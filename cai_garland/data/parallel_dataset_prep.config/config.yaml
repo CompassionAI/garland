@@ -2,12 +2,12 @@ defaults:
   - input: 84000-parallel-sentences
   - output: uncased-no-accents
   - stages:
-    # - naive-concats
-    # - naive-concats-shuffled
-    # - concatted-registers
-    # - concatted-registers-shuffled
+    - naive-concats
+    - naive-concats-shuffled
+    - concatted-registers
+    - concatted-registers-shuffled
     - folio-registers
-    # - dictionary
+    - dictionary
   - processing: local-dask
   - _self_
 
