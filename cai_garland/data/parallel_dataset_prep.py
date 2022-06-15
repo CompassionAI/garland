@@ -150,8 +150,14 @@ def _pull_folio_dataset(dask_client, cfg, stage_cfg):
     kangyur_df = OldKangyurLoader().dataframe
 
     logger.info("Loading joined translations and the Kangyur")
-    kangyur_df['locator'] = kangyur_df.apply(lambda row: str(row.volume_number) + '|' + str(row.location), axis=1)
-    english_df['locator'] = english_df.apply(lambda row: str(row.volume_number) + '|' + str(row.location), axis=1)
+    kangyur_df['locator'] = kangyur_df.apply(
+        lambda row: str(row.volume_number) + '|' + str(row.location),
+        meta=('locator', object),
+        axis=1)
+    english_df['locator'] = english_df.apply(
+        lambda row: str(row.volume_number) + '|' + str(row.location),
+        meta=('locator', object),
+        axis=1)
     kangyur_df, english_df = kangyur_df.set_index('locator'), english_df.set_index('locator')
     joined_df = kangyur_df[['filename', 'text']].join(
         english_df[['filename', 'volume_number', 'tohoku_number', 'location', 'text']],
