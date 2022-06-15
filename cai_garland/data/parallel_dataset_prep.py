@@ -387,23 +387,25 @@ def _write_to_file(f_name, lines, cleaned_symbols, preprocess_location, separato
             f.write(line + '\n')
 
 
-def _check_for_unks(f_name, en_lm, preprocess_location):
+def _check_for_unks(f_name, cfg):
     # Check if there are any tokens in a file that encode into <unk>
-    preprocess_location = os.path.join(DATA_BASE_PATH, preprocess_location)
+    from transformers import AutoTokenizer
+
+    en_tokenizer = AutoTokenizer.from_pretrained(cfg.output.tokenizer_name)
 
     decoded, encoded = [], []
-    with open(os.path.join(preprocess_location, f_name), mode="r", encoding="utf-8") as f:
+    with open(os.path.join(cfg.output_dir, f_name), mode="r", encoding="utf-8") as f:
         for line in tqdm(f.readlines(), desc=f_name):
             decoded.append(line)
-            encoded.append(en_lm.encode(line))
+            encoded.append(en_tokenizer.encode(line, add_special_tokens=False))
 
-    unk_id, unk_lines = en_lm.task.target_dictionary.unk(), []
+    unk_id, unk_lines = en_tokenizer.encode(en_tokenizer.unk_token, add_special_tokens=False)[0], []
     for line, line_text in zip(encoded, decoded):
-        if unk_id in line.tolist():
+        if unk_id in line:
             unk_lines.append((line, line_text))
 
     if len(unk_lines) > 0:
-        logger.warning(f"Unknown tokens found in {f_name}!!!")
+        logger.warning(f"Unknown tokens found in {f_name}!!! Total of {len(unk_lines)} lines contain <unk>.")
         for line in unk_lines[:10]:
             logger.warning("    " + line)
         if len(unk_lines) > 9:
@@ -611,13 +613,10 @@ def main(cfg):
     _check_equal_lengths("test.bo", "test.en", cfg.output_dir)
 
     if cfg.output.check_for_en_unks:
-        raise NotImplementedError()
-        # logger.info("Checking for unknown tokens")
-        # import torch
-        # en_lm = torch.hub.load("pytorch/fairseq", "bart.base")
-        # _check_for_unks("train.en", en_lm, args.preprocess_location)
-        # _check_for_unks("valid.en", en_lm, args.preprocess_location)
-        # _check_for_unks("test.en", en_lm, args.preprocess_location)
+        logger.info("Checking for unknown tokens")
+        _check_for_unks("train.en", cfg)
+        _check_for_unks("valid.en", cfg)
+        _check_for_unks("test.en", cfg)
 
 
 if __name__ == "__main__":
