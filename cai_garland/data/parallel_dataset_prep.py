@@ -508,21 +508,24 @@ def main(cfg):
     logger.info(
         f"Dashboard is at {dask_client.dashboard_link}")
 
-    logger.info("Checking for duplicate folios")
-    folio_df = TeiLoader('kangyur').dataframe
-    dupes = folio_df.groupby(
-        by=[folio_df.tohoku_number, folio_df.volume_number, folio_df.location]).filename.nunique().compute()
-    dupes = dupes[dupes > 1]
-    if len(dupes) > 0:
-        logger.warning("Duplicate folios found! You likely need to exclude them from the TeiLoader.")
-        if cfg.input.error_on_duplicate_folios:
-            duped_tohokus = sorted(dupes.reset_index().tohoku_number.unique())
-            logger.debug(f"There are {len(duped_tohokus)} duplicates")
-            logger.debug(f"Tohoku numbers: {duped_tohokus}")
-            logger.debug(f"First few duplicate locations: \n{str(dupes.sort_index().head(10))}")
-            raise DuplicateFolioException()
-    del folio_df
-    del dupes
+    if cfg.skip_duplicate_folio_check:
+        logger.warning("Skipping check for duplicate folios!!! This is a bad idea.")
+    else:
+        logger.info("Checking for duplicate folios")
+        folio_df = TeiLoader('kangyur').dataframe
+        dupes = folio_df.groupby(
+            by=[folio_df.tohoku_number, folio_df.volume_number, folio_df.location]).filename.nunique().compute()
+        dupes = dupes[dupes > 1]
+        if len(dupes) > 0:
+            logger.warning("Duplicate folios found! You likely need to exclude them from the TeiLoader.")
+            if cfg.input.error_on_duplicate_folios:
+                duped_tohokus = sorted(dupes.reset_index().tohoku_number.unique())
+                logger.debug(f"There are {len(duped_tohokus)} duplicates")
+                logger.debug(f"Tohoku numbers: {duped_tohokus}")
+                logger.debug(f"First few duplicate locations: \n{str(dupes.sort_index().head(10))}")
+                raise DuplicateFolioException()
+        del folio_df
+        del dupes
 
     logger.info("Processing datasets")
     final_train_bo, final_train_en = [], []
