@@ -9,6 +9,8 @@ defaults:
     - folio-registers
     - dictionary
   - processing: local-dask
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
   - _self_
 
 hydra:

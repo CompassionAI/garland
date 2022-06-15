@@ -2,6 +2,7 @@ import logging
 import hydra
 from hydra.utils import instantiate
 from tqdm import tqdm
+from colorama import init as init_colorama, Fore as ForeColor
 
 import os
 import sys
@@ -14,9 +15,8 @@ from copy import deepcopy
 from cai_common.data import ParallelTMXLoader, TeiLoader, OldKangyurLoader
 
 
+init_colorama()
 DATA_BASE_PATH = os.environ['CAI_DATA_BASE_PATH']
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -538,7 +538,7 @@ def main(cfg):
     final_valid_bo, final_valid_en = [], []
     final_test_bo, final_test_en = [], []
     for stage_idx, stage_name in enumerate(cfg.stages):
-        logger.info(f"Running step \"{stage_name}\" ({stage_idx + 1}/{len(cfg.stages)})")
+        logger.info(f"{ForeColor.LIGHTCYAN_EX}Running step \"{stage_name}\" ({stage_idx + 1}/{len(cfg.stages)})")
 
         stage_cfg = cfg.stages[stage_name]
 
