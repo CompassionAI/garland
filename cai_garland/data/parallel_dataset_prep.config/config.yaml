@@ -1,0 +1,26 @@
+defaults:
+  - input: 84000-parallel-sentences
+  - output: uncased-no-accents
+  - stages:
+    - naive-concats
+    - naive-concats-shuffled
+    - concatted-registers
+    - concatted-registers-shuffled
+    - folio-registers
+    - dictionary
+  - processing: local-dask
+  - _self_
+
+hydra:
+  # verbose: cai_garland.data
+  run:
+    dir: .
+  output_subdir: ~
+
+seed: 12345
+
+output_dir: ${oc.env:CAI_TEMP_PATH}/enbo_data
+
+# These are used by BERT when shuffling
+cuda: true
+batch_size: 16

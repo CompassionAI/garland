@@ -1,0 +1,11 @@
+# Maximum number of source language registers
+max_num_registers: 3
+
+# Maximum number of tokens accepted by a register (including bos and eos)
+max_register_length: 128
+
+# Probability of (fraction of) intermediate, as opposed to greedy, segmentations
+intermediate_segmentation_probability: 0.5
+
+# Number of times to try to make an intermediate segmentation
+num_intermediate_tries: 10

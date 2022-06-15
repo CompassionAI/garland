@@ -1,0 +1,9 @@
+# Use the Dask distributed scheduler. Turn this off in case of strange errors. Note that, if you turn this off, Dask
+#   will not make a dashboard.
+dask_distributed: true
+
+# Make the Dask dashboard only visible on localhost. Use this to avoid weird crashes involving LocalCluster.
+local_dask_dash: true
+
+# Number of Dask worker processes to load training data with.
+dask_workers: 10

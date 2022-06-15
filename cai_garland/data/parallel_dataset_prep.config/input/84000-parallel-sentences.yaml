@@ -1,0 +1,20 @@
+# Tohoku numbers of texts to use as test data
+test_tohoku_numbers:
+  - 298
+  - 312
+  - 86
+  - 171
+  - 245
+
+# Directory with the parallel sentences dataset under CAI_DATA_BASE_PATH
+parallel_dataset_location: raw_datasets/84000-parallel-sentences
+
+# Raise an exception if dataset pull functions find duplicate folios
+error_on_duplicate_folios: true
+
+# Name of the input data tokenizer to use for calculating the length of output sequences. Note that the output is _not_
+#   tokenized, this is used for sanity checks
+tokenizer_name: olive-large
+
+# Maximum length of the source model, including special tokens
+max_source_length: 128

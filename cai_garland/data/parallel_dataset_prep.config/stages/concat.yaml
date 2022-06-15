@@ -1,0 +1,2 @@
+# Concatenate up to this many consecutive sentences to form longer training examples
+concat_window: 10

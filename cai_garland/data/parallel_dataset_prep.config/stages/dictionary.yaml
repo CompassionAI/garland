@@ -1,0 +1,17 @@
+dictionary:
+  # Function to pull the dataset
+  pull_func:
+    _target_: cai_garland.data.parallel_dataset_prep._pull_dictionary_dataset
+
+  # Function to prepare the dataset
+  prep_func:
+    _target_: cai_garland.data.parallel_dataset_prep._prep_linear_dataset
+
+  # Glob for dictionaries to augment with
+  dictionary_augment_glob: "processed_datasets/tibetan-english-dictionaries-for-aug/*"
+
+  # Pick out the best word. If not set, will simply flatten the dictionaries
+  pick_best_word: true
+
+  # Maximum length of every English definition for a word to count as well-defined
+  well_defined_word_max_en_len: 20

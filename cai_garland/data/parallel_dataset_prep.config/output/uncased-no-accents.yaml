@@ -1,0 +1,27 @@
+# Symbol cleanup mapping, relative to parallel_dataset_prep.py
+symbol_cleaning_json: parallel_dataset_prep.config/symbol_cleaning.json
+
+# Check the English data for unknown tokens
+check_for_en_unks: false
+
+# Sort the parallel dataset by index of the English sentence in the parallel folio dataset
+sort_by_starting_index: true
+
+# Lower case the English translations
+lower_case_en: true
+
+# Remove accents from the English translations
+remove_en_accents: true
+
+# Name of the tokenizer to use for packing data into registers. Note that the output is _not_ tokenized, this is only
+#   used to count the final tokenized length of the target text
+tokenizer_name: facebook/bart-base
+
+# Maximum number of tokens output by the decoder (including bos and eos)
+max_target_length: 1024
+
+# Validation fraction to reserve
+validation_frac: 0
+
+# Separator for datasets with multiple registers
+separator: "[eor]"
