@@ -25,6 +25,7 @@ class DuplicateFolioException(Exception):
 
 
 def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
+    # Use a language model to pick random next sentences that are linguistically adequate to augment the dataset
     import torch
     from transformers import BertTokenizer, BertForNextSentencePrediction
 
@@ -419,6 +420,7 @@ def _check_for_unks(f_name, cfg):
 
 
 def _postprocess_training_data(flat_data):
+    # Clean up training data and pack it into source-target dictionaries
     if len(flat_data) == 0:
         return []
     if type(flat_data[0]['tibetan']) is list:
@@ -436,6 +438,7 @@ def _postprocess_training_data(flat_data):
 
 
 def _postprocess_final_data(bo_data, en_data, cfg, stage_cfg):
+    # Clean shads in the bo text and trim registers that are too long, if needed
     def _postprocess(text):
         text = text.replace(" ། ", " །")
         if text[-2:] == " །":
