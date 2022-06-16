@@ -12,12 +12,18 @@ import random
 import unicodedata
 from copy import deepcopy
 
+from dask.distributed import Client, LocalCluster
+
 from cai_common.data import ParallelTMXLoader, TeiLoader, OldKangyurLoader
 
 
 init_colorama()
 DATA_BASE_PATH = os.environ['CAI_DATA_BASE_PATH']
 logger = logging.getLogger(__name__)
+
+
+dask_logger = logging.getLogger("distributed.utils_perf")
+dask_logger.setLevel(logging.ERROR)
 
 
 class DuplicateFolioException(Exception):
@@ -509,7 +515,6 @@ def main(cfg):
     random.seed(cfg.seed)
 
     logger.info("Spinning up Dask cluster...")
-    from dask.distributed import Client, LocalCluster
     dask_client = Client(LocalCluster(
         n_workers=cfg.processing.dask_workers,
         threads_per_worker=1,
