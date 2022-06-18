@@ -10,6 +10,7 @@ from transformers import (
 )
 
 from cai_manas.tokenizer import TibertTokenizer
+from .bilingual_tokenizer import BilingualTokenizer
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 
 
@@ -80,4 +81,11 @@ def make_encoder_decoder(encoder_name: str, decoder_name: str):
     decoder.config.add_cross_attention = True
 
     config = EncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config)
-    return EncoderDecoderModel(encoder=encoder, decoder=decoder, config=config), encoder_tokenizer, decoder_tokenizer
+    model = EncoderDecoderModel(encoder=encoder, decoder=decoder, config=config)
+    tokenizer = BilingualTokenizer(encoder_tokenizer, decoder_tokenizer)
+
+    model.config.decoder_start_token_id = decoder_tokenizer.cls_token_id
+    model.config.pad_token_id = decoder_tokenizer.pad_token_id
+    model.config.vocab_size = model.config.decoder.vocab_size
+
+    return model, tokenizer
