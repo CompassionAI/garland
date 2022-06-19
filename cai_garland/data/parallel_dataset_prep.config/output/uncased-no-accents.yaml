@@ -21,7 +21,7 @@ tokenizer_name: facebook/bart-base
 max_target_length: 1024
 
 # Validation fraction to reserve
-validation_frac: 0
+validation_frac: 0.001
 
 # Separator for datasets with multiple registers
 separator: "[eor]"
