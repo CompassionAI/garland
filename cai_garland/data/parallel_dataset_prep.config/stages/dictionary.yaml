@@ -15,3 +15,6 @@ dictionary:
 
   # Maximum length of every English definition for a word to count as well-defined
   well_defined_word_max_en_len: 20
+
+  # Do not put anything from this dataset in the validation data
+  exclude_from_validation: True

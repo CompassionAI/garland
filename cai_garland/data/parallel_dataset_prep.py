@@ -562,11 +562,15 @@ def main(cfg):
         logger.info("Preparing test dataset")
         test_concat_data = instantiate(stage_cfg.prep_func, test_flat_data, cfg, stage_cfg)
 
+        skip_validation = stage_cfg.get('exclude_from_validation', False)
+        if skip_validation:
+            logger.info(f"{ForeColor.CYAN}Skipping generating validation data from stage {stage_name}")
+
         train_bo, valid_bo, train_en, valid_en = [], [], [], []
         for datum in train_concat_data:
             line_bo, line_en = datum['tibetan'], datum['english']
             cur_rand = random.random()
-            if cur_rand < cfg.output.validation_frac:
+            if (not skip_validation) and cur_rand < cfg.output.validation_frac:
                 valid_bo.append(line_bo)
                 valid_en.append(line_en)
                 continue

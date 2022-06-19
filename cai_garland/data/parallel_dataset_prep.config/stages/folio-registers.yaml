@@ -9,3 +9,6 @@ folio-registers:
   # Function to prepare the dataset
   prep_func:
     _target_: cai_garland.data.parallel_dataset_prep._prep_folio_register_dataset
+
+  # Do not put anything from this dataset in the validation data
+  exclude_from_validation: True
