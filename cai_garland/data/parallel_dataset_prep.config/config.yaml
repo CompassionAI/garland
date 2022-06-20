@@ -4,9 +4,9 @@ defaults:
   - stages:
     - naive-concats
     - naive-concats-shuffled
-    - concatted-registers
-    - concatted-registers-shuffled
-    - folio-registers
+    # - concatted-registers
+    # - concatted-registers-shuffled
+    # - folio-registers
     - dictionary
   - processing: local-dask
   - override hydra/job_logging: colorlog
