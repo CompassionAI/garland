@@ -65,6 +65,11 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                     "bo_fn": os.path.join(files_path, "train.bo"),
                     "en_fn": os.path.join(files_path, "train.en")}),
             datasets.SplitGenerator(
+                name=datasets.Split.VALIDATION,
+                gen_kwargs={
+                    "bo_fn": os.path.join(files_path, "valid.bo"),
+                    "en_fn": os.path.join(files_path, "valid.en")}),
+            datasets.SplitGenerator(
                 name=datasets.Split.TEST,
                 gen_kwargs={
                     "bo_fn": os.path.join(files_path, "test.bo"),
