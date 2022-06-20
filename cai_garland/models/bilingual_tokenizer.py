@@ -43,6 +43,18 @@ class BilingualTokenizer(PreTrainedTokenizerBase):
     def _decode(self, *args, **kwargs):
         return self._tokenizer._decode(*args, **kwargs)
 
+    def save_pretrained(
+        self,
+        save_directory,
+        legacy_format = None,
+        filename_prefix = None
+    ):
+        prefix_array = [] if filename_prefix is None else [filename_prefix]
+        self.source_tokenizer.save_pretrained(
+            save_directory, legacy_format=legacy_format, filename_prefix='-'.join(prefix_array + ["source"]))
+        self.target_tokenizer.save_pretrained(
+            save_directory, legacy_format=legacy_format, filename_prefix='-'.join(prefix_array + ["target"]))
+
     @contextmanager
     def as_target_tokenizer(self):
         """Switches to the target tokenizer within the context returned by the manager."""
