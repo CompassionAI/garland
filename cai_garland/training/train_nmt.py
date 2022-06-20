@@ -218,6 +218,41 @@ class DataTrainingArguments:
             self.val_max_target_length = self.max_target_length
 
 
+def preprocess_function(
+    examples,
+    tokenizer=None,
+    max_source_length=None,
+    max_target_length=None,
+    padding=None,
+    ignore_pad_token_for_loss=None
+):
+    if tokenizer is None or \
+        max_source_length is None or \
+        max_target_length is None or \
+        padding is None or \
+        ignore_pad_token_for_loss is None:
+        raise ValueError("One of the argument to preprocess_function is missing")
+
+    inputs = [ex for ex in examples["tibetan"]]
+    targets = [ex for ex in examples["english"]]
+
+    inputs = tokenizer(inputs, max_length=max_source_length, padding=padding, truncation=True)
+
+    with tokenizer.as_target_tokenizer():
+        targets = tokenizer(targets, max_length=max_target_length, padding=padding, truncation=True)
+
+    # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
+    # padding in the loss.
+    if padding == "max_length" and ignore_pad_token_for_loss:
+        targets["input_ids"] = [
+            [(l if l != tokenizer.pad_token_id else -100) for l in label]
+                for label in targets["input_ids"]
+        ]
+
+    inputs["labels"] = targets["input_ids"]
+    return inputs
+
+
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -270,7 +305,9 @@ def main():
     set_seed(training_args.seed)
 
     train_dataset = load_dataset(data_args.dataset_loader, data_args.dataset_config, split=datasets.splits.Split.TRAIN)
-    eval_dataset = load_dataset(data_args.dataset_loader, data_args.dataset_config, split=datasets.splits.Split.TEST)
+    eval_dataset = load_dataset(
+        data_args.dataset_loader, data_args.dataset_config, split=datasets.splits.Split.VALIDATION)
+    test_dataset = load_dataset(data_args.dataset_loader, data_args.dataset_config, split=datasets.splits.Split.TEST)
 
     model, tokenizer = make_encoder_decoder(model_args.encoder_model, model_args.decoder_model)
 
@@ -281,39 +318,50 @@ def main():
     max_target_length = model.config.decoder.max_position_embeddings
     padding = "max_length" if data_args.pad_to_max_length else False
 
-    def preprocess_function(examples):
-        inputs = [ex for ex in examples["tibetan"]]
-        targets = [ex for ex in examples["english"]]
-
-        inputs = tokenizer(inputs, max_length=data_args.max_source_length, padding=padding, truncation=True)
-
-        with tokenizer.as_target_tokenizer():
-            targets = tokenizer(targets, max_length=max_target_length, padding=padding, truncation=True)
-
-        # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
-        # padding in the loss.
-        if padding == "max_length" and data_args.ignore_pad_token_for_loss:
-            targets["input_ids"] = [
-                [(l if l != tokenizer.pad_token_id else -100) for l in label]
-                 for label in targets["input_ids"]
-            ]
-
-        inputs["labels"] = targets["input_ids"]
-        return inputs
-
     with training_args.main_process_first(desc="train dataset map pre-processing"):
         train_dataset = train_dataset.map(
             preprocess_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
+            load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on train dataset",
+            fn_kwargs={
+                "tokenizer": tokenizer,
+                "max_source_length": data_args.max_source_length,
+                "max_target_length": max_target_length,
+                "padding": padding,
+                "ignore_pad_token_for_loss": data_args.ignore_pad_token_for_loss
+            }
         )
-    with training_args.main_process_first(desc="test dataset map pre-processing"):
+    with training_args.main_process_first(desc="validation dataset map pre-processing"):
         eval_dataset = eval_dataset.map(
             preprocess_function,
             batched=True,
             num_proc=data_args.preprocessing_num_workers,
+            load_from_cache_file=not data_args.overwrite_cache,
+            desc="Running tokenizer on train dataset",
+            fn_kwargs={
+                "tokenizer": tokenizer,
+                "max_source_length": data_args.max_source_length,
+                "max_target_length": max_target_length,
+                "padding": padding,
+                "ignore_pad_token_for_loss": data_args.ignore_pad_token_for_loss
+            }
+        )
+    with training_args.main_process_first(desc="test dataset map pre-processing"):
+        test_dataset = test_dataset.map(
+            preprocess_function,
+            batched=True,
+            num_proc=data_args.preprocessing_num_workers,
+            load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on test dataset",
+            fn_kwargs={
+                "tokenizer": tokenizer,
+                "max_source_length": data_args.max_source_length,
+                "max_target_length": max_target_length,
+                "padding": padding,
+                "ignore_pad_token_for_loss": data_args.ignore_pad_token_for_loss
+            }
         )
 
     # Data collator
@@ -403,8 +451,8 @@ def main():
         logger.info("*** Evaluate ***")
 
         metrics = trainer.evaluate(max_length=max_length, num_beams=num_beams, metric_key_prefix="eval")
-        max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
-        metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
+        max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(test_dataset)
+        metrics["eval_samples"] = min(max_eval_samples, len(test_dataset))
 
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
