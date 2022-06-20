@@ -29,16 +29,24 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         parallel sentences.
     
     Attributes:
-        dataset_location: Location of the processed dataset files within the data registry.
+        dataset_locations: Location of the processed dataset files within the data registry.
     """
 
-    dataset_location = "processed_datasets/84000-parallel-sentences"
+    dataset_locations = {
+        "no_registers": "processed_datasets/84000-parallel-sentences-no-registers",
+        "registers_3": "processed_datasets/84000-parallel-sentences",
+    }
 
     BUILDER_CONFIGS = [
         ParallelSentences84000Config(
-            name="text_pairs",
+            name="no_registers",
             version=datasets.Version("0.0.1", ""),
-            description="Text pairs",
+            description="Dataset for a Tibetan encoder with no registers",
+        ),
+        ParallelSentences84000Config(
+            name="registers_3",
+            version=datasets.Version("0.0.1", ""),
+            description="Dataset for a Tibetan encoder with 3 registers",
         ),
     ]
 
@@ -56,7 +64,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
 
     def _split_generators(self, dl_manager):
         # Prepare the files for the available splits for reading
-        files_path = os.path.join(os.environ['CAI_DATA_BASE_PATH'], self.dataset_location)
+        files_path = os.path.join(os.environ['CAI_DATA_BASE_PATH'], self.dataset_locations[self.config.name])
 
         return [
             datasets.SplitGenerator(
@@ -78,7 +86,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
 
     def _generate_examples(self, bo_fn, en_fn):
         # Read two parallel files for a split
-        logger.info(f"Loading 84000-parallel-sentences from bo={bo_fn} and en={en_fn}")
+        logger.info(f"Loading parallel sentences from bo={bo_fn} and en={en_fn}")
         with open(bo_fn, encoding="utf-8") as bo_f, open(en_fn, encoding="utf-8") as en_f:
             for id_, (bo, en) in enumerate(zip(bo_f, en_f)):
                 yield id_, {
