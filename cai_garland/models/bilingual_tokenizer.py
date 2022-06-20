@@ -40,6 +40,9 @@ class BilingualTokenizer(PreTrainedTokenizerBase):
     def _batch_encode_plus(self, *args, **kwargs):
         return self._tokenizer._batch_encode_plus(*args, **kwargs)
 
+    def _decode(self, *args, **kwargs):
+        return self._tokenizer._decode(*args, **kwargs)
+
     @contextmanager
     def as_target_tokenizer(self):
         """Switches to the target tokenizer within the context returned by the manager."""
