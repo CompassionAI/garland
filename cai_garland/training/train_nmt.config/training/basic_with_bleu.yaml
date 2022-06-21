@@ -1,0 +1,33 @@
+defaults:
+  - huggingface_training_args
+
+seed: 12345
+
+per_device_train_batch_size: 4
+per_device_eval_batch_size: 4
+
+# Every how many training steps to run the evaluation loop
+logging_steps: 2000
+
+# Every how many training steps to save a model checkpoint
+save_steps: 10000
+
+# How many model checkpoints to keep around
+save_total_limit: 50
+
+# Optimizer learning rate
+learning_rate: 1e-4
+
+# Number of beams to use for evaluation. This argument will be passed to 'model.generate', which is used during
+#   'evaluate' and 'predict'
+generation_num_beams: 5
+
+# Maximum length of the beam search. Setting this too low (like the default in the Hugging Face example) will choke the
+#   evaluation of the model and give you artificially very low BLEU scores
+generation_max_length: 200
+
+# Evaluate the model every 'steps' (as opposed to epochs or never)
+evaluation_strategy: STEPS
+
+# Use beam search during the evaluation step, needed for computing BLEU on validation data
+predict_with_generate: true
