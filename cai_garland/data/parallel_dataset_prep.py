@@ -153,7 +153,7 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
         val_df.to_dict(orient="records"), test_df.to_dict(orient="records")
 
     if stage_cfg.shuffle_concats:
-        shuffled_train_data, shuffled_val_data, shuffled_test_data = [], []
+        shuffled_train_data, shuffled_val_data, shuffled_test_data = [], [], []
         for _ in range(stage_cfg.num_shuffling_repetitions):
             shuffled_train_data.extend(_shuffle_concatted_dataset(train_flat_data, cfg, stage_cfg))
             shuffled_val_data.extend(_shuffle_concatted_dataset(val_flat_data, cfg, stage_cfg))
