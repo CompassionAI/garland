@@ -31,3 +31,6 @@ evaluation_strategy: STEPS
 
 # Use beam search during the evaluation step, needed for computing BLEU on validation data
 predict_with_generate: true
+
+# Do not output memory use metrics to Tensorboard. This seems to be buggy in the current version of Transformers
+skip_memory_metrics: true
