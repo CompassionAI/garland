@@ -40,12 +40,12 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
     BUILDER_CONFIGS = [
         ParallelSentences84000Config(
             name="no_registers",
-            version=datasets.Version("0.0.1", ""),
+            version=datasets.Version("0.1.0", ""),
             description="Dataset for a Tibetan encoder with no registers",
         ),
         ParallelSentences84000Config(
             name="registers_3",
-            version=datasets.Version("0.0.1", ""),
+            version=datasets.Version("0.1.0", ""),
             description="Dataset for a Tibetan encoder with 3 registers",
         ),
     ]
