@@ -124,6 +124,10 @@ def main(cfg):
     logger.info("Loading test dataset")
     test_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.TEST)
 
+    if cfg.training_preprocess.shuffle_training_data:
+        logger.info("Shuffling training dataset")
+        train_dataset = train_dataset.shuffle(seed=training_cfg.seed)
+
     logger.info("Making encoder-decoder model")
     model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model)
 

@@ -1,3 +1,6 @@
+# Whether to shuffle the training dataset
+shuffle_training_data:  true
+
 # Number of random validation text entries to output to Tensorboard
 eval_decodings_in_tensorboard: 10
 
