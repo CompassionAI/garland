@@ -1,6 +1,7 @@
 import logging
 import hydra
 from hydra.utils import instantiate
+from pytest import skip
 from tqdm import tqdm
 from colorama import init as init_colorama, Fore as ForeColor
 
@@ -13,6 +14,9 @@ import unicodedata
 from copy import deepcopy
 
 from dask.distributed import Client, LocalCluster
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
 
 from cai_common.data import ParallelTMXLoader, TeiLoader, OldKangyurLoader
 
@@ -135,20 +139,28 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
             ["tohoku", "volume_number", "location", "start_idx"])[["tibetan", "english"]].dropna()
     test_df = test_df[["tibetan", "english"]]
 
+    if not stage_cfg.get('exclude_from_validation', False):
+        logger.info("Splitting out validation data...")
+        train_df, val_df = train_test_split(train_df, test_size=cfg.output.validation_frac)
+    else:
+        val_df = pd.DataFrame({"tibetan": [], "english": []})
+
     logger.debug(f"Number of Tibetan characters in test data: {int(test_df.tibetan.map(len).sum())}")
     logger.debug(f"Number of sentences in test data: {int(test_df.tibetan.count())}")
 
     logger.info("Pivoting dataframes to dictionaries")
-    train_flat_data, test_flat_data = train_df.to_dict(orient="records"), test_df.to_dict(orient="records")
+    train_flat_data, val_flat_data, test_flat_data = train_df.to_dict(orient="records"), \
+        val_df.to_dict(orient="records"), test_df.to_dict(orient="records")
 
     if stage_cfg.shuffle_concats:
-        shuffled_train_data, shuffled_test_data = [], []
+        shuffled_train_data, shuffled_val_data, shuffled_test_data = [], []
         for _ in range(stage_cfg.num_shuffling_repetitions):
             shuffled_train_data.extend(_shuffle_concatted_dataset(train_flat_data, cfg, stage_cfg))
+            shuffled_val_data.extend(_shuffle_concatted_dataset(val_flat_data, cfg, stage_cfg))
             shuffled_test_data.extend(_shuffle_concatted_dataset(test_flat_data, cfg, stage_cfg))
-        train_flat_data, test_flat_data = shuffled_train_data, shuffled_test_data
+        train_flat_data, val_flat_data, test_flat_data = shuffled_train_data, shuffled_val_data, shuffled_test_data
 
-    return train_flat_data, test_flat_data
+    return train_flat_data, val_flat_data, test_flat_data
 
 
 def _pull_folio_dataset(dask_client, cfg, stage_cfg):
@@ -188,10 +200,17 @@ def _pull_folio_dataset(dask_client, cfg, stage_cfg):
     train_df = local_df[~local_df.tohoku_number.isin(test_tohoku_nums)]
     test_df = local_df[local_df.tohoku_number.isin(test_tohoku_nums)]
 
+    if not stage_cfg.get('exclude_from_validation', False):
+        logger.info("Splitting out validation data...")
+        train_df, val_df = train_test_split(train_df, test_size=cfg.output.validation_frac)
+    else:
+        val_df = pd.DataFrame({"tibetan": [], "english": []})
+
     logger.info("Pivoting dataframes to dictionaries")
     train_flat_data = train_df[["tibetan", "english"]].to_dict(orient="records")
+    val_flat_data = val_df[["tibetan", "english"]].to_dict(orient="records")
     test_flat_data = test_df[["tibetan", "english"]].to_dict(orient="records")
-    return train_flat_data, test_flat_data
+    return train_flat_data, val_flat_data, test_flat_data
 
 
 def _pull_dictionary_dataset(dask_client, cfg, stage_cfg):
@@ -219,7 +238,7 @@ def _pull_dictionary_dataset(dask_client, cfg, stage_cfg):
                 flat_data.append({
                     "tibetan": bo,
                     "english": en})
-    return flat_data, []
+    return flat_data, [], []
 
 
 def _prep_linear_dataset(flat_data, cfg, stage_cfg):
@@ -513,6 +532,7 @@ def main(cfg):
         cfg.input.test_tohoku_numbers = []
 
     random.seed(cfg.seed)
+    np.random.seed(cfg.seed)
 
     logger.info("Spinning up Dask cluster...")
     dask_client = Client(LocalCluster(
@@ -550,37 +570,35 @@ def main(cfg):
 
         stage_cfg = cfg.stages[stage_name]
 
-        logger.info("Pulling data")
-        train_flat_data, test_flat_data = instantiate(stage_cfg.pull_func, dask_client, cfg, stage_cfg)
-
-        logger.info("Post-processing")
-        train_flat_data = _postprocess_training_data(train_flat_data)
-        test_flat_data = _postprocess_training_data(test_flat_data)
-
-        logger.info("Preparing training dataset")
-        train_concat_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg)
-        logger.info("Preparing test dataset")
-        test_concat_data = instantiate(stage_cfg.prep_func, test_flat_data, cfg, stage_cfg)
-
         skip_validation = stage_cfg.get('exclude_from_validation', False)
         if skip_validation:
             logger.info(f"{ForeColor.CYAN}Skipping generating validation data from stage {stage_name}")
 
-        train_bo, valid_bo, train_en, valid_en = [], [], [], []
-        for datum in train_concat_data:
-            line_bo, line_en = datum['tibetan'], datum['english']
-            cur_rand = random.random()
-            if (not skip_validation) and cur_rand < cfg.output.validation_frac:
-                valid_bo.append(line_bo)
-                valid_en.append(line_en)
-                continue
-            train_bo.append(line_bo)
-            train_en.append(line_en)
-        test_bo, test_en = [], []
-        for datum in test_concat_data:
-            line_bo, line_en = datum['tibetan'], datum['english']
-            test_bo.append(line_bo)
-            test_en.append(line_en)
+        logger.info("Pulling data")
+        train_flat_data, valid_flat_data, test_flat_data = instantiate(stage_cfg.pull_func, dask_client, cfg, stage_cfg)
+        if skip_validation and len(valid_flat_data) > 0:
+            raise ValueError(
+                f"Validation data should have been skipped but {len(valid_flat_data)} records were returned")
+
+        logger.info("Post-processing")
+        train_flat_data = _postprocess_training_data(train_flat_data)
+        valid_flat_data = _postprocess_training_data(valid_flat_data)
+        test_flat_data = _postprocess_training_data(test_flat_data)
+
+        logger.info("Preparing training dataset")
+        train_concat_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg)
+        if not skip_validation:
+            logger.info("Preparing validation dataset")
+        valid_concat_data = instantiate(stage_cfg.prep_func, valid_flat_data, cfg, stage_cfg)
+        logger.info("Preparing test dataset")
+        test_concat_data = instantiate(stage_cfg.prep_func, test_flat_data, cfg, stage_cfg)
+
+        def _split_data_dicts(data_dicts):
+            return [datum['tibetan'] for datum in data_dicts], [datum['english'] for datum in data_dicts]
+
+        train_bo, train_en = _split_data_dicts(train_concat_data)
+        valid_bo, valid_en = _split_data_dicts(valid_concat_data)
+        test_bo, test_en = _split_data_dicts(test_concat_data)
 
         logger.info("Deduping")
         split_by_pipe = type(train_bo[0]) is list
