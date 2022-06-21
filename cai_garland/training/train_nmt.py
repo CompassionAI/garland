@@ -21,6 +21,7 @@ Fine-tuning the library models for sequence to sequence.
 import logging
 import os
 import sys
+import random
 
 import hydra
 from hydra.core.config_store import ConfigStore
@@ -35,6 +36,7 @@ from datasets import load_dataset, load_metric
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
 from transformers.trainer_utils import get_last_checkpoint
 
+from cai_common.utils.tensorboard_callback import CAITensorboardCallback
 from cai_garland.models.factory import make_encoder_decoder
 
 
@@ -198,6 +200,7 @@ def main(cfg):
     # Metric
     logger.info("Loading SacreBLEU")
     metric = load_metric("sacrebleu")
+    eval_output_idxs = random.choices(range(len(eval_dataset)), k=cfg.training_preprocess.eval_decodings_in_tensorboard)
 
     def postprocess_text(preds, labels):
         preds = [pred.strip() for pred in preds]
@@ -218,6 +221,13 @@ def main(cfg):
             decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
         decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
 
+        if len(eval_output_idxs) > 0:
+            text_logs = {
+                f"evaluation_example_{idx}": f"Prediction: {decoded_preds[idx]}\n\nLabel: {decoded_labels[idx][0]}"
+                for idx in eval_output_idxs
+            }
+            trainer.log(text_logs)
+
         result = metric.compute(predictions=decoded_preds, references=decoded_labels)
         result = {"bleu": result["score"]}
 
@@ -237,6 +247,7 @@ def main(cfg):
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_cfg.predict_with_generate else None,
     )
+    CAITensorboardCallback.replace_in_trainer(trainer)
 
     # Training
     checkpoint = None
