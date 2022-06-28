@@ -1,0 +1,5 @@
+process_func:
+  _target_: cai_garland.cli.translate.batch
+
+# This should be specified from the command line
+source_glob: ~

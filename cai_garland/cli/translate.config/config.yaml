@@ -1,0 +1,12 @@
+defaults:
+  - model: olive-cormorant-bart
+  - mode: interactive
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+  - _self_
+
+hydra:
+  verbose: cai_garland
+  run:
+    dir: .
+  output_subdir: ~

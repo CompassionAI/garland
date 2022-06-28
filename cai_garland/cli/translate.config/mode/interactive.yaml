@@ -1,0 +1,2 @@
+process_func:
+  _target_: cai_garland.cli.translate.interactive
