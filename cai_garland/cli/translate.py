@@ -31,6 +31,8 @@ def main(cfg):
     )
 
     translator = Translator(os.path.join(cfg.model.model_ckpt, cfg.model.model_size))
+    translator.num_beams = cfg.generation.num_beams
+
     instantiate(cfg.mode.process_func, translator, cfg)
 
 

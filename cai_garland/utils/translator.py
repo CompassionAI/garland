@@ -16,6 +16,7 @@ class Translator:
     Attributes:
         model: An EncoderDecoderModel for the fine-tuned encoder-decoder translation stack.
         tokenizer: A BilingualTokenizer for the source and target languages.
+        num_beams: Number of beams to use in the beam search (default is 20).
     """
 
     def __init__(self, model_ckpt: str) -> None:
@@ -34,15 +35,21 @@ class Translator:
         logger.debug(f"Loading CAI translation model config")
         cai_base_config = get_cai_config(model_ckpt)
         encoder_name = cai_base_config['encoder_model_name']
+        encoder_length = cai_base_config['encoder_max_length']
         decoder_name = cai_base_config['decoder_model_name']
-        logger.debug(f"Encoder name: {encoder_name}")
-        logger.debug(f"Decoder name: {decoder_name}")
+        decoder_length = cai_base_config['decoder_max_length']
+        logger.debug(f"Encoder name={encoder_name}, length={encoder_length}")
+        logger.debug(f"Decoder name={decoder_name}, length={decoder_length}")
+        self.model.encoder.max_length = encoder_length
+        self.model.decoder.max_length = decoder_length
 
         logger.debug("Loading bilingual tokenizer")
         self.tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name)
 
         logger.debug("Configuring model")
         self.model.eval()
+
+        self.num_beams = 20
 
     def translate(self, bo_text: str) -> str:
         """Translate the input Tibtean.
@@ -54,8 +61,13 @@ class Translator:
             The translated text (not tokens)."""
 
         bo_tokens = self.tokenizer(bo_text, return_tensors="pt").input_ids
-        logger.debug(f"Tokenized input: {bo_tokens}")
-        preds = self.model.generate(bo_tokens)[0]
+        if len(bo_tokens[0]) > self.model.encoder.max_length:
+            raise ValueError(f"Translation input too long: encoder maximum length is {self.model.encoder.max_length}, "
+                             f"input tokenizes to {len(bo_tokens[0])} tokens.")
+        logger.debug(f"Tokenized input: {bo_tokens[0]}")
+        logger.debug(f"Tokenized input length: {len(bo_tokens[0])}")
+        preds = self.model.generate(bo_tokens, max_length=self.model.decoder.max_length, num_beams=self.num_beams)[0]
         logger.debug(f"Generated tokens: {preds}")
+        logger.debug(f"Generated tokens length: {len(preds)}")
         with self.tokenizer.as_target_tokenizer():
             return self.tokenizer.decode(preds, skip_special_tokens=True).strip()
