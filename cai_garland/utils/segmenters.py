@@ -1,24 +1,30 @@
-def opening_shad_segmenter(bo_text, **kwargs):
+def _prepend_shad_if_needed(bo_text):
     if not bo_text[0] == '།':
         bo_text = '།' + bo_text
+    return bo_text
+
+
+def none(bo_text, **kwargs):
+    return [bo_text]
+
+
+def opening_shad_segmenter(bo_text, **kwargs):
+    bo_text = _prepend_shad_if_needed(bo_text)
     return ['།' + sent if not sent[0] == '།' else sent for sent in bo_text.strip().split(' །') if len(sent) > 0]
 
 
 def closing_shad_segmenter(bo_text, **kwargs):
-    if not bo_text[0] == '།':
-        bo_text = '།' + bo_text
+    bo_text = _prepend_shad_if_needed(bo_text)
     return [x.strip() + '།' for x in bo_text.strip().split('། ') if len(x.strip()) > 0]
 
 
 def double_shad_segmenter(bo_text, **kwargs):
-    if not bo_text[0] == '།':
-        bo_text = '།' + bo_text
+    bo_text = _prepend_shad_if_needed(bo_text)
     return [x.strip() for x in bo_text.strip().split('།།') if len(x.strip()) > 0]
 
 
 def line_break_segmenter(bo_text, **kwargs):
-    if not bo_text[0] == '།':
-        bo_text = '།' + bo_text
+    bo_text = _prepend_shad_if_needed(bo_text)
     return [x.strip() for x in bo_text.split('\n') if len(x.strip()) > 0]
 
 
