@@ -11,3 +11,5 @@ hydra:
   run:
     dir: .
   output_subdir: ~
+
+cuda: False
