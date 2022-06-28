@@ -4,6 +4,7 @@ import logging
 import hydra
 from hydra.utils import instantiate
 import glob
+from omegaconf import OmegaConf
 
 from tqdm.auto import tqdm
 
@@ -21,36 +22,43 @@ def interactive(translator, cfg):
 
 
 def batch(translator, cfg):
-    if cfg.mode.input_glob is None:
+    if cfg.input_glob is None:
         raise ValueError("Specify an input file (or glob) in the mode.input_glob setting. You can do this from the "
                          "command line.")
-    os.makedirs(cfg.mode.output_dir, exist_ok=True)
-    in_fns = glob.glob(cfg.mode.input_glob)
+    os.makedirs(cfg.output_dir, exist_ok=True)
+    in_fns = glob.glob(cfg.input_glob)
     for in_fn in tqdm(in_fns, desc="Files"):
-        with open(in_fn, encoding=cfg.mode.encoding) as in_f:
+        with open(in_fn, encoding=cfg.encoding) as in_f:
             bo_text = in_f.read()
 
-        hard_segments = instantiate(cfg.mode.hard_segmentation, bo_text, **dict(cfg.mode.hard_segmenter_kwargs))
+        in_cfg_fn = os.path.join(os.path.dirname(in_fn), os.path.splitext(os.path.basename(in_fn))[0] + '.config.yaml')
+        if os.path.isfile(in_cfg_fn):
+            in_cfg = OmegaConf.load(in_cfg_fn)
+            cur_cfg = OmegaConf.merge(cfg, in_cfg)
+        else:
+            cur_cfg = cfg
+
+        hard_segments = instantiate(cur_cfg.hard_segmentation, bo_text, **dict(cur_cfg.hard_segmenter_kwargs))
 
         out_fn = os.path.join(
-            cfg.mode.output_dir, os.path.splitext(os.path.basename(in_fn))[0] + '.' + cfg.mode.output_extension)
+            cur_cfg.output_dir, os.path.splitext(os.path.basename(in_fn))[0] + '.' + cur_cfg.output_extension)
         with open(out_fn, mode='w') as out_f:
             for segment in tqdm(hard_segments, desc="Segments", leave=False):
-                for preproc_func in cfg.mode.preprocessing:
+                for preproc_func in cur_cfg.preprocessing:
                     segment = instantiate(preproc_func, segment)
 
                 try:
                     tgt_segment = translator.translate(segment)
                 except TokenizationTooLongException as err:
-                    if not cfg.mode.skip_long_inputs:
+                    if not cur_cfg.skip_long_inputs:
                         raise err
                     else:
                         tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
 
-                for postproc_func in cfg.mode.postprocessing:
+                for postproc_func in cur_cfg.postprocessing:
                     tgt_segment = instantiate(postproc_func, tgt_segment)
 
-                if cfg.mode.output_parallel_translation:
+                if cur_cfg.output_parallel_translation:
                     out_f.write(segment + '\n')
                 out_f.write(tgt_segment + '\n')
                 out_f.write('\n')
@@ -70,7 +78,7 @@ def main(cfg):
     if cfg.cuda:
         translator.cuda()
 
-    instantiate(cfg.mode.process_func, translator, cfg)
+    instantiate(cfg.mode.process_func, translator, cfg.mode)
 
 
 if __name__ == "__main__":
