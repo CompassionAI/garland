@@ -19,6 +19,9 @@ class BilingualTokenizer(PreTrainedTokenizerBase):
             *args,
             **kwargs)
 
+    def _encode_plus(self, *args, **kwargs):
+        return self._tokenizer._encode_plus(*args, **kwargs)
+
     def _tokenize(self, text, **kwargs):
         return self._tokenizer._tokenize(text, **kwargs)
 
