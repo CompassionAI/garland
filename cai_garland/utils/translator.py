@@ -9,6 +9,10 @@ from cai_garland.models.factory import make_bilingual_tokenizer
 logger = logging.getLogger(__name__)
 
 
+class TokenizationTooLongException(Exception):
+    pass
+
+
 class Translator:
     """A machine translation utility class, abstracting the pipeline from a potentially very long source document to a
     machine translated output. See cai_garland.cli.translate for usage examples.
@@ -50,6 +54,15 @@ class Translator:
         self.model.eval()
 
         self.num_beams = 20
+        self._cuda = False
+
+    def cuda(self) -> None:
+        self._cuda = True
+        self.model.cuda()
+
+    def cpu(self) -> None:
+        self._cuda = False
+        self.model.cpu()
 
     def translate(self, bo_text: str) -> str:
         """Translate the input Tibtean.
@@ -62,11 +75,16 @@ class Translator:
 
         bo_tokens = self.tokenizer(bo_text, return_tensors="pt").input_ids
         if len(bo_tokens[0]) > self.model.encoder.max_length:
-            raise ValueError(f"Translation input too long: encoder maximum length is {self.model.encoder.max_length}, "
-                             f"input tokenizes to {len(bo_tokens[0])} tokens.")
+            raise TokenizationTooLongException(f"Translation input too long: encoder maximum length is "
+                                      f"{self.model.encoder.max_length}, input tokenizes to {len(bo_tokens[0])} "
+                                      f"tokens.")
         logger.debug(f"Tokenized input: {bo_tokens[0]}")
         logger.debug(f"Tokenized input length: {len(bo_tokens[0])}")
+        if self._cuda:
+            bo_tokens = bo_tokens.cuda()
         preds = self.model.generate(bo_tokens, max_length=self.model.decoder.max_length, num_beams=self.num_beams)[0]
+        if self._cuda:
+            preds = preds.cpu()
         logger.debug(f"Generated tokens: {preds}")
         logger.debug(f"Generated tokens length: {len(preds)}")
         with self.tokenizer.as_target_tokenizer():
