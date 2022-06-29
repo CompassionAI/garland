@@ -38,6 +38,7 @@ from transformers.trainer_utils import get_last_checkpoint
 
 from cai_common.utils.tensorboard_callback import CAITensorboardCallback
 from cai_garland.models.factory import make_encoder_decoder
+from cai_garland.data.siamese_collator import SiameseDataCollatorForSeq2Seq
 
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,8 @@ def preprocess_function(
     max_source_length=None,
     max_target_length=None,
     padding=None,
-    ignore_pad_token_for_loss=None
+    ignore_pad_token_for_loss=None,
+    use_registers=False
 ):
     if tokenizer is None or \
         max_source_length is None or \
@@ -130,6 +132,8 @@ def main(cfg):
 
     logger.info("Making encoder-decoder model")
     model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model)
+
+    import ipdb; ipdb.set_trace()
 
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
