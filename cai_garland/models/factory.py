@@ -23,7 +23,6 @@ def _make_named_tokenizer(packed_name):
         logging.debug(f"Loading tokenizer {packed_name} from CompassionAI data registry")
 
         cai_name = packed_name[4:].strip()
-        local_ckpt = get_local_ckpt(cai_name)
         cai_config = get_cai_config(cai_name)
 
         tokenizer_name = cai_config['tokenizer_name']
