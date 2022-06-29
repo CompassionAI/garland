@@ -11,6 +11,7 @@ from transformers import (
 
 from cai_manas.tokenizer import TibertTokenizer
 from .bilingual_tokenizer import BilingualTokenizer
+from .siamese_encoder import SiameseEncoderConfig, SiameseEncoderModel
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 
 
@@ -24,6 +25,9 @@ def _make_named_tokenizer(packed_name):
 
         cai_name = packed_name[4:].strip()
         cai_config = get_cai_config(cai_name)
+
+        if cai_config.get('is_derived', False):
+            return _make_named_tokenizer(cai_config['base_model_name'])
 
         tokenizer_name = cai_config['tokenizer_name']
         logger.debug(f"Loading tokenizer {tokenizer_name}")
@@ -47,18 +51,31 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
         logging.debug(f"Loading {packed_name} from CompassionAI data registry")
 
         cai_name = packed_name[4:].strip()
-        local_ckpt = get_local_ckpt(cai_name)
         cai_config = get_cai_config(cai_name)
 
-        hf_config_name = cai_config['hf_base_model_name']
+        if cai_config.get('siamese', False):
+            logger.debug("Constructing Siamese model")
+            logger.debug("    Loading base model")
+            base_model = _make_named_model(cai_config['base_model_name'], hf_model_factory, tokenizer=tokenizer)
+            logger.debug("    Constructing Siamese config")
+            siamese_config = SiameseEncoderConfig.from_base_encoder_config(
+                base_model.config,
+                cai_config['num_registers']
+            )
+            logger.debug("    Constructing Siamese wrapper model")
+            model = SiameseEncoderModel(base_model, siamese_config)
+        else:
+            local_ckpt = get_local_ckpt(cai_name)
 
-        logger.debug(f"Loading Huggingface base model config")
-        model_cfg = AutoConfig.from_pretrained(hf_config_name)
+            hf_config_name = cai_config['hf_base_model_name']
 
-        logger.debug(f"Loading model")
-        model = hf_model_factory.from_pretrained(local_ckpt, config=model_cfg)
-        if tokenizer is not None:
-            model.resize_token_embeddings(len(tokenizer))
+            logger.debug(f"Loading Huggingface base model config")
+            model_cfg = AutoConfig.from_pretrained(hf_config_name)
+
+            logger.debug(f"Loading model")
+            model = hf_model_factory.from_pretrained(local_ckpt, config=model_cfg)
+            if tokenizer is not None:
+                model.resize_token_embeddings(len(tokenizer))
     elif packed_name.startswith('hf:'):
         logging.debug(f"Loading {packed_name} from Hugging Face")
 
