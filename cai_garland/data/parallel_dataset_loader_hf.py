@@ -34,7 +34,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
 
     dataset_locations = {
         "no_registers": "processed_datasets/84000-parallel-sentences-no-registers",
-        "registers_3": "processed_datasets/84000-parallel-sentences",
+        "registers_3": "processed_datasets/84000-parallel-sentences-3-registers",
     }
 
     BUILDER_CONFIGS = [
@@ -45,7 +45,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         ),
         ParallelSentences84000Config(
             name="registers_3",
-            version=datasets.Version("0.1.0", ""),
+            version=datasets.Version("0.1.1", ""),
             description="Dataset for a Tibetan encoder with 3 registers",
         ),
     ]
