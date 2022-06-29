@@ -55,13 +55,14 @@ def preprocess_function(
     max_target_length=None,
     padding=None,
     ignore_pad_token_for_loss=None,
-    use_registers=False
+    siamese=None
 ):
     if tokenizer is None or \
         max_source_length is None or \
         max_target_length is None or \
         padding is None or \
-        ignore_pad_token_for_loss is None:
+        ignore_pad_token_for_loss is None or \
+        siamese is None:
         raise ValueError("One of the argument to preprocess_function is missing")
 
     inputs = [ex for ex in examples["tibetan"]]
@@ -75,6 +76,8 @@ def preprocess_function(
     # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
     # padding in the loss.
     if padding == "max_length" and ignore_pad_token_for_loss:
+        if siamese:
+            raise NotImplementedError("pad_to_max_length is not implemented with Siamese models")
         targets["input_ids"] = [
             [(l if l != tokenizer.pad_token_id else -100) for l in label]
                 for label in targets["input_ids"]
@@ -133,14 +136,13 @@ def main(cfg):
     logger.info("Making encoder-decoder model")
     model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model)
 
-    import ipdb; ipdb.set_trace()
-
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
 
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
+    siamese = model.config.encoder.model_type == "siamese-encoder"
 
     logger.info("Preprocessing training dataset")
     with training_cfg.main_process_first(desc="train dataset map pre-processing"):
@@ -155,7 +157,8 @@ def main(cfg):
                 "max_source_length": cfg.model.max_source_length,
                 "max_target_length": max_target_length,
                 "padding": padding,
-                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss
+                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                "siamese": siamese
             }
         )
     logger.info("Preprocessing validation dataset")
@@ -171,7 +174,8 @@ def main(cfg):
                 "max_source_length": cfg.model.max_source_length,
                 "max_target_length": max_target_length,
                 "padding": padding,
-                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss
+                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                "siamese": siamese
             }
         )
     logger.info("Preprocessing test dataset")
@@ -187,9 +191,12 @@ def main(cfg):
                 "max_source_length": cfg.model.max_source_length,
                 "max_target_length": max_target_length,
                 "padding": padding,
-                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss
+                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                "siamese": siamese
             }
         )
+
+    import ipdb; ipdb.set_trace()
 
     # Data collator
     label_pad_token_id = -100 if cfg.training_preprocess.ignore_pad_token_for_loss else tokenizer.pad_token_id
