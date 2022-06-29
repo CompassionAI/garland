@@ -96,8 +96,8 @@ def main(cfg):
     )
 
     logger.info(
-        f"Process rank: {training_cfg.local_rank}, device: {training_cfg.device}, n_gpu: {training_cfg.n_gpu}"
-        + f"distributed training: {bool(training_cfg.local_rank != -1)}, 16-bits training: {training_cfg.fp16}"
+        f"Process rank: {training_cfg.local_rank}, device: {training_cfg.device}, n_gpu: {training_cfg.n_gpu}, "
+        f"distributed training: {bool(training_cfg.local_rank != -1)}, 16-bits training: {training_cfg.fp16}"
     )
 
     # Detecting last checkpoint.
