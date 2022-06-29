@@ -1,5 +1,5 @@
 # Encoder model name, following make_encoder_decoder naming convention
-encoder_model: cai:albert-olive-cormorant
+encoder_model: cai:albert-olive-cormorant/base
 
 # Decoder model name, following make_encoder_decoder naming convention
 decoder_model: hf:facebook/bart-base
