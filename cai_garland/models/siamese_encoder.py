@@ -136,9 +136,9 @@ class SiameseEncoderModel(PreTrainedModel):
         return_dict: Optional[bool] = None,
         **kwargs
     ):
-        if inputs_embeds is not None:
+        if inputs_embeds:
             raise NotImplementedError("Siamese encoder does not currently support inputs_embeds")
-        if output_attentions is not None:
+        if output_attentions:
             raise NotImplementedError("Siamese encoder does not currently support outputting attentions")
 
         encoder_outputs = []
