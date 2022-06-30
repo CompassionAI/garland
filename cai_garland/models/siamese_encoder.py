@@ -78,8 +78,6 @@ class SiameseEncoderModel(PreTrainedModel):
     splits input along the eor token in the tokenizer, feeds each entry of the split into the corresponding register
     encoder, and concatenates the outputs so as to look like an ordinary encoder to any subsequent decoder it is
     combined with via the EncoderDecoderModel class.
-
-    *NB*: This wrapper class assumes the base encoder has the bos and eos tokens at the start and end of the input.
     """
 
     config_class = SiameseEncoderConfig
@@ -131,8 +129,6 @@ class SiameseEncoderModel(PreTrainedModel):
         if len(input_ids) > 1:
             raise ValueError("Batch forward not implemented")
 
-        bos, eos = input_ids[0][0], input_ids[0][-1]    # Assumes the base encoder has bos and eos tokens at the start
-                                                        #   and end of the input!
         src_tokens = src_tokens[0]
         split_idxs = (src_tokens == self.eor_token_id).nonzero(as_tuple=True)[0].tolist()
         tokens_res, cur_split_idx = [], 0

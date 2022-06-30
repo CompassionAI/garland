@@ -196,11 +196,11 @@ def main(cfg):
             }
         )
 
-    import ipdb; ipdb.set_trace()
-
     # Data collator
     label_pad_token_id = -100 if cfg.training_preprocess.ignore_pad_token_for_loss else tokenizer.pad_token_id
     if cfg.training_preprocess.pad_to_max_length:
+        if siamese:
+            raise NotImplementedError("Siamese encoders with pad_to_max_length are not currently implemented")
         logger.debug("Using default_data_collator")
         data_collator = default_data_collator
     else:
@@ -211,6 +211,13 @@ def main(cfg):
             label_pad_token_id=label_pad_token_id,
             pad_to_multiple_of=8 if training_cfg.fp16 else None,
         )
+        if siamese:
+            logger.debug("Wrapping in SiameseDataCollatorForSeq2Seq")
+            data_collator = SiameseDataCollatorForSeq2Seq(
+                data_collator,
+                model.config.encoder.num_registers,
+                tokenizer.source_tokenizer.eor_token_id
+            )
 
     # Metric
     logger.info("Loading SacreBLEU")
