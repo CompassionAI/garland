@@ -43,9 +43,10 @@ class SiameseDataCollatorForSeq2Seq:
 
             for key, values in feature.items():
                 if not key == "labels":     # We add the labels at the end instead of duplicating them in each register
+                    bos, eos = values[0], values[-1]
                     register_values = _split_list(values[1:-1], register_splits)
                     for register_idx, register_value in enumerate(register_values):
-                        registers_features[register_idx][feat_idx][key] = register_value
+                        registers_features[register_idx][feat_idx][key] = [bos] + register_value + [eos]
 
         features_registers = {
             key: [None for _ in range(self.num_registers)]
