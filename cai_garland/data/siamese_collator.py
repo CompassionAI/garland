@@ -10,7 +10,7 @@ def _split_list(list_, split_idxs):
     for cur_idx in split_idxs:
         res.append(list_[last_idx:cur_idx])
         last_idx = cur_idx + 1
-    return res + [list_[cur_idx:]]
+    return res + [list_[last_idx:]]
 
 
 @dataclass
