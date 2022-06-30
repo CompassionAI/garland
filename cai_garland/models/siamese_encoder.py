@@ -4,6 +4,7 @@ from typing import Optional, Dict
 import torch
 
 from transformers import PreTrainedModel, PretrainedConfig, AutoConfig
+from transformers.modeling_outputs import BaseModelOutput
 from transformers.utils import logging
 from transformers.models.auto.configuration_auto import CONFIG_MAPPING
 
@@ -124,32 +125,40 @@ class SiameseEncoderModel(PreTrainedModel):
         return_dict: Optional[bool] = None,
         **kwargs
     ):
-        import ipdb; ipdb.set_trace()
+        if inputs_embeds is not None:
+            raise NotImplementedError("Siamese encoder does not currently support inputs_embeds")
+        if output_attentions is not None:
+            raise NotImplementedError("Siamese encoder does not currently support outputting attentions")
 
-        if len(input_ids) > 1:
-            raise ValueError("Batch forward not implemented")
+        encoder_outputs = []
+        for reg_input_ids, reg_attention_mask in zip(input_ids, attention_mask):
+            encoder_outputs.append(
+                self.base_encoder(
+                    input_ids=reg_input_ids,
+                    attention_mask=reg_attention_mask,
+                    inputs_embeds=inputs_embeds,
+                    output_attentions=output_attentions,
+                    output_hidden_states=output_hidden_states,
+                    return_dict=return_dict,
+                    **kwargs,
+                )
+            )
 
-        src_tokens = src_tokens[0]
-        split_idxs = (src_tokens == self.eor_token_id).nonzero(as_tuple=True)[0].tolist()
-        tokens_res, cur_split_idx = [], 0
-        for new_split_idx in split_idxs:
-            tokens_res.append(src_tokens[cur_split_idx:new_split_idx].view(1, -1))
-            cur_split_idx = new_split_idx + 1
-        tokens_res.append(src_tokens[cur_split_idx:].view(1, -1))
-        for _ in range(len(tokens_res), self.num_registers):
-            tokens_res.append(torch.LongTensor([bos, eos]).view(1, -1))
-        lengths_res = [torch.LongTensor([cur_tokens.size(1)]) for cur_tokens in tokens_res]
-        tokens_res, lengths_res = [[t.to(src_tokens) for t in ts] for ts in [tokens_res, lengths_res]]
-        src_tokens, src_lengths = tokens_res, lengths_res
-
-
-        encoder_outputs = self.base_encoder(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            inputs_embeds=inputs_embeds,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            **kwargs,
+        last_hidden_state=torch.cat([enc_out.last_hidden_state for enc_out in encoder_outputs], dim=1)
+        if output_hidden_states:
+            hidden_states = tuple(
+                [
+                    torch.cat([enc_out.hidden_states[state_idx] for enc_out in encoder_outputs], dim=1)
+                    for state_idx in range(len(encoder_outputs[0].hidden_states))
+                ]
+            )
+        else:
+            hidden_states = None
+        if not return_dict:
+            # Add more to here if implemented
+            return (last_hidden_state,) + tuple(v for v in [hidden_states] if v is not None)        
+        return BaseModelOutput(
+            last_hidden_state=last_hidden_state,
+            hidden_states=hidden_states,
+            attentions=None,
         )
-        import ipdb; ipdb.set_trace()
