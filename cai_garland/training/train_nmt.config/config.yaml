@@ -12,8 +12,9 @@ hydra:
   run:
     dir: ${oc.env:CAI_TEMP_PATH}/nmt/olive-cormorant-bart/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
-# Set this to true to skip the validation step
-skip_eval: false
+# Uncomment this to skip evaluation
+# training:
+#   evaluation_strategy: "NO"
 
 # Overwrite the cached training and evaluation sets
 overwrite_cache: false
