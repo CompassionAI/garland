@@ -1,5 +1,6 @@
 import copy
-from typing import Optional, Dict
+from dataclasses import dataclass
+from typing import Optional, Dict, Union, Any
 
 import torch
 
@@ -10,6 +11,11 @@ from transformers.models.auto.configuration_auto import CONFIG_MAPPING
 
 
 logger = logging.get_logger(__name__)
+
+
+@dataclass
+class BaseModelOutputWithAttentionMask(BaseModelOutput):
+    attention_mask: Optional[torch.FloatTensor] = None
 
 
 class SiameseEncoderConfig(PretrainedConfig):
@@ -32,7 +38,7 @@ class SiameseEncoderConfig(PretrainedConfig):
         self.encoder = AutoConfig.for_model(encoder_model_type, **encoder_config)
         self.num_registers = kwargs["num_registers"]
 
-        self.hidden_size = self.encoder.hidden_size * self.num_registers
+        self.hidden_size = self.encoder.hidden_size
 
     def to_dict(self) -> Dict[any, any]:
         """
@@ -115,6 +121,11 @@ class SiameseEncoderModel(PreTrainedModel):
     def set_output_embeddings(self, new_embeddings):
         raise ValueError("Siamese encoders are always headless, they have no output embedding layer")
 
+    def estimate_tokens(self, input_dict: Dict[str, Union[torch.Tensor, Any]]) -> int:
+        return super().estimate_tokens({
+            self.main_input_name: torch.cat(input_dict[self.main_input_name], dim=1)
+        })
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -144,7 +155,8 @@ class SiameseEncoderModel(PreTrainedModel):
                 )
             )
 
-        last_hidden_state=torch.cat([enc_out.last_hidden_state for enc_out in encoder_outputs], dim=1)
+        catted_attention_mask = torch.cat(attention_mask, dim=1)
+        last_hidden_state = torch.cat([enc_out.last_hidden_state for enc_out in encoder_outputs], dim=1)
         if output_hidden_states:
             hidden_states = tuple(
                 [
@@ -157,8 +169,9 @@ class SiameseEncoderModel(PreTrainedModel):
         if not return_dict:
             # Add more to here if implemented
             return (last_hidden_state,) + tuple(v for v in [hidden_states] if v is not None)        
-        return BaseModelOutput(
+        return BaseModelOutputWithAttentionMask(
             last_hidden_state=last_hidden_state,
+            attention_mask=catted_attention_mask,
             hidden_states=hidden_states,
             attentions=None,
         )
