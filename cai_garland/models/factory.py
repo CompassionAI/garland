@@ -54,13 +54,16 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
         cai_config = get_cai_config(cai_name)
 
         if cai_config.get('siamese', False):
+            if tokenizer is None:
+                raise ValueError("Need a tokenizer to construct a Siamese encoder")
             logger.debug("Constructing Siamese model")
             logger.debug("    Loading base model")
             base_model = _make_named_model(cai_config['base_model_name'], hf_model_factory, tokenizer=tokenizer)
             logger.debug("    Constructing Siamese config")
             siamese_config = SiameseEncoderConfig.from_base_encoder_config(
                 base_model.config,
-                cai_config['num_registers']
+                cai_config['num_registers'],
+                tokenizer.eor_token_id
             )
             logger.debug("    Constructing Siamese wrapper model")
             model = SiameseEncoderModel(siamese_config, base_encoder=base_model)

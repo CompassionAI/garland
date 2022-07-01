@@ -1,3 +1,4 @@
+from cmath import e
 import copy
 from dataclasses import dataclass
 from typing import Optional, Dict, Union, Any
@@ -36,6 +37,7 @@ class SiameseEncoderConfig(PretrainedConfig):
         encoder_model_type = encoder_config.pop("model_type")
         self.encoder = AutoConfig.for_model(encoder_model_type, **encoder_config)
         self.num_registers = kwargs["num_registers"]
+        self.eor_token_id = kwargs["eor_token_id"]
 
         self.hidden_size = self.encoder.hidden_size
 
@@ -57,6 +59,7 @@ class SiameseEncoderConfig(PretrainedConfig):
         cls,
         encoder_config: PretrainedConfig,
         num_registers: int,
+        eor_token_id: int,
         **kwargs
     ) -> PretrainedConfig:
         """Initialize a configuration for a Siamese encoder stack.
@@ -68,9 +71,11 @@ class SiameseEncoderConfig(PretrainedConfig):
                 Tokenizer for the base encoder, needed for the special tokens.
             num_registers:
                 Number of Siamese replicas (registers) to make for the base encoder.
+            eor_token_id:
+                The ID of the [eor] token in the tokenizer
         """
 
-        return cls(encoder=encoder_config.to_dict(), num_registers=num_registers, **kwargs)
+        return cls(encoder=encoder_config.to_dict(), num_registers=num_registers, eor_token_id=eor_token_id, **kwargs)
 
 
 # This injects our new model config type into the Hugging Face factory for configs without having to modify their
