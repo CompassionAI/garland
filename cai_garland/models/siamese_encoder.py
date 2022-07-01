@@ -7,7 +7,6 @@ import torch
 from transformers import PreTrainedModel, PretrainedConfig, AutoConfig, AutoModel
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.utils import logging
-# from transformers.models.auto.configuration_auto import CONFIG_MAPPING
 
 
 logger = logging.get_logger(__name__)
