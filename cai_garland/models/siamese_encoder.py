@@ -148,6 +148,21 @@ class SiameseEncoderModel(PreTrainedModel):
         if output_attentions:
             raise NotImplementedError("Siamese encoder does not currently support outputting attentions")
 
+        if type(input_ids) is torch.Tensor:
+            if len(input_ids) == 1:
+                from ..data.siamese_collator import _split_list
+                tokens = input_ids[0].cpu().tolist()
+                register_splits = [idx for idx, token in enumerate(tokens) if token == self.config.eor_token_id]
+                bos, eos = tokens[0], tokens[-1]
+                input_ids = [
+                    torch.IntTensor([[bos] + reg + [eos]]) for reg in _split_list(tokens[1:-1], register_splits)
+                ]
+                for _ in range(len(input_ids), self.config.num_registers):
+                    input_ids.append(torch.IntTensor([[bos, eos]]))
+                attention_mask = [torch.IntTensor([[1]*len(reg[0])]) for reg in input_ids]
+            else:
+                raise NotImplementedError("Siamese encoder does not currently support batch inference")
+
         encoder_outputs = []
         for reg_input_ids, reg_attention_mask in zip(input_ids, attention_mask):
             encoder_outputs.append(
