@@ -4,10 +4,10 @@ from typing import Optional, Dict, Union, Any
 
 import torch
 
-from transformers import PreTrainedModel, PretrainedConfig, AutoConfig
+from transformers import PreTrainedModel, PretrainedConfig, AutoConfig, AutoModel
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.utils import logging
-from transformers.models.auto.configuration_auto import CONFIG_MAPPING
+# from transformers.models.auto.configuration_auto import CONFIG_MAPPING
 
 
 logger = logging.get_logger(__name__)
@@ -76,7 +76,7 @@ class SiameseEncoderConfig(PretrainedConfig):
 
 # This injects our new model config type into the Hugging Face factory for configs without having to modify their
 #   code base. If ever this is contributed to the Transformers main branch, this should be moved.
-CONFIG_MAPPING.register(SiameseEncoderConfig.model_type, SiameseEncoderConfig)
+AutoConfig.register(SiameseEncoderConfig.model_type, SiameseEncoderConfig)
 
 
 class SiameseEncoderModel(PreTrainedModel):
@@ -90,7 +90,7 @@ class SiameseEncoderModel(PreTrainedModel):
     config_class = SiameseEncoderConfig
     base_model_prefix = "siamese_encoder"
 
-    def __init__(self, base_encoder: PreTrainedModel, config: SiameseEncoderConfig):
+    def __init__(self, config: SiameseEncoderConfig, base_encoder: PreTrainedModel = None):
         """
 
         Args:
@@ -101,6 +101,9 @@ class SiameseEncoderModel(PreTrainedModel):
         """
 
         super().__init__(config)
+        if base_encoder is None:
+            base_encoder = AutoModel.from_config(config.encoder)
+
         self.base_encoder = base_encoder
 
         if self.base_encoder.config.to_dict() != self.config.encoder.to_dict():
@@ -175,3 +178,8 @@ class SiameseEncoderModel(PreTrainedModel):
             hidden_states=hidden_states,
             attentions=None,
         )
+
+
+# This injects our new model type into the Hugging Face factory for models without having to modify their code base. If
+#   ever this is contributed to the Transformers main branch, this should be moved.
+AutoModel.register(SiameseEncoderConfig, SiameseEncoderModel)

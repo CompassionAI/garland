@@ -5,6 +5,8 @@ from transformers import EncoderDecoderModel
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_garland.models.factory import make_bilingual_tokenizer
 
+from cai_garland.models.siamese_encoder import SiameseEncoderModel      # Need to import to tensure it is registered
+
 
 logger = logging.getLogger(__name__)
 
