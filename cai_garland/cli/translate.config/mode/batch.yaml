@@ -4,39 +4,12 @@ process_func:
 # This should be specified from the command line
 input_glob: ~
 
+input_encoding: utf-8
+
 output_dir: ./translations
 
 # Extension of the output files (without the starting dot)
 output_extension: en
-
-encoding: utf-8
-
-# Hard segmentation is applied before preprocessing. Hard segments reset the beam generation state. Note that file
-#   boundaries always count as hard segments.
-#
-#   This is a single function in cai_garland.utils.segmenters
-#
-#   The recommended segmenters are: none, opening_shad_segmenter, line_break_segmenter, double_shad_segmenter
-hard_segmentation:
-  _target_: cai_garland.utils.segmenters.opening_shad_segmenter
-hard_segmenter_kwargs: {}
-
-# Preprocessing is applied after hard segmentation (if any). This happens right before feeding the segments to the
-#   generation algorithm.
-#
-#   This is a (possibly empty) list of function calls in cai_garland.utils.str_processors, formatted like so:
-#     - _target_: cai_garland.utils.str_processors.sample_func_1
-#     - _target_: cai_garland.utils.str_processors.sample_func_2
-#     - ...
-preprocessing:
-  - _target_: cai_garland.utils.str_processors.remove_newline
-  - _target_: cai_garland.utils.str_processors.remove_consecutive_spaces
-
-# Preprocessing is applied to the decoded text.
-#
-#   This is a (possibly empty) list of functions in cai_garland.utils.str_processors
-postprocessing:
-  - _target_: cai_garland.utils.str_processors.remove_consecutive_spaces
 
 # If true will output in the form:
 #   preprocessed source segment
