@@ -1,0 +1,2 @@
+model_ckpt: olive-cormorant-bart
+model_size: base-x3-base

@@ -5,6 +5,8 @@ from transformers import EncoderDecoderModel
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_garland.models.factory import make_bilingual_tokenizer
 
+from cai_garland.models.siamese_encoder import SiameseEncoderModel
+
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +76,16 @@ class Translator:
             The translated text (not tokens)."""
 
         bo_tokens = self.tokenizer(bo_text, return_tensors="pt").input_ids
-        if len(bo_tokens[0]) > self.model.encoder.max_length:
-            raise TokenizationTooLongException(f"Translation input too long: encoder maximum length is "
-                                      f"{self.model.encoder.max_length}, input tokenizes to {len(bo_tokens[0])} "
-                                      f"tokens.")
+        if type(self.model.encoder) is SiameseEncoderModel:
+            splits = self.model.encoder.split_tokens_into_registers(bo_tokens)['input_ids']
+            if any(len(tokens[0]) > self.model.encoder.max_length for tokens in splits):
+                raise TokenizationTooLongException(f"Translation input too long: encoder maximum length is "
+                    f"{self.model.encoder.max_length}.")
+        else:
+            if len(bo_tokens[0]) > self.model.encoder.max_length:
+                raise TokenizationTooLongException(f"Translation input too long: encoder maximum length is "
+                    f"{self.model.encoder.max_length}, input tokenizes to {len(bo_tokens[0])} "
+                    f"tokens.")
         logger.debug(f"Tokenized input: {bo_tokens[0]}")
         logger.debug(f"Tokenized input length: {len(bo_tokens[0])}")
         if self._cuda:

@@ -34,10 +34,11 @@ import numpy as np
 from datasets import load_dataset, load_metric
 
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
-from transformers.trainer_utils import get_last_checkpoint
+from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint
 
 from cai_common.utils.tensorboard_callback import CAITensorboardCallback
 from cai_garland.models.factory import make_encoder_decoder
+from cai_garland.data.siamese_collator import SiameseDataCollatorForSeq2Seq
 
 
 logger = logging.getLogger(__name__)
@@ -53,13 +54,15 @@ def preprocess_function(
     max_source_length=None,
     max_target_length=None,
     padding=None,
-    ignore_pad_token_for_loss=None
+    ignore_pad_token_for_loss=None,
+    siamese=None
 ):
     if tokenizer is None or \
         max_source_length is None or \
         max_target_length is None or \
         padding is None or \
-        ignore_pad_token_for_loss is None:
+        ignore_pad_token_for_loss is None or \
+        siamese is None:
         raise ValueError("One of the argument to preprocess_function is missing")
 
     inputs = [ex for ex in examples["tibetan"]]
@@ -73,6 +76,8 @@ def preprocess_function(
     # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
     # padding in the loss.
     if padding == "max_length" and ignore_pad_token_for_loss:
+        if siamese:
+            raise NotImplementedError("pad_to_max_length is not implemented with Siamese models")
         targets["input_ids"] = [
             [(l if l != tokenizer.pad_token_id else -100) for l in label]
                 for label in targets["input_ids"]
@@ -87,7 +92,7 @@ def main(cfg):
     cfg.training.output_dir = HydraConfig.get().run.dir
     training_cfg = HydraSeq2SeqTrainingArguments.as_hf_training_args(cfg.training)
     training_cfg.logging_dir = os.path.join(cfg.training.output_dir, "tb_logs")
-    training_cfg.do_eval = not cfg.skip_eval
+    skip_eval = cfg.training.evaluation_strategy == IntervalStrategy.NO
 
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -96,8 +101,8 @@ def main(cfg):
     )
 
     logger.info(
-        f"Process rank: {training_cfg.local_rank}, device: {training_cfg.device}, n_gpu: {training_cfg.n_gpu}"
-        + f"distributed training: {bool(training_cfg.local_rank != -1)}, 16-bits training: {training_cfg.fp16}"
+        f"Process rank: {training_cfg.local_rank}, device: {training_cfg.device}, n_gpu: {training_cfg.n_gpu}, "
+        f"distributed training: {bool(training_cfg.local_rank != -1)}, 16-bits training: {training_cfg.fp16}"
     )
 
     # Detecting last checkpoint.
@@ -137,6 +142,7 @@ def main(cfg):
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
+    siamese = model.config.encoder.model_type == "siamese-encoder"
 
     logger.info("Preprocessing training dataset")
     with training_cfg.main_process_first(desc="train dataset map pre-processing"):
@@ -151,45 +157,51 @@ def main(cfg):
                 "max_source_length": cfg.model.max_source_length,
                 "max_target_length": max_target_length,
                 "padding": padding,
-                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss
+                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                "siamese": siamese
             }
         )
-    logger.info("Preprocessing validation dataset")
-    with training_cfg.main_process_first(desc="validation dataset map pre-processing"):
-        eval_dataset = eval_dataset.map(
-            preprocess_function,
-            batched=True,
-            num_proc=cfg.training_preprocess.preprocessing_num_workers,
-            load_from_cache_file=not cfg.overwrite_cache,
-            desc="Running tokenizer on train dataset",
-            fn_kwargs={
-                "tokenizer": tokenizer,
-                "max_source_length": cfg.model.max_source_length,
-                "max_target_length": max_target_length,
-                "padding": padding,
-                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss
-            }
-        )
-    logger.info("Preprocessing test dataset")
-    with training_cfg.main_process_first(desc="test dataset map pre-processing"):
-        test_dataset = test_dataset.map(
-            preprocess_function,
-            batched=True,
-            num_proc=cfg.training_preprocess.preprocessing_num_workers,
-            load_from_cache_file=not cfg.overwrite_cache,
-            desc="Running tokenizer on test dataset",
-            fn_kwargs={
-                "tokenizer": tokenizer,
-                "max_source_length": cfg.model.max_source_length,
-                "max_target_length": max_target_length,
-                "padding": padding,
-                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss
-            }
-        )
+    if not skip_eval:
+        logger.info("Preprocessing validation dataset")
+        with training_cfg.main_process_first(desc="validation dataset map pre-processing"):
+            eval_dataset = eval_dataset.map(
+                preprocess_function,
+                batched=True,
+                num_proc=cfg.training_preprocess.preprocessing_num_workers,
+                load_from_cache_file=not cfg.overwrite_cache,
+                desc="Running tokenizer on train dataset",
+                fn_kwargs={
+                    "tokenizer": tokenizer,
+                    "max_source_length": cfg.model.max_source_length,
+                    "max_target_length": max_target_length,
+                    "padding": padding,
+                    "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                    "siamese": siamese
+                }
+            )
+        logger.info("Preprocessing test dataset")
+        with training_cfg.main_process_first(desc="test dataset map pre-processing"):
+            test_dataset = test_dataset.map(
+                preprocess_function,
+                batched=True,
+                num_proc=cfg.training_preprocess.preprocessing_num_workers,
+                load_from_cache_file=not cfg.overwrite_cache,
+                desc="Running tokenizer on test dataset",
+                fn_kwargs={
+                    "tokenizer": tokenizer,
+                    "max_source_length": cfg.model.max_source_length,
+                    "max_target_length": max_target_length,
+                    "padding": padding,
+                    "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                    "siamese": siamese
+                }
+            )
 
     # Data collator
     label_pad_token_id = -100 if cfg.training_preprocess.ignore_pad_token_for_loss else tokenizer.pad_token_id
     if cfg.training_preprocess.pad_to_max_length:
+        if siamese:
+            raise NotImplementedError("Siamese encoders with pad_to_max_length are not currently implemented")
         logger.debug("Using default_data_collator")
         data_collator = default_data_collator
     else:
@@ -200,6 +212,13 @@ def main(cfg):
             label_pad_token_id=label_pad_token_id,
             pad_to_multiple_of=8 if training_cfg.fp16 else None,
         )
+        if siamese:
+            logger.debug("Wrapping in SiameseDataCollatorForSeq2Seq")
+            data_collator = SiameseDataCollatorForSeq2Seq(
+                data_collator,
+                model.config.encoder.num_registers,
+                tokenizer.source_tokenizer.eor_token_id
+            )
 
     # Metric
     logger.info("Loading SacreBLEU")
@@ -246,7 +265,7 @@ def main(cfg):
         model=model,
         args=training_cfg,
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset if not cfg.skip_eval else None,
+        eval_dataset=eval_dataset if not skip_eval else None,
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_cfg.predict_with_generate else None,
@@ -284,7 +303,7 @@ def main(cfg):
         if training_cfg.generation_max_length is not None
         else cfg.training_preprocess.val_max_target_length
     )
-    if not cfg.skip_eval:
+    if not skip_eval:
         logger.info(f"{ForeColor.LIGHTCYAN_EX}Evaluating the final checkpoint")
 
         metrics = trainer.evaluate(

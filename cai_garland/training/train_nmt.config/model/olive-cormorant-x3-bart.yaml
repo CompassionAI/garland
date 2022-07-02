@@ -1,0 +1,13 @@
+# Encoder model name, following make_encoder_decoder naming convention
+encoder_model: cai:albert-olive-cormorant/base-x3     # This is a config for a Siamese model
+
+# The maximum total input sequence length after tokenization _for the base encoder_. This is the maximum length of a
+#   single register. Sequences longer than this will be truncated, sequences shorter will be padded
+max_source_length: 128
+
+# Decoder model name, following make_encoder_decoder naming convention
+decoder_model: hf:facebook/bart-base
+
+# The maximum total sequence length for target text after tokenization. Sequences longer than this will be truncated,
+#   sequences shorter will be padded
+max_target_length: 1024
