@@ -141,6 +141,7 @@ class SiameseEncoderModel(PreTrainedModel):
             raise NotImplementedError("Siamese encoder does not currently support batch inference")
 
         from ..data.siamese_collator import _split_list
+        to_device = input_ids.device
         tokens = input_ids[0].cpu().tolist()
         register_splits = [idx for idx, token in enumerate(tokens) if token == self.config.eor_token_id]
         bos, eos = tokens[0], tokens[-1]
@@ -151,8 +152,8 @@ class SiameseEncoderModel(PreTrainedModel):
             input_ids.append(torch.IntTensor([[bos, eos]]))
         attention_mask = [torch.IntTensor([[1]*len(reg[0])]) for reg in input_ids]
         return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask
+            "input_ids": [tensor.to(to_device) for tensor in input_ids],
+            "attention_mask": [tensor.to(to_device) for tensor in attention_mask]
         }
 
 
