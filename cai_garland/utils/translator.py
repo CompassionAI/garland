@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from transformers import EncoderDecoderModel
 
@@ -13,6 +14,13 @@ logger = logging.getLogger(__name__)
 
 class TokenizationTooLongException(Exception):
     pass
+
+
+def _warm_start_constraints(batch_id, input_ids, target_tkns):
+    if len(input_ids) < len(target_tkns):
+        return [target_tkns[len(input_ids) - 1]]
+    else:
+        return slice(0, None)
 
 
 class Translator:
@@ -66,7 +74,7 @@ class Translator:
         self._cuda = False
         self.model.cpu()
 
-    def translate(self, bo_text: str) -> str:
+    def translate(self, bo_text: str, prefix: Optional[str]=None) -> str:
         """Translate the input Tibtean.
         
         Args:
@@ -76,6 +84,7 @@ class Translator:
             The translated text (not tokens)."""
 
         bo_tokens = self.tokenizer(bo_text, return_tensors="pt").input_ids
+
         if type(self.model.encoder) is SiameseEncoderModel:
             splits = self.model.encoder.split_tokens_into_registers(bo_tokens)['input_ids']
             if any(len(tokens[0]) > self.model.encoder.max_length for tokens in splits):
@@ -86,13 +95,29 @@ class Translator:
                 raise TokenizationTooLongException(f"Translation input too long: encoder maximum length is "
                     f"{self.model.encoder.max_length}, input tokenizes to {len(bo_tokens[0])} "
                     f"tokens.")
+
         logger.debug(f"Tokenized input: {bo_tokens[0]}")
         logger.debug(f"Tokenized input length: {len(bo_tokens[0])}")
+
+        if prefix is not None:
+            with self.tokenizer.as_target_tokenizer():
+                prefix_tokens = self.tokenizer(prefix).input_ids[:-1]
+                prefix_fn = lambda batch_id, input_ids: _warm_start_constraints(
+                    batch_id, input_ids, prefix_tokens)
+        else:
+            prefix_fn = None
+
         if self._cuda:
             bo_tokens = bo_tokens.cuda()
-        preds = self.model.generate(bo_tokens, max_length=self.model.decoder.max_length, num_beams=self.num_beams)[0]
+        preds = self.model.generate(
+            bo_tokens,
+            max_length=self.model.decoder.max_length,
+            num_beams=self.num_beams,
+            prefix_allowed_tokens_fn=prefix_fn
+        )[0]
         if self._cuda:
             preds = preds.cpu()
+
         logger.debug(f"Generated tokens: {preds}")
         logger.debug(f"Generated tokens length: {len(preds)}")
         with self.tokenizer.as_target_tokenizer():
