@@ -1,9 +1,9 @@
 from contextlib import contextmanager
 
-from transformers import PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizer
 
 
-class BilingualTokenizer(PreTrainedTokenizerBase):
+class BilingualTokenizer(PreTrainedTokenizer):
     def __init__(self, source_tokenizer, target_tokenizer, *args, **kwargs):
         self.source_tokenizer = source_tokenizer
         self.target_tokenizer = target_tokenizer
@@ -45,6 +45,9 @@ class BilingualTokenizer(PreTrainedTokenizerBase):
 
     def _decode(self, *args, **kwargs):
         return self._tokenizer._decode(*args, **kwargs)
+
+    def build_inputs_with_special_tokens(self, token_ids_0, token_ids_1 = None):
+        return self._tokenizer.build_inputs_with_special_tokens(token_ids_0, token_ids_1=token_ids_1)
 
     def save_pretrained(
         self,
