@@ -47,25 +47,33 @@ def batch(translator, mode_cfg, generation_cfg):
         out_fn = os.path.join(
             mode_cfg.output_dir, os.path.splitext(os.path.basename(in_fn))[0] + '.' + mode_cfg.output_extension)
         with open(out_fn, mode='w') as out_f:
-            for segment in tqdm(hard_segments, desc="Segments", leave=False):
+            for hard_segment in tqdm(hard_segments, desc="Hard segments", leave=False):
                 for preproc_func in generation_cfg.processing.preprocessing:
-                    segment = instantiate(preproc_func, segment)
+                    hard_segment = instantiate(preproc_func, hard_segment)
 
-                try:
-                    tgt_segment = translator.translate(segment)
-                except TokenizationTooLongException as err:
-                    if not mode_cfg.skip_long_inputs:
-                        raise err
-                    else:
-                        tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
+                soft_segments = instantiate(
+                    generation_cfg.segmentation.soft_segmentation,
+                    hard_segment,
+                    translator=translator,
+                    **dict(generation_cfg.segmentation.soft_segmenter_kwargs)
+                )
 
-                for postproc_func in generation_cfg.processing.postprocessing:
-                    tgt_segment = instantiate(postproc_func, tgt_segment)
+                for soft_segment in tqdm(soft_segments, desc="Soft segments", leave=False):
+                    try:
+                        tgt_segment = translator.translate(soft_segment)
+                    except TokenizationTooLongException as err:
+                        if not mode_cfg.skip_long_inputs:
+                            raise err
+                        else:
+                            tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
 
-                if mode_cfg.output_parallel_translation:
-                    out_f.write(segment + '\n')
-                out_f.write(tgt_segment + '\n')
-                out_f.write('\n')
+                    for postproc_func in generation_cfg.processing.postprocessing:
+                        tgt_segment = instantiate(postproc_func, tgt_segment)
+
+                    if mode_cfg.output_parallel_translation:
+                        out_f.write(soft_segment + '\n')
+                    out_f.write(tgt_segment + '\n')
+                    out_f.write('\n')
 
 
 @hydra.main(version_base="1.2", config_path="./translate.config", config_name="config")
