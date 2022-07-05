@@ -10,12 +10,20 @@ segmentation:
   #
   #   The recommended segmenters are: none, opening_shad_segmenter, line_break_segmenter, double_shad_segmenter
   hard_segmentation:
-    _target_: cai_garland.utils.segmenters.opening_shad_segmenter
+    _target_: cai_garland.utils.segmenters.none
   hard_segmenter_kwargs: {}
 
+  # Soft segmentation is applied after preprocessing. Soft segments do _not_ reset the beam generation state.
+  #
+  #   This is a single function in cai_garland.utils.segmenters
+  #
+  #   The recommended segmenters are: none, opening_shad_segmenter, target_token_count_segmenter
+  soft_segmentation:
+    _target_: cai_garland.utils.segmenters.target_token_count_segmenter
+  soft_segmenter_kwargs: {}
+
 processing:
-  # Preprocessing is applied after hard segmentation (if any). This happens right before feeding the segments to the
-  #   generation algorithm.
+  # Preprocessing is applied after hard segmentation (if any) but before soft segmentation (if any).
   #
   #   This is a (possibly empty) list of function calls in cai_garland.utils.str_processors, formatted like so:
   #     - _target_: cai_garland.utils.str_processors.sample_func_1
