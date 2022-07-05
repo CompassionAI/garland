@@ -1,3 +1,6 @@
+from tqdm.auto import tqdm
+
+
 def _prepend_shad_if_needed(bo_text):
     if not bo_text[0] == '།':
         bo_text = '།' + bo_text
@@ -28,29 +31,51 @@ def line_break_segmenter(bo_text, **kwargs):
     return [x.strip() for x in bo_text.split('\n') if len(x.strip()) > 0]
 
 
-def target_token_count_segmenter(bo_text, tokenizer, max_register_length=128, num_special_tokens=2, **kwargs):
+def target_token_count_segmenter(bo_text, translator=None, tqdm=tqdm, **kwargs):
+    # This segmenter packs bo_text into registers. Each register is of the longest possible length that fits into the
+    #   encoder.
+    #
+    #   1. First, segment by opening shads.
+    #   2. If some segments don't fit, subdivide those segments again by the closing shad.
+    #   3. Greedily sweep left to right and append to registers as you go until you run out of space, after which start
+    #       a new register.
+    #
+    # Note that this algorithm does not take any maximum number of registers. Also, after the closing shad segmentation
+    #   in the second step there may still be segments of length longer than the encoder length, in which case their
+    #   encoding will fail during translation (or they need to be further segmented downstream).
+    if translator is None:
+        raise ValueError("target_token_count_segmenter needs to have the translator helper class passed in")
     bo_segments = opening_shad_segmenter(bo_text)
-    available_space = max_register_length - num_special_tokens
-    bo_token_lengths = [len(tokenizer.encode(bo_segment, add_special_tokens=False)) for bo_segment in bo_segments]
+    available_space = translator.model.encoder.max_length - translator.tokenizer.num_special_tokens_to_add(pair=False)
+
+    bo_token_lengths = [
+        len(translator.tokenizer.encode(bo_segment, add_special_tokens=False))
+        for bo_segment in tqdm(bo_segments, desc="Calculating lengths", leave=False)
+    ]
+
     if max(bo_token_lengths) > available_space:
         new_segments = []
-        for idx, (bo_segment, tkn_length) in enumerate(zip(bo_segments, bo_token_lengths)):
+        for bo_segment, tkn_length in zip(bo_segments, bo_token_lengths):
             if tkn_length > available_space:
                 new_segments.extend(closing_shad_segmenter(bo_segment))
             else:
                 new_segments.append(bo_segment)
         bo_segments = new_segments
-    bo_token_lengths = [len(tokenizer.encode(bo_segment, add_special_tokens=False)) for bo_segment in bo_segments]
-    if max(bo_token_lengths) > available_space:
-        raise ValueError("Tokenized Tibetan text is too long for register encoding")
-    bo_registers, register_start, register_idx = [], 0, 0
-    while register_idx < len(bo_token_lengths):
-        while sum(bo_token_lengths[register_start:register_idx + 1]) <= available_space:
-            if register_idx == len(bo_token_lengths):
-                break
-            register_idx += 1
-        if register_idx == register_start:
-            continue
-        bo_registers.append(' '.join(bo_segments[register_start:register_idx]).strip())
-        register_start = register_idx
-    return bo_registers
+        bo_token_lengths = [
+            len(translator.tokenizer.encode(bo_segment, add_special_tokens=False))
+            for bo_segment in tqdm(bo_segments, desc="Re-calculating lengths", leave=False)
+        ]
+
+    registers, cur_register, cur_register_length = [], [], 0
+    while True:
+        if (len(bo_segments) == 0) or (cur_register_length + bo_token_lengths[0] > available_space):
+            registers.append(' '.join(cur_register).strip())
+            cur_register, cur_register_length = [], 0
+
+        if len(bo_segments) == 0:
+            break
+
+        cur_register.append(bo_segments.pop(0))
+        cur_register_length += bo_token_lengths.pop(0)
+
+    return registers
