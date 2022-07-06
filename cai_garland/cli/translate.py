@@ -96,7 +96,7 @@ def batch(translator, mode_cfg, generation_cfg):
                         tgt_segment = instantiate(postproc_func, tgt_segment)
 
                     if mode_cfg.output_parallel_translation:
-                        out_f.write(input_ + '\n')
+                        out_f.write(soft_segment + '\n')
                     out_f.write(tgt_segment + '\n')
                     out_f.write('\n')
 
