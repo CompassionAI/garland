@@ -58,20 +58,45 @@ def batch(translator, mode_cfg, generation_cfg):
                     **dict(generation_cfg.segmentation.soft_segmenter_kwargs)
                 )
 
+                register_memory_decoding = translator.model.encoder.config.model_type == "siamese-encoder" and \
+                    generation_cfg.get("use_registers_for_decoding_memory", True)
+                if register_memory_decoding:
+                    src_registers, tgt_registers = [], []
+                    num_registers = translator.model.encoder.config.num_registers
                 for soft_segment in tqdm(soft_segments, desc="Soft segments", leave=False):
+                    if register_memory_decoding:
+                        input_ = translator.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
+                        prefix = ' '.join(tgt_registers)
+                    else:
+                        input_ = soft_segment
+                        prefix = None
+
+                    translation_err = False
                     try:
-                        tgt_segment = translator.translate(soft_segment)
+                        tgt_segment = translator.translate(input_, prefix=prefix)
                     except TokenizationTooLongException as err:
                         if not mode_cfg.skip_long_inputs:
                             raise err
                         else:
+                            translation_err = True
                             tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
+
+                    if register_memory_decoding:
+                        if translation_err:
+                            src_registers, tgt_registers = [], []
+                        else:
+                            tgt_segment = tgt_segment[len(prefix):].strip()
+                            src_registers.append(soft_segment)
+                            tgt_registers.append(tgt_segment)
+                            if len(src_registers) == num_registers:
+                                src_registers.pop(0)
+                                tgt_registers.pop(0)
 
                     for postproc_func in generation_cfg.processing.postprocessing:
                         tgt_segment = instantiate(postproc_func, tgt_segment)
 
                     if mode_cfg.output_parallel_translation:
-                        out_f.write(soft_segment + '\n')
+                        out_f.write(input_ + '\n')
                     out_f.write(tgt_segment + '\n')
                     out_f.write('\n')
 
