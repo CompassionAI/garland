@@ -8,7 +8,7 @@ def _split_list(list_, split_idxs):
         return [list_]
     res, last_idx = [], 0
     for cur_idx in split_idxs:
-        res.append(list_[last_idx:cur_idx])
+        res.append(list_[last_idx:cur_idx - 1])
         last_idx = cur_idx + 1
     return res + [list_[last_idx:]]
 
