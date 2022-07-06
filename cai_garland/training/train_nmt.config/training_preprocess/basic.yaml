@@ -24,3 +24,6 @@ max_train_samples: ~
 
 # For debugging purposes or quicker training, truncate the number of evaluation examples to this value if set
 max_eval_samples: ~
+
+# You can toggle padding quantization here if you like. It doesn't seem to make much difference
+no_padding_quantization: false
