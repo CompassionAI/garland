@@ -198,6 +198,7 @@ def main(cfg):
             )
 
     # Data collator
+    half_precision = training_cfg.fp16 or training_cfg.bf16
     label_pad_token_id = -100 if cfg.training_preprocess.ignore_pad_token_for_loss else tokenizer.pad_token_id
     if cfg.training_preprocess.pad_to_max_length:
         if siamese:
@@ -210,7 +211,7 @@ def main(cfg):
             tokenizer,
             model=model,
             label_pad_token_id=label_pad_token_id,
-            pad_to_multiple_of=8 if training_cfg.fp16 else None,
+            pad_to_multiple_of=8 if half_precision else None,
         )
         if siamese:
             logger.debug("Wrapping in SiameseDataCollatorForSeq2Seq")
