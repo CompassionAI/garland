@@ -34,3 +34,10 @@ predict_with_generate: true
 
 # Do not output memory use metrics to Tensorboard. This seems to be buggy in the current version of Transformers
 skip_memory_metrics: true
+
+# Various floating point settings. Currently bf16 is the recommended.
+#   See here for good explanation:
+#   https://huggingface.co/docs/transformers/perf_train_gpu_one#fp16-training
+# fp16: true
+bf16: true
+# tf32: true
