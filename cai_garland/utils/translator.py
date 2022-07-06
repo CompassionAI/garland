@@ -1,11 +1,12 @@
 import logging
 from typing import Optional
+from tqdm.auto import tqdm
 
 from transformers import EncoderDecoderModel
 
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_garland.models.factory import make_bilingual_tokenizer
-
+from cai_garland.utils.segmenters import SegmenterNone, SegmenterOpeningShad
 from cai_garland.models.siamese_encoder import SiameseEncoderModel
 
 
@@ -31,7 +32,16 @@ class Translator:
         model: An EncoderDecoderModel for the fine-tuned encoder-decoder translation stack.
         tokenizer: A BilingualTokenizer for the source and target languages.
         num_beams: Number of beams to use in the beam search (default is 20).
+        hard_segmenter: Which hard segmenter from cai_garland.utils.segmenters to use for batch translation.
+        soft_segmenter: Which soft segmenter from cai_garland.utils.segmenters to use for batch translation.
+        preprocessors: List of preprocessors from cai_garland.utils.str_processors to use for batch translation.
+        postprocessors: List of postprocessors from cai_garland.utils.str_processors to use for batch translation.
     """
+
+    hard_segmenter = SegmenterOpeningShad()
+    preprocessors = []
+    soft_segmenter = SegmenterNone()
+    postprocessors = []
 
     def __init__(self, model_ckpt: str) -> None:
         """Loads all the relevant data and models for machine translation.
@@ -122,3 +132,60 @@ class Translator:
         logger.debug(f"Generated tokens length: {len(preds)}")
         with self.tokenizer.as_target_tokenizer():
             return self.tokenizer.decode(preds, skip_special_tokens=True).strip()
+
+
+    def batch_translate(
+        self,
+        bo_text,
+        out_fn,
+        tqdm=tqdm,
+        hard_segmenter_kwargs={},
+        soft_segmenter_kwargs={},
+        retrospective_registers=False,
+        throw_translation_errors=False
+    ):
+        hard_segments = self.hard_segmenter(bo_text, **hard_segmenter_kwargs)
+
+        with open(out_fn, mode='w') as out_f:
+            for hard_segment in tqdm(hard_segments, desc="Hard segments", leave=False):
+                for preproc_func in self.preprocessors:
+                    hard_segment = preproc_func(hard_segment)
+
+                soft_segments = self.soft_segmenter(hard_segment, translator=self, **soft_segmenter_kwargs)
+
+                if retrospective_registers:
+                    src_registers, tgt_registers = [], []
+                    num_registers = self.model.encoder.config.num_registers
+                for soft_segment in tqdm(soft_segments, desc="Soft segments", leave=False):
+                    if retrospective_registers:
+                        input_ = self.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
+                        prefix = ' '.join(tgt_registers)
+                    else:
+                        input_ = soft_segment
+                        prefix = None
+
+                    translation_err = False
+                    try:
+                        tgt_segment = self.translate(input_, prefix=prefix)
+                    except TokenizationTooLongException as err:
+                        if throw_translation_errors:
+                            raise err
+                        else:
+                            translation_err = True
+                            tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
+
+                    if retrospective_registers:
+                        if translation_err:
+                            src_registers, tgt_registers = [], []
+                        else:
+                            tgt_segment = tgt_segment[len(prefix):].strip()
+                            src_registers.append(soft_segment)
+                            tgt_registers.append(tgt_segment)
+                            if len(src_registers) == num_registers:
+                                src_registers.pop(0)
+                                tgt_registers.pop(0)
+
+                    for postproc_func in self.postprocessors:
+                        tgt_segment = postproc_func(tgt_segment)
+
+                    yield soft_segment, tgt_segment

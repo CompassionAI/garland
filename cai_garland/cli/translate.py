@@ -38,67 +38,35 @@ def batch(translator, mode_cfg, generation_cfg):
         else:
             generation_cfg = generation_cfg
 
-        hard_segments = instantiate(
-            generation_cfg.segmentation.hard_segmentation,
-            bo_text,
-            **dict(generation_cfg.segmentation.hard_segmenter_kwargs)
-        )
-
         out_fn = os.path.join(
             mode_cfg.output_dir, os.path.splitext(os.path.basename(in_fn))[0] + '.' + mode_cfg.output_extension)
+        retrospective_registers = translator.model.encoder.config.model_type == "siamese-encoder" and \
+            generation_cfg.get("use_registers_for_retrospective_decoding", True)
         with open(out_fn, mode='w') as out_f:
-            for hard_segment in tqdm(hard_segments, desc="Hard segments", leave=False):
-                for preproc_func in generation_cfg.processing.preprocessing:
-                    hard_segment = instantiate(preproc_func, hard_segment)
+            translator.hard_segmenter = instantiate(generation_cfg.segmentation.hard_segmentation)
+            translator.preprocessors = [
+                instantiate(preproc_func)
+                for preproc_func in generation_cfg.processing.preprocessing
+            ]
+            translator.soft_segmenter = instantiate(generation_cfg.segmentation.soft_segmentation)
+            translator.postprocessors = [
+                instantiate(preproc_func)
+                for preproc_func in generation_cfg.processing.postprocessing
+            ]
 
-                soft_segments = instantiate(
-                    generation_cfg.segmentation.soft_segmentation,
-                    hard_segment,
-                    translator=translator,
-                    **dict(generation_cfg.segmentation.soft_segmenter_kwargs)
-                )
-
-                retrospective_registers = translator.model.encoder.config.model_type == "siamese-encoder" and \
-                    generation_cfg.get("use_registers_for_retrospective_decoding", True)
-                if retrospective_registers:
-                    src_registers, tgt_registers = [], []
-                    num_registers = translator.model.encoder.config.num_registers
-                for soft_segment in tqdm(soft_segments, desc="Soft segments", leave=False):
-                    if retrospective_registers:
-                        input_ = translator.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
-                        prefix = ' '.join(tgt_registers)
-                    else:
-                        input_ = soft_segment
-                        prefix = None
-
-                    translation_err = False
-                    try:
-                        tgt_segment = translator.translate(input_, prefix=prefix)
-                    except TokenizationTooLongException as err:
-                        if not mode_cfg.skip_long_inputs:
-                            raise err
-                        else:
-                            translation_err = True
-                            tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
-
-                    if retrospective_registers:
-                        if translation_err:
-                            src_registers, tgt_registers = [], []
-                        else:
-                            tgt_segment = tgt_segment[len(prefix):].strip()
-                            src_registers.append(soft_segment)
-                            tgt_registers.append(tgt_segment)
-                            if len(src_registers) == num_registers:
-                                src_registers.pop(0)
-                                tgt_registers.pop(0)
-
-                    for postproc_func in generation_cfg.processing.postprocessing:
-                        tgt_segment = instantiate(postproc_func, tgt_segment)
-
-                    if mode_cfg.output_parallel_translation:
-                        out_f.write(soft_segment + '\n')
-                    out_f.write(tgt_segment + '\n')
-                    out_f.write('\n')
+            for src_segment, tgt_segment in translator.batch_translate(
+                bo_text,
+                out_fn,
+                tqdm=tqdm,
+                hard_segmenter_kwargs=dict(generation_cfg.segmentation.hard_segmenter_kwargs),
+                soft_segmenter_kwargs=dict(generation_cfg.segmentation.soft_segmenter_kwargs),
+                retrospective_registers=retrospective_registers,
+                throw_translation_errors=not mode_cfg.skip_long_inputs
+            ):
+                if mode_cfg.output_parallel_translation:
+                    out_f.write(src_segment + '\n')
+                out_f.write(tgt_segment + '\n')
+                out_f.write('\n')
 
 
 @hydra.main(version_base="1.2", config_path="./translate.config", config_name="config")

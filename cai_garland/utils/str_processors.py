@@ -1,13 +1,16 @@
 import re
 
 
-def remove_newline(segment):
-    return segment.replace('\n', '').strip()
+class ProcessorRemoveNewLine:
+    def __call__(self, segment: str) -> str:
+        return segment.replace('\n', '').strip()
 
 
-def replace_newline_with_space(segment):
-    return segment.replace('\n', ' ').strip()
+class ProcessorReplaceNewLineWithSpace:
+    def __call__(self, segment: str) -> str:
+       return segment.replace('\n', ' ').strip()
 
 
-def remove_consecutive_spaces(segment):
-    return re.sub('\s+', ' ', segment).strip()
+class ProcessorRemoveConsecutiveSpaces:
+    def __call__(self, segment: str) -> str:
+        return re.sub('\s+', ' ', segment).strip()
