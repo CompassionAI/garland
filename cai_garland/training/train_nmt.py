@@ -121,11 +121,25 @@ def main(cfg):
 
     set_seed(training_cfg.seed)
 
+    logger.info("Making encoder-decoder model")
+    model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model)
+
+    if model.config.decoder.decoder_start_token_id is None:
+        raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
+
+    # Temporarily set max_target_length for training.
+    max_target_length = model.config.decoder.max_position_embeddings
+    padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
+    siamese = model.config.encoder.model_type == "siamese-encoder"
+
     logger.info("Loading training dataset")
     train_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.TRAIN)
     logger.info("Loading validation dataset")
     eval_dataset = load_dataset(
-        cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.VALIDATION)
+        cfg.data.dataset_loader,
+        cfg.data.dataset_config,
+        split=cfg.data.get('validation_split_name', datasets.splits.Split.VALIDATION)
+    )
     logger.info("Loading test dataset")
     test_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.TEST)
 
@@ -133,11 +147,22 @@ def main(cfg):
         logger.info("Shuffling training dataset")
         train_dataset = train_dataset.shuffle(seed=training_cfg.seed)
 
-    logger.info("Making encoder-decoder model")
-    model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model)
-
-    if model.config.decoder.decoder_start_token_id is None:
-        raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
+    logger.info(f"Original validation set, prior to rebalancing and resampling, size is {len(eval_dataset)}")
+    validation_register_rebalance_frac = cfg.data.get('validation_register_rebalance_frac', None)
+    if validation_register_rebalance_frac is not None:
+        register_eval_dataset = eval_dataset.filter(lambda ex: tokenizer.source_tokenizer.eor_token in ex['tibetan'])
+        no_register_eval_dataset = eval_dataset \
+            .filter(lambda ex: not tokenizer.source_tokenizer.eor_token in ex['tibetan']) \
+            .shuffle(seed=training_cfg.seed) \
+            .select(range(len(register_eval_dataset) * validation_register_rebalance_frac))
+        eval_dataset = datasets.interleave_datasets([register_eval_dataset, no_register_eval_dataset])
+        logger.info(f"Rebalanced validation set to size {len(eval_dataset)}")
+        
+    validation_sampling_rate = cfg.data.get('validation_sampling_rate', None)
+    if validation_sampling_rate is not None:
+        eval_dataset = eval_dataset.train_test_split(
+            train_size=validation_sampling_rate, seed=training_cfg.seed)['train']
+        logger.info(f"Subsampled validation set to size {len(eval_dataset)}")
 
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
