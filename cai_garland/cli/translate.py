@@ -58,13 +58,13 @@ def batch(translator, mode_cfg, generation_cfg):
                     **dict(generation_cfg.segmentation.soft_segmenter_kwargs)
                 )
 
-                register_memory_decoding = translator.model.encoder.config.model_type == "siamese-encoder" and \
-                    generation_cfg.get("use_registers_for_decoding_memory", True)
-                if register_memory_decoding:
+                retrospective_registers = translator.model.encoder.config.model_type == "siamese-encoder" and \
+                    generation_cfg.get("use_registers_for_retrospective_decoding", True)
+                if retrospective_registers:
                     src_registers, tgt_registers = [], []
                     num_registers = translator.model.encoder.config.num_registers
                 for soft_segment in tqdm(soft_segments, desc="Soft segments", leave=False):
-                    if register_memory_decoding:
+                    if retrospective_registers:
                         input_ = translator.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
                         prefix = ' '.join(tgt_registers)
                     else:
@@ -81,7 +81,7 @@ def batch(translator, mode_cfg, generation_cfg):
                             translation_err = True
                             tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
 
-                    if register_memory_decoding:
+                    if retrospective_registers:
                         if translation_err:
                             src_registers, tgt_registers = [], []
                         else:
