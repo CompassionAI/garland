@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 
 from tqdm.auto import tqdm
 
-from ..utils.translator import Translator, TokenizationTooLongException
+from ..utils.translator import Translator
 
 
 def interactive(translator, mode_cfg, generation_cfg):
