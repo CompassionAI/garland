@@ -143,10 +143,11 @@ class SiameseEncoderModel(PreTrainedModel):
         from ..data.siamese_collator import _split_list
         to_device = input_ids.device
         tokens = input_ids[0].cpu().tolist()
-        register_splits = [idx for idx, token in enumerate(tokens) if token == self.config.eor_token_id]
         bos, eos = tokens[0], tokens[-1]
+        tokens = tokens[1:-1]
+        register_splits = [idx for idx, token in enumerate(tokens) if token == self.config.eor_token_id]
         input_ids = [
-            torch.IntTensor([[bos] + reg + [eos]]) for reg in _split_list(tokens[1:-1], register_splits)
+            torch.IntTensor([[bos] + reg + [eos]]) for reg in _split_list(tokens, register_splits)
         ]
         for _ in range(len(input_ids), self.config.num_registers):
             input_ids.append(torch.IntTensor([[bos, eos]]))
