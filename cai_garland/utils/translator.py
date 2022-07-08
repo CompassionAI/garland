@@ -144,7 +144,7 @@ class Translator:
         retrospective_registers=False,
         throw_translation_errors=False
     ):
-        hard_segments = self.hard_segmenter(bo_text, **hard_segmenter_kwargs)
+        hard_segments = self.hard_segmenter(bo_text, translator=self, **hard_segmenter_kwargs)
 
         with open(out_fn, mode='w') as out_f:
             for hard_segment in tqdm(hard_segments, desc="Hard segments", leave=False):
