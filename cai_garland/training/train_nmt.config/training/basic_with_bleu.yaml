@@ -38,6 +38,7 @@ predict_with_generate: true
 
 # What metric to use on evaluation data to decide which model is the current champion
 metric_for_best_model: bleu
+greater_is_better: true       # Defaults to true if metric_for_best_model isn't loss, set explicitly for clarity
 
 # Do not output memory use metrics to Tensorboard. This seems to be buggy in the current version of Transformers
 skip_memory_metrics: true
