@@ -14,3 +14,16 @@ target_lang: en
 #   like mBART where the first generated token needs to be the target language token. Usually it is the target
 #   language token
 forced_bos_token: ~
+
+# Name of the validation split to use in the overall dataset (defaults to "validation" if omitted)
+validation_split_name: test
+
+# Rate at which to subsample the validation data. Performed _after_ the register rebalancing, if any. With rebalancing,
+#   the approximate final size of the evaluation set is given by the following:
+#
+#     (1 + validation_register_rebalance_frac) * (fraction of register data) * validation_sampling_rate
+#
+#   with the register data balance as specified by validation_register_rebalance_frac, if any.
+#
+# Can be none to avoid subsampling.
+validation_sampling_rate: 0.05
