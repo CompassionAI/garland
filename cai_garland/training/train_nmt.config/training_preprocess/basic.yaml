@@ -2,7 +2,7 @@
 shuffle_training_data:  true
 
 # Number of random validation text entries to output to Tensorboard
-eval_decodings_in_tensorboard: 10
+eval_decodings_in_tensorboard: 20
 
 # The number of processes to use for the preprocessing
 preprocessing_num_workers: ~
