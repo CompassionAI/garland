@@ -194,7 +194,7 @@ def main(cfg):
                 batched=True,
                 num_proc=cfg.training_preprocess.preprocessing_num_workers,
                 load_from_cache_file=not cfg.overwrite_cache,
-                desc="Running tokenizer on train dataset",
+                desc="Running tokenizer on validation dataset",
                 fn_kwargs={
                     "tokenizer": tokenizer,
                     "max_source_length": cfg.model.max_source_length,
