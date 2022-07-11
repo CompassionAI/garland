@@ -1,7 +1,6 @@
 import logging
 import hydra
 from hydra.utils import instantiate
-from pytest import skip
 from tqdm import tqdm
 from colorama import init as init_colorama, Fore as ForeColor
 
@@ -10,7 +9,7 @@ import sys
 import json
 import math
 import random
-import unicodedata
+from itertools import zip_longest
 from copy import deepcopy
 
 from dask.distributed import Client, LocalCluster
@@ -19,6 +18,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from cai_common.data import ParallelTMXLoader, TeiLoader, OldKangyurLoader
+from cai_manas.tokenizer import TibertTokenizer
 
 
 init_colorama()
@@ -126,13 +126,13 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
         parallel_df = dask_client.persist(parallel_df)[["tohoku", "tibetan", "english"]]
     parallel_df["tohoku"] = parallel_df.tohoku.fillna(-1).astype(int)
 
-    logger.info("Loading training dataframe...")
+    logger.info("Loading training dataframe")
     train_df = parallel_df[~parallel_df.tohoku.isin(cfg.input.test_tohoku_numbers)].compute()
     if cfg.output.sort_by_starting_index:
         train_df = train_df.sort_values(
             ["tohoku", "volume_number", "location", "start_idx"])[["tibetan", "english"]].dropna()
     train_df = train_df[["tibetan", "english"]]
-    logger.info("Loading test dataframe...")
+    logger.info("Loading test dataframe")
     test_df = parallel_df[parallel_df.tohoku.isin(cfg.input.test_tohoku_numbers)].compute()
     if cfg.output.sort_by_starting_index:
         test_df = test_df.sort_values(
@@ -140,7 +140,7 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     test_df = test_df[["tibetan", "english"]]
 
     if not stage_cfg.get('exclude_from_validation', False):
-        logger.info("Splitting out validation data...")
+        logger.info("Splitting out validation data")
         train_df, val_df = train_test_split(train_df, test_size=cfg.output.validation_frac)
     else:
         val_df = pd.DataFrame({"tibetan": [], "english": []})
@@ -201,7 +201,7 @@ def _pull_folio_dataset(dask_client, cfg, stage_cfg):
     test_df = local_df[local_df.tohoku_number.isin(test_tohoku_nums)]
 
     if not stage_cfg.get('exclude_from_validation', False):
-        logger.info("Splitting out validation data...")
+        logger.info("Splitting out validation data")
         train_df, val_df = train_test_split(train_df, test_size=cfg.output.validation_frac)
     else:
         val_df = pd.DataFrame({"tibetan": [], "english": []})
@@ -241,16 +241,13 @@ def _pull_dictionary_dataset(dask_client, cfg, stage_cfg):
     return flat_data, [], []
 
 
-def _prep_linear_dataset(flat_data, cfg, stage_cfg):
+def _prep_linear_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # No preprocessing, direct passthrough of dataset
     return flat_data
 
 
-def _prep_concatted_dataset(flat_data, cfg, stage_cfg):
+def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples
-    from cai_manas.tokenizer import TibertTokenizer
-
-    tokenizer = TibertTokenizer.from_pretrained(TibertTokenizer.get_local_model_dir(cfg.input.tokenizer_name))
     bo_token_lengths = [
         len(tokenizer.encode(datum['tibetan'], add_special_tokens=False))
         for datum in tqdm(flat_data, desc="Calculating token lengths")]
@@ -275,13 +272,12 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg):
     return concatted_data
 
 
-def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg):
+def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples and split into
     #   source language registers of a given maximum length
-    from cai_manas.tokenizer import TibertTokenizer
     from transformers import AutoTokenizer
 
-    bo_tokenizer = TibertTokenizer.from_pretrained(TibertTokenizer.get_local_model_dir(cfg.input.tokenizer_name))
+    bo_tokenizer = tokenizer
     en_tokenizer = AutoTokenizer.from_pretrained(cfg.output.tokenizer_name)
     bo_token_lengths = [
         len(bo_tokenizer.encode(datum['tibetan'], add_special_tokens=False))
@@ -297,7 +293,7 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg):
         cur_idx = i
         for _ in range(stage_cfg.max_num_registers):
             bo_register, register_start = "", cur_idx
-            while sum(bo_token_lengths[register_start:cur_idx + 1]) <= stage_cfg.max_register_length - 2:
+            while sum(bo_token_lengths[register_start:cur_idx + 1]) <= cfg.input.max_source_length - 2:
                 if cur_idx >= len(flat_data) or en_length + en_token_lengths[cur_idx] >= \
                     cfg.output.max_target_length - 2:
                     break
@@ -322,7 +318,7 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg):
             cur_idx = i
             for _ in range(stage_cfg.max_num_registers):
                 top_idx, top_en_length = cur_idx, en_length
-                while sum(bo_token_lengths[cur_idx:top_idx + 1]) <= stage_cfg.max_register_length - 2:
+                while sum(bo_token_lengths[cur_idx:top_idx + 1]) <= cfg.input.max_source_length - 2:
                     if top_idx >= len(flat_data) or \
                        top_en_length + en_token_lengths[top_idx] >= cfg.output.max_target_length - 2:
                         break
@@ -344,12 +340,9 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg):
     return concatted_data
 
 
-def _prep_folio_register_dataset(flat_data, cfg, stage_cfg):
+def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset of folios that have been split into registers
-    from cai_manas.tokenizer import TibertTokenizer
     from cai_garland.utils.segmenters import closing_shad_segmenter
-
-    tokenizer = TibertTokenizer.from_pretrained(TibertTokenizer.get_local_model_dir(cfg.input.tokenizer_name))
 
     concatted_data = []
     for datum in tqdm(flat_data, total=len(flat_data), desc="Segmenting"):
@@ -360,7 +353,7 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg):
         bo_token_lengths = [len(tokenizer.encode(bo_segment, add_special_tokens=False)) for bo_segment in bo_segments]
         bo_registers, register_start, register_idx = [], 0, 0
         for _ in range(stage_cfg.max_num_registers):
-            while sum(bo_token_lengths[register_start:register_idx + 1]) <= stage_cfg.max_register_length - 2:
+            while sum(bo_token_lengths[register_start:register_idx + 1]) <= cfg.input.max_source_length - 2:
                 if register_idx == len(bo_token_lengths):
                     break
                 register_idx += 1
@@ -380,7 +373,7 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg):
             for num_tries in range(stage_cfg.num_intermediate_tries):
                 bo_registers, register_start, register_idx = [], 0, 0
                 for _ in range(stage_cfg.max_num_registers - 1):
-                    while sum(bo_token_lengths[register_start:register_idx + 1]) <= stage_cfg.max_register_length - 2:
+                    while sum(bo_token_lengths[register_start:register_idx + 1]) <= cfg.input.max_source_length - 2:
                         if register_idx == len(bo_token_lengths):
                             break
                         register_idx += 1
@@ -389,7 +382,7 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg):
                     break_point = math.ceil((register_idx - register_start) * random.random()) + register_start
                     bo_registers.append(' '.join(bo_segments[register_start:break_point]).strip())
                     register_start = break_point
-                if sum(bo_token_lengths[register_start:]) > stage_cfg.max_register_length - 2:
+                if sum(bo_token_lengths[register_start:]) > cfg.input.max_source_length - 2:
                     continue
                 bo_registers.append(' '.join(bo_segments[register_start:]).strip())
                 concatted_data.append({
@@ -444,63 +437,53 @@ def _check_for_unks(f_name, cfg):
             logger.warning("...")
 
 
-def _postprocess_training_data(flat_data):
-    # Clean up training data and pack it into source-target dictionaries
+def _preprocess_flat_data(flat_data, cfg):
+    # Preprocess training data and pack it into source-target dictionaries
     if len(flat_data) == 0:
         return []
-    if type(flat_data[0]['tibetan']) is list:
-        return [
-            {
-                "tibetan": [subdatum.strip() for subdatum in datum["tibetan"]],
-                "english": datum["english"].strip()}
-            for datum in flat_data]
-    else:
-        return [
-            {
-                "tibetan": datum["tibetan"].strip(),
-                "english": datum["english"].strip()}
-            for datum in flat_data]
-
-
-def _postprocess_final_data(bo_data, en_data, cfg, stage_cfg):
-    # Clean shads in the bo text and trim registers that are too long, if needed
-    def _postprocess(text):
-        text = text.replace(" ། ", " །")
-        if text[-2:] == " །":
-            text = text[:-2]
-        return text
-
-    if len(bo_data) == 0:
-        return [], []
-    if type(bo_data[0]) is list:
-        bo_data = [[_postprocess(subdatum) for subdatum in datum] for datum in tqdm(bo_data, desc="Cleaning bo text")]
-    else:
-        bo_data = [_postprocess(datum) for datum in tqdm(bo_data, desc="Cleaning bo text")]
-
-    if hasattr(stage_cfg, "max_register_length"):
-        from cai_manas.tokenizer import TibertTokenizer
-
-        tokenizer = TibertTokenizer.from_pretrained(TibertTokenizer.get_local_model_dir(cfg.input.tokenizer_name))
-
-        prev_len = len(bo_data)
-
-        if type(bo_data[0]) is list:
-            bo_token_lengths = [
-                max([len(tokenizer.encode(subdatum)) for subdatum in datum])
-                     for datum in tqdm(bo_data, desc="Calculating token lengths")]
-            bo_data = [
-                datums for datums, len_ in zip(bo_data, bo_token_lengths) if len_ < stage_cfg.max_register_length]
-            en_data = [
-                datums for datums, len_ in zip(en_data, bo_token_lengths) if len_ < stage_cfg.max_register_length]
+    src_processors = [instantiate(proc) for proc in cfg.input.preprocessing.source_lang]
+    tgt_processors = [instantiate(proc) for proc in cfg.input.preprocessing.target_lang]
+    for src_processor, tgt_processor in zip_longest(src_processors, tgt_processors, fillvalue=lambda x: x):
+        if type(flat_data[0]['tibetan']) is list:
+            flat_data = [
+                {
+                    "tibetan": [src_processor(subdatum) for subdatum in datum["tibetan"]],
+                    "english": tgt_processor(datum["english"])}
+                for datum in flat_data
+            ]
         else:
-            bo_token_lengths = [len(tokenizer.encode(datum))
-                                for datum in tqdm(bo_data, desc="Calculating token lengths")]
-            bo_data = [
-                datum for datum, len_ in zip(bo_data, bo_token_lengths) if len_ < stage_cfg.max_register_length]
-            en_data = [
-                datum for datum, len_ in zip(en_data, bo_token_lengths) if len_ < stage_cfg.max_register_length]
+            flat_data = [
+                {
+                    "tibetan": src_processor(datum["tibetan"]),
+                    "english": tgt_processor(datum["english"])}
+                for datum in flat_data
+            ]
+    return flat_data
 
-        logger.info(f"Final data keeps {len(bo_data) / prev_len} of the original")
+
+def _filter_src_lengths(bo_data, en_data, cfg, tokenizer):
+    prev_len = len(bo_data)
+
+    if prev_len == 0:
+        return [], []
+
+    if type(bo_data[0]) is list:
+        bo_token_lengths = [
+            max([len(tokenizer.encode(subdatum)) for subdatum in datum])
+                    for datum in tqdm(bo_data, desc="Calculating token lengths")]
+        bo_data = [
+            datums for datums, len_ in zip(bo_data, bo_token_lengths) if len_ < cfg.input.max_source_length]
+        en_data = [
+            datums for datums, len_ in zip(en_data, bo_token_lengths) if len_ < cfg.input.max_source_length]
+    else:
+        bo_token_lengths = [len(tokenizer.encode(datum))
+                            for datum in tqdm(bo_data, desc="Calculating token lengths")]
+        bo_data = [
+            datum for datum, len_ in zip(bo_data, bo_token_lengths) if len_ < cfg.input.max_source_length]
+        en_data = [
+            datum for datum, len_ in zip(en_data, bo_token_lengths) if len_ < cfg.input.max_source_length]
+
+    logger.info(f"Final data keeps {len(bo_data) / prev_len} of the original")
 
     return bo_data, en_data
 
@@ -511,12 +494,6 @@ def _check_equal_lengths(bo_file_name, en_file_name, preprocess_location):
     bo_len = len(open(os.path.join(preprocess_location, bo_file_name), mode="r", encoding="utf-8").readlines())
     en_len = len(open(os.path.join(preprocess_location, en_file_name), mode="r", encoding="utf-8").readlines())
     assert bo_len == en_len
-
-
-def _remove_accents(en_str):
-    # Remove accents from an English string. First normalizes to NFKD and then removes all combining characters.
-    nfkd_form = unicodedata.normalize('NFKD', en_str)
-    return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 
 @hydra.main(version_base="1.2", config_path="./parallel_dataset_prep.config", config_name="config")
@@ -534,7 +511,10 @@ def main(cfg):
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
 
-    logger.info("Spinning up Dask cluster...")
+    logger.info("Loading tokenizer")
+    tokenizer = TibertTokenizer.from_pretrained(TibertTokenizer.get_local_model_dir(cfg.input.tokenizer_name))
+
+    logger.info("Spinning up Dask cluster")
     dask_client = Client(LocalCluster(
         n_workers=cfg.processing.dask_workers,
         threads_per_worker=1,
@@ -580,18 +560,18 @@ def main(cfg):
             raise ValueError(
                 f"Validation data should have been skipped but {len(valid_flat_data)} records were returned")
 
-        logger.info("Post-processing")
-        train_flat_data = _postprocess_training_data(train_flat_data)
-        valid_flat_data = _postprocess_training_data(valid_flat_data)
-        test_flat_data = _postprocess_training_data(test_flat_data)
+        logger.info("Pre-processing")
+        train_flat_data = _preprocess_flat_data(train_flat_data, cfg)
+        valid_flat_data = _preprocess_flat_data(valid_flat_data, cfg)
+        test_flat_data = _preprocess_flat_data(test_flat_data, cfg)
 
         logger.info("Preparing training dataset")
-        train_concat_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg)
+        train_concat_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg, tokenizer)
         if not skip_validation:
             logger.info("Preparing validation dataset")
-        valid_concat_data = instantiate(stage_cfg.prep_func, valid_flat_data, cfg, stage_cfg)
+        valid_concat_data = instantiate(stage_cfg.prep_func, valid_flat_data, cfg, stage_cfg, tokenizer)
         logger.info("Preparing test dataset")
-        test_concat_data = instantiate(stage_cfg.prep_func, test_flat_data, cfg, stage_cfg)
+        test_concat_data = instantiate(stage_cfg.prep_func, test_flat_data, cfg, stage_cfg, tokenizer)
 
         def _split_data_dicts(data_dicts):
             return [datum['tibetan'] for datum in data_dicts], [datum['english'] for datum in data_dicts]
@@ -610,16 +590,30 @@ def main(cfg):
             train_bo = [bo_segments.split('|') for bo_segments in train_bo]
 
         logger.info("Post-processing Tibetan dataset")
-        train_bo, train_en = _postprocess_final_data(train_bo, train_en, cfg, stage_cfg)
-        valid_bo, valid_en = _postprocess_final_data(valid_bo, valid_en, cfg, stage_cfg)
-        test_bo, test_en = _postprocess_final_data(test_bo, test_en, cfg, stage_cfg)
+        for processor in cfg.output.postprocessing.source_lang:
+            processor = instantiate(processor)
+            if type(train_bo[0]) is list:
+                train_bo, valid_bo, test_bo = [
+                    [
+                        [processor(subdatum) for subdatum in datum]
+                        for datum in dataset
+                    ]
+                    for dataset in (train_bo, valid_bo, test_bo)
+                ]
+            else:
+                train_bo, valid_bo, test_bo = [
+                    [processor(datum) for datum in dataset] for dataset in (train_bo, valid_bo, test_bo)]
+
+        logger.info("Filtering out Tibetan examples that tokenize longer than max_source_length")
+        train_bo, train_en = _filter_src_lengths(train_bo, train_en, cfg, tokenizer)
+        valid_bo, valid_en = _filter_src_lengths(valid_bo, valid_en, cfg, tokenizer)
+        test_bo, test_en = _filter_src_lengths(test_bo, test_en, cfg, tokenizer)
 
         logger.info("Post-processing English dataset")
-        if cfg.output.lower_case_en:
-            train_en, valid_en, test_en = [[en.lower() for en in en_set] for en_set in [train_en, valid_en, test_en]]
-        if cfg.output.remove_en_accents:
-            train_en, valid_en, test_en = [[_remove_accents(en) for en in en_set]
-                                        for en_set in [train_en, valid_en, test_en]]
+        for processor in cfg.output.postprocessing.target_lang:
+            processor = instantiate(processor)
+            train_en, valid_en, test_en = [
+                [processor(datum) for datum in dataset] for dataset in [train_en, valid_en, test_en]]
 
         logger.info("Appending results")
         final_train_bo.extend(train_bo)
@@ -643,12 +637,12 @@ def main(cfg):
     _write_to_file("test.bo", final_test_bo, cleaned_symbols_bo, cfg.output_dir, separator=separator_)
     _write_to_file("test.en", final_test_en, cleaned_symbols_en, cfg.output_dir)
 
-    logger.info("Checking for equal lengths...")
-    logger.info("    Trainining...")
+    logger.info("Checking for equal lengths")
+    logger.info("    Trainining")
     _check_equal_lengths("train.bo", "train.en", cfg.output_dir)
-    logger.info("    Validation...")
+    logger.info("    Validation")
     _check_equal_lengths("valid.bo", "valid.en", cfg.output_dir)
-    logger.info("    Test...")
+    logger.info("    Test")
     _check_equal_lengths("test.bo", "test.en", cfg.output_dir)
 
     if cfg.output.check_for_en_unks:

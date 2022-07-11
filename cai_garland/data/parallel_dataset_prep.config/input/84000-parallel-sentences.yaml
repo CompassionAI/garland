@@ -18,3 +18,21 @@ tokenizer_name: olive-large
 
 # Maximum length of the source model, including special tokens
 max_source_length: 128
+
+# Preprocessing settings, before any stages are applied.
+#
+# These are (possibly empty) lists of function classes in cai_garland.utils.str_processors, formatted like so:
+#   - _target_: cai_garland.utils.str_processors.ProcessorSampleFunc1
+#   - _target_: cai_garland.utils.str_processors.ProcessorSampleFunc2
+#   - ...
+preprocessing:
+  source_lang:
+    - _target_: cai_garland.utils.str_processors.ProcessorStrip
+    - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
+
+  target_lang:
+    - _target_: cai_garland.utils.str_processors.ProcessorStrip
+    - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveAccents

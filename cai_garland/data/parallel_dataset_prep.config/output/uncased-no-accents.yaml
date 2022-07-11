@@ -7,12 +7,6 @@ check_for_en_unks: true
 # Sort the parallel dataset by index of the English sentence in the parallel folio dataset
 sort_by_starting_index: true
 
-# Lower case the English translations
-lower_case_en: true
-
-# Remove accents from the English translations
-remove_en_accents: true
-
 # Name of the tokenizer to use for packing data into registers. Note that the output is _not_ tokenized, this is only
 #   used to count the final tokenized length of the target text
 tokenizer_name: facebook/bart-base
@@ -25,3 +19,17 @@ validation_frac: 0.0002
 
 # Separator for datasets with multiple registers
 separator: "[eor]"
+
+# Postprocessing settings, after all stages are applied, right before outputting to disk.
+#
+# These are (possibly empty) lists of function classes in cai_garland.utils.str_processors, formatted like so:
+#   - _target_: cai_garland.utils.str_processors.ProcessorSampleFunc1
+#   - _target_: cai_garland.utils.str_processors.ProcessorSampleFunc2
+#   - ...
+postprocessing:
+  source_lang:
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveDanglingShads
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
+
+  target_lang:
+    - _target_: cai_garland.utils.str_processors.ProcessorLowerCase
