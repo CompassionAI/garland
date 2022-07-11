@@ -342,14 +342,14 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
 
 def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset of folios that have been split into registers
-    from cai_garland.utils.segmenters import closing_shad_segmenter
+    from cai_garland.utils.segmenters import SegmenterClosingShad
 
     concatted_data = []
     for datum in tqdm(flat_data, total=len(flat_data), desc="Segmenting"):
         # First, append the greedy segmentation
         if len(datum['tibetan']) == 0 or len(datum['english']) == 0:
             continue
-        bo_segments = closing_shad_segmenter(datum['tibetan'])
+        bo_segments = SegmenterClosingShad()(datum['tibetan'])
         bo_token_lengths = [len(tokenizer.encode(bo_segment, add_special_tokens=False)) for bo_segment in bo_segments]
         bo_registers, register_start, register_idx = [], 0, 0
         for _ in range(stage_cfg.max_num_registers):
