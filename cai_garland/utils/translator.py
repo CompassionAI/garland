@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 from tqdm.auto import tqdm
 
 from transformers import EncoderDecoderModel
@@ -84,7 +84,7 @@ class Translator:
         self._cuda = False
         self.model.cpu()
 
-    def translate(self, bo_text: str, prefix: Optional[str]=None) -> str:
+    def translate(self, bo_text: str, prefix: Optional[str]=None, generator_kwargs: Dict[Any, Any]={}) -> str:
         """Translate the input Tibtean.
         
         Args:
@@ -123,7 +123,8 @@ class Translator:
             bo_tokens,
             max_length=self.model.decoder.max_length,
             num_beams=self.num_beams,
-            prefix_allowed_tokens_fn=prefix_fn
+            prefix_allowed_tokens_fn=prefix_fn,
+            **generator_kwargs
         )[0]
         if self._cuda:
             preds = preds.cpu()
@@ -142,7 +143,8 @@ class Translator:
         hard_segmenter_kwargs={},
         soft_segmenter_kwargs={},
         retrospective_registers=False,
-        throw_translation_errors=False
+        throw_translation_errors=False,
+        generator_kwargs={}
     ):
         hard_segments = self.hard_segmenter(bo_text, translator=self, **hard_segmenter_kwargs)
 
@@ -166,7 +168,7 @@ class Translator:
 
                     translation_err = False
                     try:
-                        tgt_segment = self.translate(input_, prefix=prefix)
+                        tgt_segment = self.translate(input_, prefix=prefix, generator_kwargs=generator_kwargs)
                     except TokenizationTooLongException as err:
                         if throw_translation_errors:
                             raise err

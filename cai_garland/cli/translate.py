@@ -61,7 +61,8 @@ def batch(translator, mode_cfg, generation_cfg):
                 hard_segmenter_kwargs=dict(generation_cfg.segmentation.hard_segmenter_kwargs),
                 soft_segmenter_kwargs=dict(generation_cfg.segmentation.soft_segmenter_kwargs),
                 retrospective_registers=retrospective_registers,
-                throw_translation_errors=not mode_cfg.skip_long_inputs
+                throw_translation_errors=not mode_cfg.skip_long_inputs,
+                generator_kwargs=generation_cfg.generation.generator_kwargs
             ):
                 if mode_cfg.output_parallel_translation:
                     out_f.write(src_segment + '\n')
