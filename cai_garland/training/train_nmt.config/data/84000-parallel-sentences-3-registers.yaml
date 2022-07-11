@@ -35,4 +35,4 @@ validation_register_rebalance_frac: 1
 #   with the register data balance as specified by validation_register_rebalance_frac, if any.
 #
 # Can be none to avoid subsampling.
-validation_sampling_rate: 0.20
+validation_sampling_rate: 0.50

@@ -51,15 +51,11 @@ cs.store(group="training", name="huggingface_training_args", node=HydraSeq2SeqTr
 def preprocess_function(
     examples,
     tokenizer=None,
-    max_source_length=None,
-    max_target_length=None,
     padding=None,
     ignore_pad_token_for_loss=None,
     siamese=None
 ):
     if tokenizer is None or \
-        max_source_length is None or \
-        max_target_length is None or \
         padding is None or \
         ignore_pad_token_for_loss is None or \
         siamese is None:
@@ -68,10 +64,10 @@ def preprocess_function(
     inputs = [ex for ex in examples["tibetan"]]
     targets = [ex for ex in examples["english"]]
 
-    inputs = tokenizer(inputs, max_length=max_source_length, padding=padding, truncation=True)
+    inputs = tokenizer(inputs, padding=padding)
 
     with tokenizer.as_target_tokenizer():
-        targets = tokenizer(targets, max_length=max_target_length, padding=padding, truncation=True)
+        targets = tokenizer(targets, padding=padding)
 
     # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
     # padding in the loss.
@@ -85,6 +81,17 @@ def preprocess_function(
 
     inputs["labels"] = targets["input_ids"]
     return inputs
+
+
+def is_long_example(example, eor_token_id, max_source_length, max_target_length):
+    tokens = example['input_ids'][1:-1]
+    register_splits = [idx for idx, token in enumerate(tokens) if token == eor_token_id]
+    register_splits = [0] + register_splits + [len(tokens)]
+    if max([x2 - x1 for x1, x2 in zip(register_splits[:-1], register_splits[1:])]) > max_source_length - 2:
+        return True
+    if len(example['labels']) > max_target_length:
+        return True
+    return False
 
 
 @hydra.main(version_base="1.2", config_path="./train_nmt.config", config_name="config")
@@ -147,23 +154,6 @@ def main(cfg):
         logger.info("Shuffling training dataset")
         train_dataset = train_dataset.shuffle(seed=training_cfg.seed)
 
-    logger.info(f"Original validation set, prior to rebalancing and resampling, size is {len(eval_dataset)}")
-    validation_register_rebalance_frac = cfg.data.get('validation_register_rebalance_frac', None)
-    if validation_register_rebalance_frac is not None:
-        register_eval_dataset = eval_dataset.filter(lambda ex: tokenizer.source_tokenizer.eor_token in ex['tibetan'])
-        no_register_eval_dataset = eval_dataset \
-            .filter(lambda ex: not tokenizer.source_tokenizer.eor_token in ex['tibetan']) \
-            .shuffle(seed=training_cfg.seed) \
-            .select(range(len(register_eval_dataset) * validation_register_rebalance_frac))
-        eval_dataset = datasets.interleave_datasets([register_eval_dataset, no_register_eval_dataset])
-        logger.info(f"Rebalanced validation set to size {len(eval_dataset)}")
-        
-    validation_sampling_rate = cfg.data.get('validation_sampling_rate', None)
-    if validation_sampling_rate is not None:
-        eval_dataset = eval_dataset.train_test_split(
-            train_size=validation_sampling_rate, seed=training_cfg.seed)['train']
-        logger.info(f"Subsampled validation set to size {len(eval_dataset)}")
-
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
@@ -179,8 +169,6 @@ def main(cfg):
             desc="Running tokenizer on train dataset",
             fn_kwargs={
                 "tokenizer": tokenizer,
-                "max_source_length": cfg.model.max_source_length,
-                "max_target_length": max_target_length,
                 "padding": padding,
                 "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
                 "siamese": siamese
@@ -197,8 +185,6 @@ def main(cfg):
                 desc="Running tokenizer on validation dataset",
                 fn_kwargs={
                     "tokenizer": tokenizer,
-                    "max_source_length": cfg.model.max_source_length,
-                    "max_target_length": max_target_length,
                     "padding": padding,
                     "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
                     "siamese": siamese
@@ -214,13 +200,48 @@ def main(cfg):
                 desc="Running tokenizer on test dataset",
                 fn_kwargs={
                     "tokenizer": tokenizer,
-                    "max_source_length": cfg.model.max_source_length,
-                    "max_target_length": max_target_length,
                     "padding": padding,
                     "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
                     "siamese": siamese
                 }
             )
+
+    logger.info("Filtering out long examples")
+    is_not_long_example_lambda = lambda x: not is_long_example(
+        x, tokenizer.source_tokenizer.eor_token_id, cfg.model.max_source_length, max_target_length)
+    pre_filter_len = len(train_dataset)
+    train_dataset = train_dataset.filter(is_not_long_example_lambda, desc="Training filter")
+    logger.info(f"Training: {1 - len(train_dataset) / pre_filter_len} has been filtered out, {len(train_dataset)} "
+                 "examples left.")
+
+    pre_filter_len = len(eval_dataset)
+    eval_dataset = eval_dataset.filter(is_not_long_example_lambda, desc="Validation filter")
+    logger.info(f"Validation: {1 - len(eval_dataset) / pre_filter_len} has been filtered out.")
+    logger.info(f"Validation: {1 - len(eval_dataset) / pre_filter_len} has been filtered out, {len(eval_dataset)} "
+                 "examples left.")
+
+    pre_filter_len = len(test_dataset)
+    test_dataset = test_dataset.filter(is_not_long_example_lambda, desc="Test filter")
+    logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out.")
+    logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out, {len(test_dataset)} "
+                 "examples left.")
+
+    logger.info(f"Original validation set, prior to rebalancing and resampling, size is {len(eval_dataset)}")
+    validation_register_rebalance_frac = cfg.data.get('validation_register_rebalance_frac', None)
+    if validation_register_rebalance_frac is not None:
+        register_eval_dataset = eval_dataset.filter(lambda ex: tokenizer.source_tokenizer.eor_token in ex['tibetan'])
+        no_register_eval_dataset = eval_dataset \
+            .filter(lambda ex: not tokenizer.source_tokenizer.eor_token in ex['tibetan']) \
+            .shuffle(seed=training_cfg.seed) \
+            .select(range(len(register_eval_dataset) * validation_register_rebalance_frac))
+        eval_dataset = datasets.interleave_datasets([register_eval_dataset, no_register_eval_dataset])
+        logger.info(f"Rebalanced validation set to size {len(eval_dataset)}")
+        
+    validation_sampling_rate = cfg.data.get('validation_sampling_rate', None)
+    if validation_sampling_rate is not None:
+        eval_dataset = eval_dataset.train_test_split(
+            train_size=validation_sampling_rate, seed=training_cfg.seed)['train']
+        logger.info(f"Subsampled validation set to size {len(eval_dataset)}")
 
     # Data collator
     quantize_padding = (training_cfg.fp16 or training_cfg.bf16) and not cfg.training_preprocess.no_padding_quantization
