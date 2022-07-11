@@ -1,6 +1,10 @@
 generation:
   method: beam-search
-  num_beams: 10
+  num_beams: 20
+
+  generator_kwargs:
+    repetition_penalty: 2.2
+    no_repeat_ngram_size: 3
 
 segmentation:
   # Hard segmentation is applied before preprocessing. Hard segments reset the beam generation state. Note that file
