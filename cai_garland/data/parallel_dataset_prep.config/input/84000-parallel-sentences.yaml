@@ -27,12 +27,28 @@ max_source_length: 128
 #   - ...
 preprocessing:
   source_lang:
+    # Symbol cleanup mapping for the source language, relative to parallel_dataset_prep.py
+    - _target_: cai_garland.utils.str_processors.ProcessorSymbolCleaningJSON
+      _args_: [parallel_dataset_prep.config/symbol_cleaning_bo.json]
     - _target_: cai_garland.utils.str_processors.ProcessorStrip
     - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveDanglingShads
     - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
 
   target_lang:
+    # Symbol cleanup mapping for the target language, relative to parallel_dataset_prep.py
+    - _target_: cai_garland.utils.str_processors.ProcessorSymbolCleaningJSON
+      _args_: [parallel_dataset_prep.config/symbol_cleaning_en.json]
     - _target_: cai_garland.utils.str_processors.ProcessorStrip
     - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
-    - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
     - _target_: cai_garland.utils.str_processors.ProcessorRemoveAccents
+    - _target_: cai_garland.utils.str_processors.ProcessorLowerCase
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveBracketed
+      _args_: ["{([", "])}"]
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveCharacters
+      _args_: ["0-9"]
+    - _target_: cai_garland.utils.str_processors.ProcessorBlankOutAllWithCharacters
+      _args_: ["]{"]
+    - _target_: cai_garland.utils.str_processors.ProcessorBlankOutDanglingBrackets
+      _args_: ["\""]
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces

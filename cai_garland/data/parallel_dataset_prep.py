@@ -35,6 +35,45 @@ class DuplicateFolioException(Exception):
     pass
 
 
+def _preprocess_flat_data(flat_data, cfg):
+    # Preprocess training data and pack it into source-target dictionaries
+    if len(flat_data) == 0:
+        return []
+    src_processors = [instantiate(proc) for proc in cfg.input.preprocessing.source_lang]
+    tgt_processors = [instantiate(proc) for proc in cfg.input.preprocessing.target_lang]
+    for src_processor, tgt_processor in zip_longest(src_processors, tgt_processors, fillvalue=lambda x: x):
+        if type(flat_data[0]['tibetan']) is list:
+            flat_data = [
+                {
+                    "tibetan": [src_processor(subdatum) for subdatum in datum["tibetan"]],
+                    "english": tgt_processor(datum["english"])}
+                for datum in flat_data
+            ]
+            res = []
+            for example in flat_data:
+                if len(example['english']) == 0:
+                    continue
+                example['tibetan'] = [datum for datum in example['tibetan'] if len(datum) > 0]
+                if max([len(datum) for datum in example['tibetan']]) == 0:
+                    continue
+                res.append(example)
+        else:
+            flat_data = [
+                {
+                    "tibetan": src_processor(datum["tibetan"]),
+                    "english": tgt_processor(datum["english"])}
+                for datum in flat_data
+            ]
+            res = []
+            for example in flat_data:
+                if len(example['tibetan']) == 0:
+                    continue
+                if len(example['english']) == 0:
+                    continue
+                res.append(example)
+    return res
+
+
 def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
     # Use a language model to pick random next sentences that are linguistically adequate to augment the dataset
     import torch
@@ -153,6 +192,11 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     train_flat_data, val_flat_data, test_flat_data = train_df.to_dict(orient="records"), \
         val_df.to_dict(orient="records"), test_df.to_dict(orient="records")
 
+    logger.info("Pre-processing")
+    train_flat_data = _preprocess_flat_data(train_flat_data, cfg)
+    val_flat_data = _preprocess_flat_data(val_flat_data, cfg)
+    test_flat_data = _preprocess_flat_data(test_flat_data, cfg)
+
     if stage_cfg.shuffle_concats:
         shuffled_train_data, shuffled_val_data, shuffled_test_data = [], [], []
         for _ in range(stage_cfg.num_shuffling_repetitions):
@@ -211,6 +255,12 @@ def _pull_folio_dataset(dask_client, cfg, stage_cfg):
     train_flat_data = train_df[["tibetan", "english"]].to_dict(orient="records")
     val_flat_data = val_df[["tibetan", "english"]].to_dict(orient="records")
     test_flat_data = test_df[["tibetan", "english"]].to_dict(orient="records")
+
+    logger.info("Pre-processing")
+    train_flat_data = _preprocess_flat_data(train_flat_data, cfg)
+    val_flat_data = _preprocess_flat_data(val_flat_data, cfg)
+    test_flat_data = _preprocess_flat_data(test_flat_data, cfg)
+
     return train_flat_data, val_flat_data, test_flat_data
 
 
@@ -239,6 +289,10 @@ def _pull_dictionary_dataset(dask_client, cfg, stage_cfg):
                 flat_data.append({
                     "tibetan": bo,
                     "english": en})
+
+    logger.info("Pre-processing")
+    flat_data = _preprocess_flat_data(flat_data, cfg)
+
     return flat_data, [], []
 
 
@@ -446,30 +500,6 @@ def _check_for_unks(f_name, cfg):
             logger.warning("...")
 
 
-def _preprocess_flat_data(flat_data, cfg):
-    # Preprocess training data and pack it into source-target dictionaries
-    if len(flat_data) == 0:
-        return []
-    src_processors = [instantiate(proc) for proc in cfg.input.preprocessing.source_lang]
-    tgt_processors = [instantiate(proc) for proc in cfg.input.preprocessing.target_lang]
-    for src_processor, tgt_processor in zip_longest(src_processors, tgt_processors, fillvalue=lambda x: x):
-        if type(flat_data[0]['tibetan']) is list:
-            flat_data = [
-                {
-                    "tibetan": [src_processor(subdatum) for subdatum in datum["tibetan"]],
-                    "english": tgt_processor(datum["english"])}
-                for datum in flat_data
-            ]
-        else:
-            flat_data = [
-                {
-                    "tibetan": src_processor(datum["tibetan"]),
-                    "english": tgt_processor(datum["english"])}
-                for datum in flat_data
-            ]
-    return flat_data
-
-
 def _filter_src_lengths(bo_data, en_data, cfg, tokenizer):
     prev_len = len(bo_data)
 
@@ -519,6 +549,7 @@ def main(cfg):
 
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
+    ProcessorSymbolCleaningJSON.base_dir = os.path.dirname(__file__)
 
     logger.info("Loading tokenizer")
     tokenizer = TibertTokenizer.from_pretrained(TibertTokenizer.get_local_model_dir(cfg.input.tokenizer_name))
@@ -569,11 +600,6 @@ def main(cfg):
             raise ValueError(
                 f"Validation data should have been skipped but {len(valid_flat_data)} records were returned")
 
-        logger.info("Pre-processing")
-        train_flat_data = _preprocess_flat_data(train_flat_data, cfg)
-        valid_flat_data = _preprocess_flat_data(valid_flat_data, cfg)
-        test_flat_data = _preprocess_flat_data(test_flat_data, cfg)
-
         logger.info("Preparing training dataset")
         train_concat_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg, tokenizer)
         if not skip_validation:
@@ -599,7 +625,6 @@ def main(cfg):
             train_bo = [bo_segments.split('|') for bo_segments in train_bo]
 
         logger.info("Post-processing Tibetan dataset")
-        ProcessorSymbolCleaningJSON.base_dir = os.path.dirname(__file__)
 
         for processor in cfg.output.postprocessing.source_lang:
             processor = instantiate(processor)
