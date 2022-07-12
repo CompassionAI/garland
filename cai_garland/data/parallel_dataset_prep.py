@@ -395,6 +395,22 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     return concatted_data
 
 
+def _filter_skips(bo_lines, en_lines, bo_cleaned_symbols, en_cleaned_symbols):
+    bo_line_skips = set(bo_cleaned_symbols.pop("skip_this_line", []))
+    en_line_skips = set(en_cleaned_symbols.pop("skip_this_line", []))
+    bo_res, en_res = [], []
+    for bo_line, en_line in zip(bo_lines, en_lines):
+        if len(bo_line) == 0 or len(en_line) == 0:
+            continue
+        if any([skip_char in bo_line for skip_char in bo_line_skips]):
+            continue
+        if any([skip_char in en_line for skip_char in en_line_skips]):
+            continue
+        bo_res.append(bo_line)
+        en_res.append(en_line)
+    return bo_res, en_res
+
+
 def _write_to_file(f_name, lines, cleaned_symbols, preprocess_location, separator=None):
     # Save dataset lines to a file while cleaning out bad symbols
     logger.info(f"Writing {f_name}")
@@ -628,6 +644,14 @@ def main(cfg):
         cleaned_symbols_src = json.load(f)
     with open(os.path.join(os.path.dirname(__file__), cfg.output.symbol_cleaning_tgt_json), 'r') as f:
         cleaned_symbols_tgt = json.load(f)
+
+    logger.info("Filtering out skipped lines")
+    final_train_bo, final_train_en = _filter_skips(
+        final_train_bo, final_train_en, cleaned_symbols_src, cleaned_symbols_tgt)
+    final_valid_bo, final_valid_en = _filter_skips(
+        final_valid_bo, final_valid_en, cleaned_symbols_src, cleaned_symbols_tgt)
+    final_test_bo, final_test_en = _filter_skips(
+        final_test_bo, final_test_en, cleaned_symbols_src, cleaned_symbols_tgt)
 
     os.makedirs(cfg.output_dir, exist_ok=True)
     separator_ = cfg.output.get("separator", None)
