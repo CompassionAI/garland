@@ -19,6 +19,7 @@ from sklearn.model_selection import train_test_split
 
 from cai_common.data import ParallelTMXLoader, TeiLoader, OldKangyurLoader
 from cai_manas.tokenizer import TibertTokenizer
+from cai_garland.utils.str_processors import ProcessorSymbolCleaningJSON
 
 
 init_colorama()
@@ -395,27 +396,21 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     return concatted_data
 
 
-def _filter_skips(bo_lines, en_lines, bo_cleaned_symbols, en_cleaned_symbols):
-    bo_line_skips = set(bo_cleaned_symbols.pop("skip_this_line", []))
-    en_line_skips = set(en_cleaned_symbols.pop("skip_this_line", []))
+def _filter_skips(bo_lines, en_lines):
     bo_res, en_res = [], []
     for bo_line, en_line in zip(bo_lines, en_lines):
         if len(bo_line) == 0 or len(en_line) == 0:
-            continue
-        if any([skip_char in bo_line for skip_char in bo_line_skips]):
-            continue
-        if any([skip_char in en_line for skip_char in en_line_skips]):
             continue
         bo_res.append(bo_line)
         en_res.append(en_line)
     return bo_res, en_res
 
 
-def _write_to_file(f_name, lines, cleaned_symbols, preprocess_location, separator=None):
+def _write_to_file(f_name, lines, preprocess_location, separator=None):
     # Save dataset lines to a file while cleaning out bad symbols
     logger.info(f"Writing {f_name}")
     if separator is not None:
-        separator = separator.strip() + ' '
+        separator = separator.strip()
     preprocess_location = os.path.join(DATA_BASE_PATH, preprocess_location)
     with open(os.path.join(preprocess_location, f_name), mode="w", encoding="utf-8") as f:
         for line in lines:
@@ -423,8 +418,6 @@ def _write_to_file(f_name, lines, cleaned_symbols, preprocess_location, separato
                 if separator is None:
                     raise ValueError("Dataset requires a separator but none provided")
                 line = separator.join(line)
-            for bad_c, good_c in cleaned_symbols.items():
-                line = line.replace(bad_c, good_c)
             f.write(line + '\n')
 
 
@@ -606,6 +599,8 @@ def main(cfg):
             train_bo = [bo_segments.split('|') for bo_segments in train_bo]
 
         logger.info("Post-processing Tibetan dataset")
+        ProcessorSymbolCleaningJSON.base_dir = os.path.dirname(__file__)
+
         for processor in cfg.output.postprocessing.source_lang:
             processor = instantiate(processor)
             if type(train_bo[0]) is list:
@@ -620,13 +615,14 @@ def main(cfg):
                 train_bo, valid_bo, test_bo = [
                     [processor(datum) for datum in dataset] for dataset in (train_bo, valid_bo, test_bo)]
 
-        logger.info("Filtering out Tibetan examples that tokenize longer than max_source_length")
-        train_bo, train_en = _filter_src_lengths(train_bo, train_en, cfg, tokenizer)
-        valid_bo, valid_en = _filter_src_lengths(valid_bo, valid_en, cfg, tokenizer)
-        test_bo, test_en = _filter_src_lengths(test_bo, test_en, cfg, tokenizer)
+        if cfg.filter_longer_than_max_source_length:
+            logger.info("Filtering out Tibetan examples that tokenize longer than max_source_length")
+            train_bo, train_en = _filter_src_lengths(train_bo, train_en, cfg, tokenizer)
+            valid_bo, valid_en = _filter_src_lengths(valid_bo, valid_en, cfg, tokenizer)
+            test_bo, test_en = _filter_src_lengths(test_bo, test_en, cfg, tokenizer)
 
         logger.info("Post-processing English dataset")
-        for processor in cfg.output.postprocessing.target_lang:
+        for processor in tqdm(cfg.output.postprocessing.target_lang):
             processor = instantiate(processor)
             train_en, valid_en, test_en = [
                 [processor(datum) for datum in dataset] for dataset in [train_en, valid_en, test_en]]
@@ -640,27 +636,20 @@ def main(cfg):
         final_test_en.extend(test_en)
 
     logger.info("Writing final datasets to disk")
-    with open(os.path.join(os.path.dirname(__file__), cfg.output.symbol_cleaning_src_json), 'r') as f:
-        cleaned_symbols_src = json.load(f)
-    with open(os.path.join(os.path.dirname(__file__), cfg.output.symbol_cleaning_tgt_json), 'r') as f:
-        cleaned_symbols_tgt = json.load(f)
 
     logger.info("Filtering out skipped lines")
-    final_train_bo, final_train_en = _filter_skips(
-        final_train_bo, final_train_en, cleaned_symbols_src, cleaned_symbols_tgt)
-    final_valid_bo, final_valid_en = _filter_skips(
-        final_valid_bo, final_valid_en, cleaned_symbols_src, cleaned_symbols_tgt)
-    final_test_bo, final_test_en = _filter_skips(
-        final_test_bo, final_test_en, cleaned_symbols_src, cleaned_symbols_tgt)
+    final_train_bo, final_train_en = _filter_skips(final_train_bo, final_train_en)
+    final_valid_bo, final_valid_en = _filter_skips(final_valid_bo, final_valid_en)
+    final_test_bo, final_test_en = _filter_skips(final_test_bo, final_test_en)
 
     os.makedirs(cfg.output_dir, exist_ok=True)
     separator_ = cfg.output.get("separator", None)
-    _write_to_file("train.bo", final_train_bo, cleaned_symbols_src, cfg.output_dir, separator=separator_)
-    _write_to_file("train.en", final_train_en, cleaned_symbols_tgt, cfg.output_dir)
-    _write_to_file("valid.bo", final_valid_bo, cleaned_symbols_src, cfg.output_dir, separator=separator_)
-    _write_to_file("valid.en", final_valid_en, cleaned_symbols_tgt, cfg.output_dir)
-    _write_to_file("test.bo", final_test_bo, cleaned_symbols_src, cfg.output_dir, separator=separator_)
-    _write_to_file("test.en", final_test_en, cleaned_symbols_tgt, cfg.output_dir)
+    _write_to_file("train.bo", final_train_bo, cfg.output_dir, separator=separator_)
+    _write_to_file("train.en", final_train_en, cfg.output_dir)
+    _write_to_file("valid.bo", final_valid_bo, cfg.output_dir, separator=separator_)
+    _write_to_file("valid.en", final_valid_en, cfg.output_dir)
+    _write_to_file("test.bo", final_test_bo, cfg.output_dir, separator=separator_)
+    _write_to_file("test.en", final_test_en, cfg.output_dir)
 
     logger.info("Checking for equal lengths")
     logger.info("    Trainining")
