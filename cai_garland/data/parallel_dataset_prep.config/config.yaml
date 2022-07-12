@@ -27,4 +27,7 @@ output_dir: ${oc.env:CAI_TEMP_PATH}/enbo_data
 cuda: true
 batch_size: 16
 
+# Filter out Tibetan examples that tokenize longer than max_source_length
+filter_longer_than_max_source_length: false
+
 skip_duplicate_folio_check: false
