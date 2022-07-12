@@ -624,18 +624,19 @@ def main(cfg):
         final_test_en.extend(test_en)
 
     logger.info("Writing final datasets to disk")
-    with open(os.path.join(os.path.dirname(__file__), cfg.output.symbol_cleaning_json), 'r') as f:
-        cleaned_symbols_en = json.load(f)
-    cleaned_symbols_bo = {"\n": ""}
+    with open(os.path.join(os.path.dirname(__file__), cfg.output.symbol_cleaning_src_json), 'r') as f:
+        cleaned_symbols_src = json.load(f)
+    with open(os.path.join(os.path.dirname(__file__), cfg.output.symbol_cleaning_tgt_json), 'r') as f:
+        cleaned_symbols_tgt = json.load(f)
 
     os.makedirs(cfg.output_dir, exist_ok=True)
     separator_ = cfg.output.get("separator", None)
-    _write_to_file("train.bo", final_train_bo, cleaned_symbols_bo, cfg.output_dir, separator=separator_)
-    _write_to_file("train.en", final_train_en, cleaned_symbols_en, cfg.output_dir)
-    _write_to_file("valid.bo", final_valid_bo, cleaned_symbols_bo, cfg.output_dir, separator=separator_)
-    _write_to_file("valid.en", final_valid_en, cleaned_symbols_en, cfg.output_dir)
-    _write_to_file("test.bo", final_test_bo, cleaned_symbols_bo, cfg.output_dir, separator=separator_)
-    _write_to_file("test.en", final_test_en, cleaned_symbols_en, cfg.output_dir)
+    _write_to_file("train.bo", final_train_bo, cleaned_symbols_src, cfg.output_dir, separator=separator_)
+    _write_to_file("train.en", final_train_en, cleaned_symbols_tgt, cfg.output_dir)
+    _write_to_file("valid.bo", final_valid_bo, cleaned_symbols_src, cfg.output_dir, separator=separator_)
+    _write_to_file("valid.en", final_valid_en, cleaned_symbols_tgt, cfg.output_dir)
+    _write_to_file("test.bo", final_test_bo, cleaned_symbols_src, cfg.output_dir, separator=separator_)
+    _write_to_file("test.en", final_test_en, cleaned_symbols_tgt, cfg.output_dir)
 
     logger.info("Checking for equal lengths")
     logger.info("    Trainining")

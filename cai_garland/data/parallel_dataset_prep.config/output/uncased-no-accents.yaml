@@ -1,5 +1,8 @@
-# Symbol cleanup mapping, relative to parallel_dataset_prep.py
-symbol_cleaning_json: parallel_dataset_prep.config/symbol_cleaning.json
+# Symbol cleanup mapping for the source language, relative to parallel_dataset_prep.py
+symbol_cleaning_src_json: parallel_dataset_prep.config/symbol_cleaning_bo.json
+
+# Symbol cleanup mapping for the target language, relative to parallel_dataset_prep.py
+symbol_cleaning_tgt_json: parallel_dataset_prep.config/symbol_cleaning_en.json
 
 # Check the English data for unknown tokens
 check_for_en_unks: true
