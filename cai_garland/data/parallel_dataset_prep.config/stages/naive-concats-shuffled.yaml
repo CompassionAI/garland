@@ -1,6 +1,6 @@
 defaults:
   - shuffle/shuffle@naive-concats-shuffled
-  - concat@naive-concats-shuffled
+  - concat/concat@naive-concats-shuffled
 
 naive-concats-shuffled:
   # Function to pull the dataset

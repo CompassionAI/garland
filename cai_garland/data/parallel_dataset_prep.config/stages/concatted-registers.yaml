@@ -1,7 +1,7 @@
 defaults:
   - shuffle/no-shuffle@concatted-registers
   - registers@concatted-registers
-  - concat@concatted-registers
+  - concat/concat@concatted-registers
 
 concatted-registers:
   # Function to pull the dataset

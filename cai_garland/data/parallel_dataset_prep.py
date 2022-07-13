@@ -348,6 +348,8 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
         cur_idx = i
         for _ in range(stage_cfg.max_num_registers):
             bo_register, register_start = "", cur_idx
+            concat_count = 0
+            max_concat_count = stage_cfg.get("max_source_sentences_per_register", None)
             while sum(bo_token_lengths[register_start:cur_idx + 1]) <= cfg.input.max_source_length - 2:
                 if cur_idx >= len(flat_data) or en_length + en_token_lengths[cur_idx] >= \
                     cfg.output.max_target_length - 2:
@@ -357,6 +359,9 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
                 bo_length += bo_token_lengths[cur_idx]
                 en_length += en_token_lengths[cur_idx]
                 cur_idx += 1
+                concat_count += 1
+                if max_concat_count is not None and concat_count >= max_concat_count:
+                    break
             bo_register = bo_register.strip()
             if len(bo_register) > 0:
                 bo_registers.append(bo_register)
@@ -366,7 +371,7 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
             'tibetan': bo_registers,
             'english': en_line.strip()})
         # Second, generate intermediate segmentations
-        while True:
+        while stage_cfg.get("generate_intermediate_segmentation", True):
             if random.random() > stage_cfg.intermediate_segmentation_probability:
                 break
             bo_registers, en_line, en_length = [], "", 0
