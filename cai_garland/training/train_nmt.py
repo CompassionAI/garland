@@ -231,9 +231,15 @@ def main(cfg):
     if validation_register_rebalance_frac is not None:
         register_eval_dataset = eval_dataset.filter(lambda ex: tokenizer.source_tokenizer.eor_token in ex['tibetan'])
         no_register_eval_dataset = eval_dataset \
-            .filter(lambda ex: not tokenizer.source_tokenizer.eor_token in ex['tibetan']) \
+            .filter(lambda ex: not tokenizer.source_tokenizer.eor_token in ex['tibetan'])
+        no_register_eval_dataset = no_register_eval_dataset \
             .shuffle(seed=training_cfg.seed) \
-            .select(range(len(register_eval_dataset) * validation_register_rebalance_frac))
+            .select(range(
+                min(
+                    len(register_eval_dataset) * validation_register_rebalance_frac,
+                    len(no_register_eval_dataset)
+                )
+            ))
         eval_dataset = datasets.interleave_datasets([register_eval_dataset, no_register_eval_dataset])
         logger.info(f"Rebalanced validation set to size {len(eval_dataset)}")
         
