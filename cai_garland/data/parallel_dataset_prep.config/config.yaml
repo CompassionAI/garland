@@ -6,6 +6,7 @@ defaults:
     - naive-concats-shuffled
     - concatted-registers
     - concatted-registers-shuffled
+    - unconcatted-registers-shuffled
     - folio-registers
     - dictionary
   - processing: local-dask
