@@ -47,6 +47,8 @@ preprocessing:
       _args_: ["{([", "])}"]
     - _target_: cai_garland.utils.str_processors.ProcessorRemoveCharacters
       _args_: ["0-9"]
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveCharacters
+      _args_: [")"]
     - _target_: cai_garland.utils.str_processors.ProcessorBlankOutAllWithCharacters
       _args_: ["]{"]
     - _target_: cai_garland.utils.str_processors.ProcessorBlankOutDanglingBrackets

@@ -29,7 +29,7 @@ postprocessing:
 
   target_lang:
     - _target_: cai_garland.utils.str_processors.ProcessorRemoveCharacters
-      _args_: [")\"'"]
+      _args_: ["\"'"]
     - _target_: cai_garland.utils.str_processors.ProcessorReplaceCharacters
       _args_: ["!", "."]
     - _target_: cai_garland.utils.str_processors.ProcessorReplaceCharacters
