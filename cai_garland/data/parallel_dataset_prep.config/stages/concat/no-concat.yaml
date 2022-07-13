@@ -1,0 +1,8 @@
+# Concatenate up to this many consecutive sentences to form longer training examples
+concat_window: 1
+
+# Augment the dataset by generating non-greedy registers segmentations whenever possible
+generate_intermediate_segmentation: false
+
+# Maximum number of source sentences to concatenate into a register, use ~ for only max_source_length constraints
+max_source_sentences_per_register: 1
