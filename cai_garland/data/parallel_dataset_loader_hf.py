@@ -34,18 +34,24 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
 
     dataset_locations = {
         "no_registers": "processed_datasets/84000-parallel-sentences-no-registers",
+        "no_registers_no_splits": "processed_datasets/84000-parallel-sentences-no-registers",
         "registers_3": "processed_datasets/84000-parallel-sentences-3-registers",
     }
 
     BUILDER_CONFIGS = [
         ParallelSentences84000Config(
             name="no_registers",
-            version=datasets.Version("0.1.0", ""),
+            version=datasets.Version("0.1.1", ""),
             description="Dataset for a Tibetan encoder with no registers",
         ),
         ParallelSentences84000Config(
-            name="registers_3",
+            name="no_registers_no_splits",
             version=datasets.Version("0.1.1", ""),
+            description="Dataset for a Tibetan encoder with no registers and all splits concatenated",
+        ),
+        ParallelSentences84000Config(
+            name="registers_3",
+            version=datasets.Version("0.1.2", ""),
             description="Dataset for a Tibetan encoder with 3 registers",
         ),
     ]
@@ -66,25 +72,60 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         # Prepare the files for the available splits for reading
         files_path = os.path.join(os.environ['CAI_DATA_BASE_PATH'], self.dataset_locations[self.config.name])
 
-        return [
-            datasets.SplitGenerator(
-                name=datasets.Split.TRAIN,
-                gen_kwargs={
-                    "bo_fn": os.path.join(files_path, "train.bo"),
-                    "en_fn": os.path.join(files_path, "train.en")}),
-            datasets.SplitGenerator(
-                name=datasets.Split.VALIDATION,
-                gen_kwargs={
-                    "bo_fn": os.path.join(files_path, "valid.bo"),
-                    "en_fn": os.path.join(files_path, "valid.en")}),
-            datasets.SplitGenerator(
-                name=datasets.Split.TEST,
-                gen_kwargs={
-                    "bo_fn": os.path.join(files_path, "test.bo"),
-                    "en_fn": os.path.join(files_path, "test.en")}),
-        ]
+        if self.config.name == "no_registers_no_splits":
+            return [
+                datasets.SplitGenerator(
+                    name=datasets.Split.TRAIN,
+                    gen_kwargs={
+                        "bo_fn": [
+                            os.path.join(files_path, "train.bo"),
+                            os.path.join(files_path, "valid.bo"),
+                            os.path.join(files_path, "test.bo")
+                        ],
+                        "en_fn": [
+                            os.path.join(files_path, "train.en"),
+                            os.path.join(files_path, "valid.en"),
+                            os.path.join(files_path, "test.en")
+                        ]
+                    }
+                )
+            ]
+        else:
+            return [
+                datasets.SplitGenerator(
+                    name=datasets.Split.TRAIN,
+                    gen_kwargs={
+                        "bo_fn": os.path.join(files_path, "train.bo"),
+                        "en_fn": os.path.join(files_path, "train.en")}),
+                datasets.SplitGenerator(
+                    name=datasets.Split.VALIDATION,
+                    gen_kwargs={
+                        "bo_fn": os.path.join(files_path, "valid.bo"),
+                        "en_fn": os.path.join(files_path, "valid.en")}),
+                datasets.SplitGenerator(
+                    name=datasets.Split.TEST,
+                    gen_kwargs={
+                        "bo_fn": os.path.join(files_path, "test.bo"),
+                        "en_fn": os.path.join(files_path, "test.en")}),
+            ]
 
     def _generate_examples(self, bo_fn, en_fn):
+        if type(bo_fn) is list:
+            if type(en_fn) is not list or not len(bo_fn) == len(en_fn):
+                raise ValueError("Both input files must be either strings or lists of strings of the same length")
+            # Read lists of parallel files for a split
+            logger.info(f"Loading parallel sentences from bo=[{', '.join(bo_fn)}] and en=[{', '.join(en_fn)}]")
+            for bo_fn, en_fn in zip(bo_fn, en_fn):
+                with open(bo_fn, encoding="utf-8") as bo_f, open(en_fn, encoding="utf-8") as en_f:
+                    for id_, (bo, en) in enumerate(zip(bo_f, en_f)):
+                        yield id_, {
+                            "tibetan": bo.strip(),
+                            "english": en.strip()
+                        }
+            
+        if type(en_fn) is list:
+            raise ValueError("Both input files must be either strings or lists of strings of the same length")
+
         # Read two parallel files for a split
         logger.info(f"Loading parallel sentences from bo={bo_fn} and en={en_fn}")
         with open(bo_fn, encoding="utf-8") as bo_f, open(en_fn, encoding="utf-8") as en_f:

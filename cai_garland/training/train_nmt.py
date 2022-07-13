@@ -142,13 +142,32 @@ def main(cfg):
     logger.info("Loading training dataset")
     train_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.TRAIN)
     logger.info("Loading validation dataset")
-    eval_dataset = load_dataset(
-        cfg.data.dataset_loader,
-        cfg.data.dataset_config,
-        split=cfg.data.get('validation_split_name', datasets.splits.Split.VALIDATION)
-    )
+    validation_split_name = cfg.data.get('validation_split_name', datasets.splits.Split.VALIDATION)
+    if validation_split_name == "train":
+        split_datasets = train_dataset.train_test_split(
+            train_size=1 - cfg.data.validation_sampling_rate, seed=training_cfg.seed)
+        train_dataset, eval_dataset = split_datasets['train'], split_datasets['test']
+        logger.info("Split into training and validation")
+        del split_datasets
+    else:
+        eval_dataset = load_dataset(
+            cfg.data.dataset_loader,
+            cfg.data.dataset_config,
+            split=cfg.data.get('validation_split_name', datasets.splits.Split.VALIDATION)
+        )
     logger.info("Loading test dataset")
-    test_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.TEST)
+    test_split_name = cfg.data.get('test_split_name', datasets.splits.Split.TEST)
+    if test_split_name is not None:
+        test_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=test_split_name)
+    else:
+        test_dataset = None
+
+    logger.info(f"    Training size   = {len(train_dataset)}")
+    logger.info(f"    Validation size = {len(eval_dataset)}")
+    if test_dataset is not None:
+        logger.info(f"    Test size       = {len(test_dataset)}")
+    else:
+        logger.info("    No test set")
 
     if cfg.training_preprocess.shuffle_training_data:
         logger.info("Shuffling training dataset")
@@ -190,21 +209,22 @@ def main(cfg):
                     "siamese": siamese
                 }
             )
-        logger.info("Preprocessing test dataset")
-        with training_cfg.main_process_first(desc="test dataset map pre-processing"):
-            test_dataset = test_dataset.map(
-                preprocess_function,
-                batched=True,
-                num_proc=cfg.training_preprocess.preprocessing_num_workers,
-                load_from_cache_file=not cfg.overwrite_cache,
-                desc="Running tokenizer on test dataset",
-                fn_kwargs={
-                    "tokenizer": tokenizer,
-                    "padding": padding,
-                    "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
-                    "siamese": siamese
-                }
-            )
+        if test_dataset is not None:
+            logger.info("Preprocessing test dataset")
+            with training_cfg.main_process_first(desc="test dataset map pre-processing"):
+                test_dataset = test_dataset.map(
+                    preprocess_function,
+                    batched=True,
+                    num_proc=cfg.training_preprocess.preprocessing_num_workers,
+                    load_from_cache_file=not cfg.overwrite_cache,
+                    desc="Running tokenizer on test dataset",
+                    fn_kwargs={
+                        "tokenizer": tokenizer,
+                        "padding": padding,
+                        "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                        "siamese": siamese
+                    }
+                )
 
     logger.info("Filtering out long examples")
     is_not_long_example_lambda = lambda x: not is_long_example(
@@ -220,11 +240,12 @@ def main(cfg):
     logger.info(f"Validation: {1 - len(eval_dataset) / pre_filter_len} has been filtered out, {len(eval_dataset)} "
                  "examples left.")
 
-    pre_filter_len = len(test_dataset)
-    test_dataset = test_dataset.filter(is_not_long_example_lambda, desc="Test filter")
-    logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out.")
-    logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out, {len(test_dataset)} "
-                 "examples left.")
+    if test_dataset is not None:
+        pre_filter_len = len(test_dataset)
+        test_dataset = test_dataset.filter(is_not_long_example_lambda, desc="Test filter")
+        logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out.")
+        logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out, {len(test_dataset)} "
+                    "examples left.")
 
     logger.info(f"Original validation set, prior to rebalancing and resampling, size is {len(eval_dataset)}")
     validation_register_rebalance_frac = cfg.data.get('validation_register_rebalance_frac', None)
@@ -243,10 +264,10 @@ def main(cfg):
         eval_dataset = datasets.interleave_datasets([register_eval_dataset, no_register_eval_dataset])
         logger.info(f"Rebalanced validation set to size {len(eval_dataset)}")
         
-    validation_sampling_rate = cfg.data.get('validation_sampling_rate', None)
-    if validation_sampling_rate is not None:
+    validation_subsampling_rate = cfg.data.get('validation_subsampling_rate', None)
+    if validation_subsampling_rate is not None:
         eval_dataset = eval_dataset.train_test_split(
-            train_size=validation_sampling_rate, seed=training_cfg.seed)['train']
+            train_size=validation_subsampling_rate, seed=training_cfg.seed)['train']
         logger.info(f"Subsampled validation set to size {len(eval_dataset)}")
 
     # Data collator
@@ -356,7 +377,7 @@ def main(cfg):
         if training_cfg.generation_max_length is not None
         else cfg.training_preprocess.val_max_target_length
     )
-    if not skip_eval:
+    if not skip_eval and test_dataset is not None:
         logger.info(f"{ForeColor.LIGHTCYAN_EX}Evaluating the final checkpoint")
 
         metrics = trainer.evaluate(
