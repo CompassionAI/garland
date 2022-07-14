@@ -1,5 +1,5 @@
 defaults:
-  - data: 84000-parallel-sentences-no-registers-valid-from-train
+  - data: 84000-parallel-sentences-raw
   - model: olive-cormorant-bart
   - training: basic_with_bleu
   - training_preprocess: basic
