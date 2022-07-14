@@ -2,12 +2,13 @@ defaults:
   - input: 84000-parallel-sentences
   - output: uncased-no-accents
   - stages:
-    - naive-concats
-    - naive-concats-shuffled
-    - concatted-registers
-    - concatted-registers-shuffled
-    - unconcatted-registers-shuffled
-    - folio-registers
+    - naive-unconcatted
+    # - naive-concats
+    # - naive-concats-shuffled
+    # - concatted-registers
+    # - concatted-registers-shuffled
+    # - unconcatted-registers-shuffled
+    # - folio-registers
     - dictionary
   - processing: local-dask
   - override hydra/job_logging: colorlog
