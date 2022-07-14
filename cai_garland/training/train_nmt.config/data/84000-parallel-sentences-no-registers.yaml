@@ -27,4 +27,4 @@ validation_split_name: test
 #   with the register data balance as specified by validation_register_rebalance_frac, if any.
 #
 # Can be none to avoid subsampling.
-validation_subsampling_rate: 0.05
+validation_subsampling_rate: ~
