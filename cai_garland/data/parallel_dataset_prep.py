@@ -6,7 +6,6 @@ from colorama import init as init_colorama, Fore as ForeColor
 
 import os
 import sys
-import json
 import math
 import random
 from itertools import zip_longest
