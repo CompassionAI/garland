@@ -35,6 +35,8 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
     dataset_locations = {
         "no_registers": "processed_datasets/84000-parallel-sentences-no-registers",
         "no_registers_no_splits": "processed_datasets/84000-parallel-sentences-no-registers",
+        "raw": "processed_datasets/84000-parallel-sentences-raw",
+        "raw_no_splits": "processed_datasets/84000-parallel-sentences-raw",
         "registers_3": "processed_datasets/84000-parallel-sentences-3-registers",
     }
 
@@ -48,6 +50,16 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             name="no_registers_no_splits",
             version=datasets.Version("0.1.1", ""),
             description="Dataset for a Tibetan encoder with no registers and all splits concatenated",
+        ),
+        ParallelSentences84000Config(
+            name="raw",
+            version=datasets.Version("0.1.1", ""),
+            description="Dataset for a Tibetan encoder from the raw parallel sentences",
+        ),
+        ParallelSentences84000Config(
+            name="raw_no_splits",
+            version=datasets.Version("0.1.1", ""),
+            description="Dataset for a Tibetan encoder from the raw parallel sentences and all splits concatenated",
         ),
         ParallelSentences84000Config(
             name="registers_3",
@@ -72,7 +84,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         # Prepare the files for the available splits for reading
         files_path = os.path.join(os.environ['CAI_DATA_BASE_PATH'], self.dataset_locations[self.config.name])
 
-        if self.config.name == "no_registers_no_splits":
+        if self.config.name.endswith("_no_splits"):
             return [
                 datasets.SplitGenerator(
                     name=datasets.Split.TRAIN,
