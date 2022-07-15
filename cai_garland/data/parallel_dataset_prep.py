@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from cai_common.data import ParallelTMXLoader, TeiLoader, OldKangyurLoader
+from cai_common.data import ParallelTMXLoader, TeiLoader, KangyurLoader
 from cai_manas.tokenizer import TibertTokenizer
 from cai_garland.utils.str_processors import ProcessorSymbolCleaningJSON
 
@@ -210,7 +210,7 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
 def _pull_folio_dataset(dask_client, cfg, stage_cfg):
     # Loads flat training and test datasets of parallel folios into memory from Dask
     english_df = TeiLoader("kangyur").dataframe
-    kangyur_df = OldKangyurLoader().dataframe
+    kangyur_df = KangyurLoader().dataframe
 
     logger.info("Loading joined translations and the Kangyur")
     kangyur_df['locator'] = kangyur_df.apply(
