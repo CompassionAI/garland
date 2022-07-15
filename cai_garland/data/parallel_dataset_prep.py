@@ -217,6 +217,7 @@ def _pull_folio_dataset(dask_client, cfg, stage_cfg):
         lambda row: str(row.volume_number) + '|' + str(row.location),
         meta=('locator', object),
         axis=1)
+    english_df['location'] = english_df.location.fillna(-1).astype(int)
     english_df['locator'] = english_df.apply(
         lambda row: str(row.volume_number) + '|' + str(row.location),
         meta=('locator', object),
