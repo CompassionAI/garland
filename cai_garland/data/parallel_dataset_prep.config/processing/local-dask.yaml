@@ -6,4 +6,4 @@ dask_distributed: true
 local_dask_dash: true
 
 # Number of Dask worker processes to load training data with.
-dask_workers: 10
+dask_workers: 20
