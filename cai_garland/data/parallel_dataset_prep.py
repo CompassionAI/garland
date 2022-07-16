@@ -210,7 +210,7 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
 def _pull_folio_dataset(dask_client, cfg, stage_cfg):
     # Loads flat training and test datasets of parallel folios into memory from Dask
     english_df = TeiLoader("kangyur").dataframe
-    kangyur_df = KangyurLoader().dataframe
+    kangyur_df = KangyurLoader().remove_new_lines().dataframe
 
     logger.info("Loading joined translations and the Kangyur")
     kangyur_df['locator'] = kangyur_df.apply(
