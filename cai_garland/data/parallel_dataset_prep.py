@@ -227,10 +227,48 @@ def _pull_folio_dataset(dask_client, cfg, stage_cfg):
         english_df[['filename', 'volume_number', 'tohoku_number', 'location', 'text']],
         how='inner',
         lsuffix="_tibetan")
-    local_df = joined_df.compute()
+    local_df = joined_df.compute().sort_values('tohoku_number')
 
     dupes = local_df.groupby(by=local_df.index).count().text.sort_values()
     dupes = dupes[dupes > 1]
+
+    proced_dupes = []
+    for dupe_idx in dupes.index:
+        dupe_df = local_df.loc[dupe_idx]
+        if len(dupe_df) == 2:
+            row_1, row_2 = dupe_df.iloc[0], dupe_df.iloc[1]
+            if not all([row_1[col] == row_2[col] for col in
+                ["filename_tibetan", "text_tibetan", "volume_number", "location"]
+            ]):
+                logger.warning(f"There is a dupe that doesn't look like two Tohoku numbers spanning a folio, locator="
+                               f"{dupe_idx}, equality check failed.")
+                continue
+            if not all([row_1.tohoku_number[3:].isnumeric(), row_1.tohoku_number[3:].isnumeric()]):
+                logger.warning(f"There is a dupe whose Tohoku numbers are not numeric, locator={dupe_idx}.")
+                continue
+            if row_1.tohoku_number == row_2.tohoku_number:
+                logger.warning(f"There is a dupe that doesn't look like two Tohoku numbers spanning a folio, locator="
+                               f"{dupe_idx}, Tohoku numbers are the same.")
+                continue
+            if not int(row_1.tohoku_number[3:]) == int(row_2.tohoku_number[3:]) - 1:
+                logger.warning(f"There is a dupe that doesn't look like two Tohoku numbers spanning a folio, locator="
+                               f"{dupe_idx}, Tohoku numbers not consecutive.")
+                continue
+            split_folio = row_1.text_tibetan.split("༄༅")
+            if len(split_folio) == 1:
+                logger.warning(f"There is a dupe that doesn't look like two Tohoku numbers spanning a folio, locator="
+                               f"{dupe_idx}, folio does not contain ༄༅.")
+                continue
+            if not len(split_folio) == 2:
+                logger.warning(f"There is a dupe that doesn't look like two Tohoku numbers spanning a folio, locator="
+                               f"{dupe_idx}, folio does not split into 2 parts.")
+                continue
+            split_folio[1] = "༄༅" + split_folio[1]
+            dupe_df.text_tibetan.iat[0], dupe_df.text_tibetan.iat[1] = split_folio[0], split_folio[1]
+            # local_df.loc[dupe_idx] = dupe_df    # This shouldn't be needed, as dupe_df is already a view
+            proced_dupes.append(dupe_idx)
+    dupes = dupes.drop(proced_dupes)
+
     if len(dupes) > 0:
         logger.warning(f"There are {len(dupes)} duplicates in the translation and Kangyur join!")
 
