@@ -9,7 +9,7 @@ from transformers import (
     EncoderDecoderModel
 )
 
-from cai_manas.tokenizer import TibertTokenizer
+from cai_manas.tokenizer import CAITokenizer
 from .bilingual_tokenizer import BilingualTokenizer
 from .siamese_encoder import SiameseEncoderConfig, SiameseEncoderModel
 from cai_common.models.utils import get_local_ckpt, get_cai_config
@@ -31,7 +31,7 @@ def _make_named_tokenizer(packed_name):
 
         tokenizer_name = cai_config['tokenizer_name']
         logger.debug(f"Loading tokenizer {tokenizer_name}")
-        tokenizer = TibertTokenizer.from_pretrained(TibertTokenizer.get_local_model_dir(tokenizer_name))
+        tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(tokenizer_name))
     elif packed_name.startswith('hf:'):
         logging.debug(f"Loading tokenizer {packed_name} from Hugging Face")
 

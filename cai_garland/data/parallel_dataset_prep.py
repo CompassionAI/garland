@@ -17,7 +17,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from cai_common.data import ParallelTMXLoader, TeiLoader, KangyurLoader
-from cai_manas.tokenizer import TibertTokenizer
+from cai_manas.tokenizer import CAITokenizer
 from cai_garland.utils.str_processors import ProcessorSymbolCleaningJSON
 
 
@@ -595,7 +595,7 @@ def main(cfg):
     ProcessorSymbolCleaningJSON.base_dir = os.path.dirname(__file__)
 
     logger.info("Loading tokenizer")
-    tokenizer = TibertTokenizer.from_pretrained(TibertTokenizer.get_local_model_dir(cfg.input.tokenizer_name))
+    tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(cfg.input.tokenizer_name))
 
     logger.info("Spinning up Dask cluster")
     dask_client = Client(LocalCluster(
