@@ -1,3 +1,4 @@
+# pylint: disable=protected-access
 from contextlib import contextmanager
 
 from transformers import PreTrainedTokenizer
@@ -49,17 +50,31 @@ class BilingualTokenizer(PreTrainedTokenizer):
     def build_inputs_with_special_tokens(self, token_ids_0, token_ids_1 = None):
         return self._tokenizer.build_inputs_with_special_tokens(token_ids_0, token_ids_1=token_ids_1)
 
+    def get_vocab(self):
+        return self._tokenizer.get_vocab()
+
+    def save_vocabulary(self, save_directory, filename_prefix=None):
+        return self._tokenizer.save_vocabulary(save_directory, filename_prefix)
+
+    @property
+    def vocab_size(self):
+        return self._tokenizer.vocab_size
+
     def save_pretrained(
         self,
         save_directory,
         legacy_format = None,
-        filename_prefix = None
+        filename_prefix = None,
+        push_to_hub = False,
+        **kwargs,
     ):
+        if push_to_hub:
+            raise ValueError("Bilingual tokenizer cannot be pushed to Hugging Face hub")
         prefix_array = [] if filename_prefix is None else [filename_prefix]
         self.source_tokenizer.save_pretrained(
-            save_directory, legacy_format=legacy_format, filename_prefix='-'.join(prefix_array + ["source"]))
+            save_directory, legacy_format=legacy_format, filename_prefix='-'.join(prefix_array + ["source"]), **kwargs)
         self.target_tokenizer.save_pretrained(
-            save_directory, legacy_format=legacy_format, filename_prefix='-'.join(prefix_array + ["target"]))
+            save_directory, legacy_format=legacy_format, filename_prefix='-'.join(prefix_array + ["target"]), **kwargs)
 
     @contextmanager
     def as_target_tokenizer(self):
