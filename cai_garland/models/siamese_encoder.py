@@ -1,4 +1,4 @@
-from cmath import e
+# pylint: disable=no-member
 import copy
 from dataclasses import dataclass
 from typing import Optional, Dict, Union, Any
@@ -173,7 +173,7 @@ class SiameseEncoderModel(PreTrainedModel):
         if output_attentions:
             raise NotImplementedError("Siamese encoder does not currently support outputting attentions")
 
-        if type(input_ids) is torch.Tensor:
+        if isinstance(input_ids, torch.Tensor):
             _splits = self.split_tokens_into_registers(input_ids)
             input_ids = _splits['input_ids']
             attention_mask = _splits['attention_mask']
@@ -205,7 +205,7 @@ class SiameseEncoderModel(PreTrainedModel):
             hidden_states = None
         if not return_dict:
             # Add more to here if implemented
-            return (last_hidden_state,) + tuple(v for v in [hidden_states] if v is not None)        
+            return (last_hidden_state,) + tuple(v for v in [hidden_states] if v is not None)
         return BaseModelOutputWithAttentionMask(
             last_hidden_state=last_hidden_state,
             attention_mask=catted_attention_mask,
