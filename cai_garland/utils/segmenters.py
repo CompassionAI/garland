@@ -40,22 +40,23 @@ class SegmenterLineBreak:
 
 
 class SegmenterTargetTokenCount:
-    def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:
-        # This segmenter packs bo_text into registers. Each register is of the longest possible length that fits into the
-        #   encoder.
+    def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
+        # This segmenter packs bo_text into registers. Each register is of the longest possible length that fits into
+        #   the encoder.
         #
         #   1. First, segment by opening shads.
         #   2. If some segments don't fit, subdivide those segments again by the closing shad.
-        #   3. Greedily sweep left to right and append to registers as you go until you run out of space, after which start
-        #       a new register.
+        #   3. Greedily sweep left to right and append to registers as you go until you run out of space, after which
+        #       start a new register.
         #
-        # Note that this algorithm does not take any maximum number of registers. Also, after the closing shad segmentation
-        #   in the second step there may still be segments of length longer than the encoder length, in which case their
-        #   encoding will fail during translation (or they need to be further segmented downstream).
+        # Note that this algorithm does not take any maximum number of registers. Also, after the closing shad
+        #   segmentation in the second step there may still be segments of length longer than the encoder length, in
+        #   which case their encoding will fail during translation (or they need to be further segmented downstream).
         if translator is None:
             raise ValueError("target_token_count_segmenter needs to have the translator helper class passed in")
         bo_segments = SegmenterOpeningShad()(bo_text)
-        available_space = translator.model.encoder.max_length - translator.tokenizer.num_special_tokens_to_add(pair=False)
+        available_space = \
+            translator.model.encoder.max_length - translator.tokenizer.num_special_tokens_to_add(pair=False)
 
         bo_token_lengths = [
             len(translator.tokenizer.encode(bo_segment, add_special_tokens=False))
