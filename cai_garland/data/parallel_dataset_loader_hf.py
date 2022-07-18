@@ -27,7 +27,7 @@ class ParallelSentences84000Config(datasets.BuilderConfig):
 class ParallelSentences84000(datasets.GeneratorBasedBuilder):
     """ParallelSentences84000 - a CompassionAI augmented dataset of long Tibetan-English pairs made from the 84,000
         parallel sentences.
-    
+
     Attributes:
         dataset_locations: Location of the processed dataset files within the data registry.
     """
@@ -121,9 +121,9 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                         "en_fn": os.path.join(files_path, "test.en")}),
             ]
 
-    def _generate_examples(self, bo_fn, en_fn):
-        if type(bo_fn) is list:
-            if type(en_fn) is not list or not len(bo_fn) == len(en_fn):
+    def _generate_examples(self, bo_fn, en_fn):     # pylint: disable=arguments-differ
+        if isinstance(bo_fn, list):
+            if not isinstance(en_fn, list) or not len(bo_fn) == len(en_fn):
                 raise ValueError("Both input files must be either strings or lists of strings of the same length")
             # Read lists of parallel files for a split
             logger.info(f"Loading parallel sentences from bo=[{', '.join(bo_fn)}] and en=[{', '.join(en_fn)}]")
@@ -134,8 +134,8 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                             "tibetan": bo.strip(),
                             "english": en.strip()
                         }
-            
-        if type(en_fn) is list:
+
+        if isinstance(en_fn, list):
             raise ValueError("Both input files must be either strings or lists of strings of the same length")
 
         # Read two parallel files for a split
