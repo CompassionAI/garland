@@ -1,15 +1,15 @@
 import logging
-import hydra
-from hydra.utils import instantiate
-from tqdm import tqdm
-from colorama import init as init_colorama, Fore as ForeColor
-
 import os
 import sys
 import math
 import random
 from itertools import zip_longest
 from copy import deepcopy
+
+import hydra
+from hydra.utils import instantiate
+from tqdm import tqdm
+from colorama import init as init_colorama, Fore as ForeColor
 
 from dask.distributed import Client, LocalCluster
 import numpy as np
@@ -41,7 +41,7 @@ def _preprocess_flat_data(flat_data, cfg):
     src_processors = [instantiate(proc) for proc in cfg.input.preprocessing.source_lang]
     tgt_processors = [instantiate(proc) for proc in cfg.input.preprocessing.target_lang]
     for src_processor, tgt_processor in zip_longest(src_processors, tgt_processors, fillvalue=lambda x: x):
-        if type(flat_data[0]['tibetan']) is list:
+        if isinstance(flat_data[0]['tibetan'], list):
             flat_data = [
                 {
                     "tibetan": [src_processor(subdatum) for subdatum in datum["tibetan"]],
@@ -207,7 +207,7 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     return train_flat_data, val_flat_data, test_flat_data
 
 
-def _pull_folio_dataset(dask_client, cfg, stage_cfg):
+def _pull_folio_dataset(_dask_client, cfg, stage_cfg):
     # Loads flat training and test datasets of parallel folios into memory from Dask
     english_df = TeiLoader("kangyur").dataframe
     kangyur_df = KangyurLoader().remove_new_lines().dataframe
@@ -302,7 +302,7 @@ def _pull_folio_dataset(dask_client, cfg, stage_cfg):
     return train_flat_data, val_flat_data, test_flat_data
 
 
-def _pull_dictionary_dataset(dask_client, cfg, stage_cfg):
+def _pull_dictionary_dataset(_dask_client, cfg, stage_cfg):
     # Loads flat training dataset of dictionary words into memory from Dask. The test dataset is always empty.
     #   Optionally also applies simple length-based heuristics to only pick out well-defined words without long
     #   dictionary entries, and picks out the shortest definition from a comma-delimited list of definitions.
@@ -334,7 +334,7 @@ def _pull_dictionary_dataset(dask_client, cfg, stage_cfg):
     return flat_data, [], []
 
 
-def _prep_linear_dataset(flat_data, cfg, stage_cfg, tokenizer):
+def _prep_linear_dataset(flat_data, _cfg, _stage_cfg, _tokenizer):
     # No preprocessing, direct passthrough of dataset
     return flat_data
 
@@ -511,7 +511,7 @@ def _write_to_file(f_name, lines, preprocess_location, separator=None):
     preprocess_location = os.path.join(DATA_BASE_PATH, preprocess_location)
     with open(os.path.join(preprocess_location, f_name), mode="w", encoding="utf-8") as f:
         for line in lines:
-            if type(line) is list:
+            if isinstance(line, list):
                 if separator is None:
                     raise ValueError("Dataset requires a separator but none provided")
                 line = separator.join(line)
@@ -549,7 +549,7 @@ def _filter_src_lengths(bo_data, en_data, cfg, tokenizer):
     if prev_len == 0:
         return [], []
 
-    if type(bo_data[0]) is list:
+    if isinstance(bo_data[0], list):
         bo_token_lengths = [
             max([len(tokenizer.encode(subdatum)) for subdatum in datum])
                     for datum in tqdm(bo_data, desc="Calculating token lengths")]
@@ -659,7 +659,7 @@ def main(cfg):
         test_bo, test_en = _split_data_dicts(test_concat_data)
 
         logger.info("Deduping")
-        split_by_pipe = type(train_bo[0]) is list
+        split_by_pipe = isinstance(train_bo[0], list)
         if split_by_pipe:
             train_bo = ['|'.join(bo_segments) for bo_segments in train_bo]
         deduped = list(set(zip(train_bo, train_en)))
@@ -671,7 +671,7 @@ def main(cfg):
 
         for processor in cfg.output.postprocessing.source_lang:
             processor = instantiate(processor)
-            if type(train_bo[0]) is list:
+            if isinstance(train_bo[0], list):
                 train_bo, valid_bo, test_bo = [
                     [
                         [processor(subdatum) for subdatum in datum]
@@ -735,4 +735,4 @@ def main(cfg):
 
 
 if __name__ == "__main__":
-    main()
+    main()      # pylint: disable=no-value-for-parameter
