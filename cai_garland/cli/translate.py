@@ -54,7 +54,6 @@ def batch(translator, mode_cfg, generation_cfg):
 
             for src_segment, tgt_segment in translator.batch_translate(
                 bo_text,
-                out_fn,
                 tqdm=tqdm,
                 hard_segmenter_kwargs=dict(generation_cfg.segmentation.hard_segmenter_kwargs),
                 soft_segmenter_kwargs=dict(generation_cfg.segmentation.soft_segmenter_kwargs),
