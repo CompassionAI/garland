@@ -1,17 +1,17 @@
 import os
 import sys
 import logging
+import glob
+
 import hydra
 from hydra.utils import instantiate
-import glob
 from omegaconf import OmegaConf
-
 from tqdm.auto import tqdm
 
 from ..utils.translator import Translator
 
 
-def interactive(translator, mode_cfg, generation_cfg):
+def interactive(translator, _mode_cfg, _generation_cfg):
     print("Interactive Tibetan translation...")
     while True:
         print("===")
@@ -35,8 +35,6 @@ def batch(translator, mode_cfg, generation_cfg):
         if os.path.isfile(in_cfg_fn):
             in_cfg = OmegaConf.load(in_cfg_fn)
             generation_cfg = OmegaConf.merge(generation_cfg, in_cfg)
-        else:
-            generation_cfg = generation_cfg
 
         out_fn = os.path.join(
             mode_cfg.output_dir, os.path.splitext(os.path.basename(in_fn))[0] + '.' + mode_cfg.output_extension)
@@ -88,4 +86,4 @@ def main(cfg):
 
 
 if __name__ == "__main__":
-    main()
+    main()      # pylint: disable=no-value-for-parameter
