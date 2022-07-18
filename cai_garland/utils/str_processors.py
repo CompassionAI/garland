@@ -16,12 +16,12 @@ class ProcessorRemoveNewLine:
 
 class ProcessorReplaceNewLineWithSpace:
     def __call__(self, segment: str) -> str:
-       return segment.replace('\n', ' ').strip()
+        return segment.replace('\n', ' ').strip()
 
 
 class ProcessorRemoveConsecutiveSpaces:
     def __call__(self, segment: str) -> str:
-        return re.sub('\s+', ' ', segment).strip()
+        return re.sub(r'\s+', ' ', segment).strip()
 
 
 class ProcessorLowerCase:
@@ -32,7 +32,7 @@ class ProcessorLowerCase:
 class ProcessorRemoveAccents:
     def __call__(self, segment: str) -> str:
         nfkd_form = unicodedata.normalize('NFKD', segment)
-        return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
+        return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 
 class ProcessorRemoveDanglingShads:
