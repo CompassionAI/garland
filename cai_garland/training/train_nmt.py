@@ -27,18 +27,18 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from hydra.core.hydra_config import HydraConfig
 from cai_common.utils.hydra_training_args import HydraSeq2SeqTrainingArguments
+from cai_common.utils.tensorboard_callback import CAITensorboardCallback
 from colorama import init as init_colorama, Fore as ForeColor
 
 import datasets
 import numpy as np
 from datasets import load_dataset, load_metric
 
-from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
-from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint
-
-from cai_common.utils.tensorboard_callback import CAITensorboardCallback
 from cai_garland.models.factory import make_encoder_decoder
 from cai_garland.data.siamese_collator import SiameseDataCollatorForSeq2Seq
+
+from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
+from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint
 
 
 logger = logging.getLogger(__name__)
@@ -263,7 +263,7 @@ def main(cfg):
             ))
         eval_dataset = datasets.interleave_datasets([register_eval_dataset, no_register_eval_dataset])
         logger.info(f"Rebalanced validation set to size {len(eval_dataset)}")
-        
+
     validation_subsampling_rate = cfg.data.get('validation_subsampling_rate', None)
     if validation_subsampling_rate is not None:
         eval_dataset = eval_dataset.train_test_split(
@@ -393,10 +393,10 @@ def main(cfg):
     return results
 
 
-def _mp_fn(index):
+def _mp_fn(_index):
     # For xla_spawn (TPUs)
-    main()
+    main()      # pylint: disable=no-value-for-parameter
 
 
 if __name__ == "__main__":
-    main()
+    main()      # pylint: disable=no-value-for-parameter
