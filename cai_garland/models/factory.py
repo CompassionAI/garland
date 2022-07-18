@@ -1,5 +1,7 @@
 import logging
 
+from cai_common.models.utils import get_local_ckpt, get_cai_config
+from cai_manas.tokenizer import CAITokenizer
 from transformers import (
     AutoConfig,
     AutoModel,
@@ -9,10 +11,8 @@ from transformers import (
     EncoderDecoderModel
 )
 
-from cai_manas.tokenizer import CAITokenizer
 from .bilingual_tokenizer import BilingualTokenizer
 from .siamese_encoder import SiameseEncoderConfig, SiameseEncoderModel
-from cai_common.models.utils import get_local_ckpt, get_cai_config
 
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def _make_named_tokenizer(packed_name):
         logging.debug(f"Loading tokenizer {packed_name} from Hugging Face")
 
         hf_name = packed_name[3:].strip()
-        
+
         logger.debug(f"Loading tokenizer {hf_name}")
         tokenizer = AutoTokenizer.from_pretrained(hf_name)
     else:
@@ -72,10 +72,10 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
 
             hf_config_name = cai_config['hf_base_model_name']
 
-            logger.debug(f"Loading Huggingface base model config")
+            logger.debug("Loading Huggingface base model config")
             model_cfg = AutoConfig.from_pretrained(hf_config_name)
 
-            logger.debug(f"Loading model")
+            logger.debug("Loading model")
             model = hf_model_factory.from_pretrained(local_ckpt, config=model_cfg)
             if tokenizer is not None:
                 model.resize_token_embeddings(len(tokenizer))
@@ -83,7 +83,7 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
         logging.debug(f"Loading {packed_name} from Hugging Face")
 
         hf_name = packed_name[3:].strip()
-        
+
         logger.debug(f"Loading model {hf_name}")
         model = hf_model_factory.from_pretrained(hf_name)
     else:
@@ -101,7 +101,7 @@ def make_bilingual_tokenizer(encoder_name: str, decoder_name: str):
     Args:
         encoder_name: Name of the encoder tokenizer.
         decoder_name: Name of the decoder tokenizer.
-    
+
     Returns:
         A bilingual tokenizer.
     """
@@ -119,7 +119,7 @@ def make_encoder_decoder(encoder_name: str, decoder_name: str):
     Args:
         encoder_name: Name of the encoder model.
         decoder_name: Name of the decoder model.
-    
+
     Returns:
         A tuple of the model and a bilingual tokenizer.
     """
