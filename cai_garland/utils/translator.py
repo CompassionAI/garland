@@ -1,12 +1,15 @@
 # pylint: disable=dangerous-default-value
+# pylint: disable=no-member
+# pylint: disable=protected-access
 import logging
 from typing import Optional, Dict, Any
+import torch
 from tqdm.auto import tqdm
 
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_garland.models.factory import make_bilingual_tokenizer
 from cai_garland.utils.segmenters import SegmenterNone, SegmenterOpeningShad
-from cai_garland.models.siamese_encoder import SiameseEncoderModel
+from cai_garland.models.siamese_encoder import SiameseEncoderModel, BaseModelOutputWithAttentionMask
 
 from transformers import EncoderDecoderModel
 
@@ -51,27 +54,27 @@ class Translator:
             model_ckpt:  Name of the fine-tuned model checkpoint in the data registry to use for translation. For
                 example, olive-cormorant-bart."""
         local_ckpt = get_local_ckpt(model_ckpt, model_dir=True)
-        logger.debug(f"Local model checkpoint {model_ckpt} resolved to {local_ckpt}")
+        logger.info(f"Local model checkpoint {model_ckpt} resolved to {local_ckpt}")
 
         self.model = EncoderDecoderModel.from_pretrained(local_ckpt)
         logger.debug(f"Encoder: {self.model.encoder}")
         logger.debug(f"Decoder: {self.model.decoder}")
 
-        logger.debug("Loading CAI translation model config")
+        logger.info("Loading CAI translation model config")
         cai_base_config = get_cai_config(model_ckpt)
         encoder_name = cai_base_config['encoder_model_name']
         encoder_length = cai_base_config['encoder_max_length']
         decoder_name = cai_base_config['decoder_model_name']
         decoder_length = cai_base_config['decoder_max_length']
-        logger.debug(f"Encoder name={encoder_name}, length={encoder_length}")
-        logger.debug(f"Decoder name={decoder_name}, length={decoder_length}")
+        logger.info(f"Encoder name={encoder_name}, length={encoder_length}")
+        logger.info(f"Decoder name={decoder_name}, length={decoder_length}")
         self.model.encoder.max_length = encoder_length
         self.model.decoder.max_length = decoder_length
 
-        logger.debug("Loading bilingual tokenizer")
+        logger.info("Loading bilingual tokenizer")
         self.tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name)
 
-        logger.debug("Configuring model")
+        logger.info("Configuring model")
         self.model.eval()
 
         self.num_beams = 20
@@ -85,11 +88,57 @@ class Translator:
         self._cuda = False
         self.model.cpu()
 
-    def translate(self, bo_text: str, prefix: Optional[str]=None, generator_kwargs: Dict[Any, Any]={}) -> str:
+    def _encode_text(
+        self,
+        bo_text: str
+    ) -> Any:
+        # Utility function to run only the encoder on source text. Does _not_ accept eor tokens.
+        bo_tokens = self.tokenizer(bo_text, return_tensors="pt").input_ids
+
+        if len(bo_tokens[0]) > self.model.encoder.max_length:
+            raise TokenizationTooLongException(f"Translation input too long: encoder maximum length is "
+                f"{self.model.encoder.max_length}, input tokenizes to {len(bo_tokens[0])} "
+                f"tokens.")
+
+        if self._cuda:
+            bo_tokens = bo_tokens.cuda()
+        bo_tokens = [bo_tokens]
+        inputs_tensor, model_input_name, model_kwargs = self.model._prepare_model_inputs(
+            bo_tokens, self.model.config.bos_token_id, model_kwargs={})
+        model_kwargs["attention_mask"] = [self.model._prepare_attention_mask_for_generation(
+            inputs_tensor[0],
+            self.model.config.pad_token_id,
+            self.model.config.eos_token_id
+        )]
+        model_kwargs = self.model._prepare_encoder_decoder_kwargs_for_generation(
+            inputs_tensor, model_kwargs, model_input_name)
+
+        del bo_tokens
+        encoder_outputs = model_kwargs['encoder_outputs']
+        del model_kwargs
+        if self._cuda:
+            last_hidden_state = encoder_outputs.last_hidden_state.cpu().detach().numpy()
+            attention_mask = encoder_outputs.attention_mask.cpu().detach().numpy()
+        torch.cuda.empty_cache()
+        return {
+            "last_hidden_state": last_hidden_state,
+            "attention_mask": attention_mask
+        }
+
+    def translate(
+        self,
+        bo_text: str,
+        prefix: Optional[str]=None,
+        encoder_outputs: Any = None,
+        generator_kwargs: Dict[Any, Any]={},
+    ) -> str:
         """Translate the input Tibtean.
 
         Args:
             bo_text: The Tibetan text (not tokens) to translate, as a unicode string.
+            prefix (optional): Prefix text, in the target language, to force the generator to produce.
+            encoder_outputs (optional): Pre-computed encoder outputs. If not specified, the model will run the encoder.
+            generator_kwargs (optional): Any additional keyword arguments to pass to the generator function.
 
         Returns:
             The translated text (not tokens)."""
@@ -118,8 +167,42 @@ class Translator:
         else:
             prefix_fn = None
 
+        if isinstance(encoder_outputs, list):
+            print(bo_tokens.shape)
+            encoder_outputs = BaseModelOutputWithAttentionMask(
+                last_hidden_state=torch.cat(
+                    [
+                        torch.FloatTensor(encoder_output['last_hidden_state'])
+                        for encoder_output in encoder_outputs
+                    ],
+                    dim=1
+                ),
+                attention_mask=torch.cat(
+                    [
+                        torch.LongTensor(encoder_output['attention_mask'])
+                        for encoder_output in encoder_outputs
+                    ],
+                    dim=1
+                )
+            )
+        # Need type(...) here because all classes are isinstance of dict
+        elif type(encoder_outputs) is dict:     # pylint: disable=unidiomatic-typecheck
+            encoder_outputs = BaseModelOutputWithAttentionMask(
+                last_hidden_state=torch.FloatTensor(encoder_outputs['last_hidden_state']),
+                attention_mask=torch.LongTensor(encoder_outputs['attention_mask'])
+            )
         if self._cuda:
             bo_tokens = bo_tokens.cuda()
+            if encoder_outputs is not None:
+                if isinstance(encoder_outputs.last_hidden_state, list):
+                    encoder_outputs.last_hidden_state = [t.cuda() for t in encoder_outputs.last_hidden_state]
+                    encoder_outputs.attention_mask = [t.cuda() for t in encoder_outputs.attention_mask]
+                else:
+                    encoder_outputs.last_hidden_state = encoder_outputs.last_hidden_state.cuda()
+                    encoder_outputs.attention_mask = encoder_outputs.attention_mask.cuda()
+        if encoder_outputs is not None:
+            generator_kwargs['encoder_outputs'] = encoder_outputs
+            generator_kwargs['attention_mask'] = encoder_outputs.attention_mask
         preds = self.model.generate(
             bo_tokens,
             max_length=self.model.decoder.max_length,
@@ -157,17 +240,31 @@ class Translator:
             if retrospective_registers:
                 src_registers, tgt_registers = [], []
                 num_registers = self.model.encoder.config.num_registers
-            for soft_segment in tqdm(soft_segments, desc="Soft segments", leave=False):
+
+                all_encoder_outputs = []
+                for soft_segment in tqdm(soft_segments, desc="Encoding soft segments", leave=False):
+                    all_encoder_outputs.append(self._encode_text(soft_segment))
+
+            for seg_idx, soft_segment in tqdm(
+                enumerate(soft_segments),
+                total=len(soft_segments),
+                desc="Translating soft segments",
+                leave=False
+            ):
                 if retrospective_registers:
                     input_ = self.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
                     prefix = ' '.join(tgt_registers)
+                    encoder_outputs = [
+                        all_encoder_outputs[seg_idx - i] for i in reversed(range(len(src_registers) + 1))]
                 else:
                     input_ = soft_segment
                     prefix = None
+                    encoder_outputs = None
 
                 translation_err = False
                 try:
-                    tgt_segment = self.translate(input_, prefix=prefix, generator_kwargs=generator_kwargs)
+                    tgt_segment = self.translate(
+                        input_, prefix=prefix, encoder_outputs=encoder_outputs, generator_kwargs=generator_kwargs)
                 except TokenizationTooLongException as err:
                     if throw_translation_errors:
                         raise err
