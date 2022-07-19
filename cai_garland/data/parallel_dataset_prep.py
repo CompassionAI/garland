@@ -129,22 +129,24 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     logger.info("Loading Dask dataframe")
 
     ParallelTMXLoader.data_glob = os.path.join(cfg.input.parallel_dataset_location, "*.tmx")
-    if cfg.output.sort_by_starting_index:
+    if stage_cfg.sort_by_starting_index:
         logger.info("Preparing indexed join between translations and parallel sentences")
-        folio_df = TeiLoader('kangyur').dataframe
+        folio_df = TeiLoader('kangyur').recto_verso_pagination().dataframe
         folio_df['locator'] = folio_df \
             .tohoku_number \
                 .str.lower() \
-                .map(lambda x: x.replace('toh', ''))\
+                .map(lambda x: x.replace('toh', '')) \
             + '|' \
-            + folio_df.location.fillna('').str.lower()
+            + folio_df.location.str.lower()
         folio_df = folio_df.set_index('locator')
+        folio_df = dask_client.persist(folio_df)
 
         parallel_df = ParallelTMXLoader() \
             .apply_markup() \
             .clean_bad_chars() \
             .dataframe
         parallel_df['locator'] = parallel_df.tohoku.str.lower() + '|' + parallel_df.folio.str.lower()
+        parallel_df = dask_client.persist(parallel_df)
 
         joined_df = parallel_df.join(folio_df, on='locator', rsuffix="_folio", how='outer')
         joined_df = joined_df[['tohoku', 'volume_number', 'location', 'tibetan', 'english', 'text']]
@@ -163,17 +165,18 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
             .clean_bad_chars() \
             .dataframe
         parallel_df = dask_client.persist(parallel_df)[["tohoku", "tibetan", "english"]]
-    parallel_df["tohoku"] = parallel_df.tohoku.fillna(-1).astype(int)
+    parallel_df = parallel_df.dropna()
 
     logger.info("Loading training dataframe")
-    train_df = parallel_df[~parallel_df.tohoku.isin(cfg.input.test_tohoku_numbers)].compute()
-    if cfg.output.sort_by_starting_index:
+    test_tohoku_numbers = [str(toh) for toh in cfg.input.test_tohoku_numbers]
+    train_df = parallel_df[~parallel_df.tohoku.isin(test_tohoku_numbers)].compute()
+    if stage_cfg.sort_by_starting_index:
         train_df = train_df.sort_values(
             ["tohoku", "volume_number", "location", "start_idx"])[["tibetan", "english"]].dropna()
     train_df = train_df[["tibetan", "english"]]
     logger.info("Loading test dataframe")
-    test_df = parallel_df[parallel_df.tohoku.isin(cfg.input.test_tohoku_numbers)].compute()
-    if cfg.output.sort_by_starting_index:
+    test_df = parallel_df[parallel_df.tohoku.isin(test_tohoku_numbers)].compute()
+    if stage_cfg.sort_by_starting_index:
         test_df = test_df.sort_values(
             ["tohoku", "volume_number", "location", "start_idx"])[["tibetan", "english"]].dropna()
     test_df = test_df[["tibetan", "english"]]
