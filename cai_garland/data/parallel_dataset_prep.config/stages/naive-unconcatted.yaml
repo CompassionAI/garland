@@ -10,3 +10,6 @@ naive-concats:
   # Function to prepare the dataset
   prep_func:
     _target_: cai_garland.data.parallel_dataset_prep._prep_linear_dataset
+
+  # Do not sort the parallel dataset by index of the English sentence in the parallel folio dataset
+  sort_by_starting_index: false

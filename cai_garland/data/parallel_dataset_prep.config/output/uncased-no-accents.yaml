@@ -1,9 +1,6 @@
 # Check the English data for unknown tokens
 check_for_en_unks: true
 
-# Sort the parallel dataset by index of the English sentence in the parallel folio dataset
-sort_by_starting_index: true
-
 # Name of the tokenizer to use for packing data into registers. Note that the output is _not_ tokenized, this is only
 #   used to count the final tokenized length of the target text
 tokenizer_name: facebook/bart-base
