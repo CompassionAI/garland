@@ -73,55 +73,154 @@ def _preprocess_flat_data(flat_data, cfg):
     return res
 
 
+def _pipeline_preprocess(pipeline_, inputs, candidate_labels=None, hypothesis_template="This example is {}."):
+    # pylint: disable=protected-access
+    from transformers.tokenization_utils import TruncationStrategy
+
+    sequence_pairs, sequences = pipeline_._args_parser(inputs, candidate_labels, hypothesis_template)
+
+    for i, (candidate_label, sequence_pair) in enumerate(zip(candidate_labels, sequence_pairs)):
+        model_input = pipeline_._parse_and_tokenize([sequence_pair], truncation=TruncationStrategy.LONGEST_FIRST)
+
+        yield {
+            "candidate_label": candidate_label,
+            "sequence": sequences[0],
+            "is_last": i == len(candidate_labels) - 1,
+            **model_input,
+        }
+
+
+def _score_for_concats(base_sent, candidate_pairs, pipeline, temperature=1, hypothesis_template="{}"):
+    # This is ripped out from the zero-shot classification pipeline code, with contradictions added
+    from transformers.tokenization_utils import TruncationStrategy
+
+    model_outputs = []
+    model_inputs = pipeline.tokenizer(
+        [
+            (base_sent['english'], hypothesis_template.format(candidate_pair['english']))
+            for candidate_pair in candidate_pairs
+        ],
+        add_special_tokens=True,
+        return_tensors="pt",
+        padding=True,
+        truncation=TruncationStrategy.LONGEST_FIRST
+    )
+    model_inputs = {k: model_inputs[k].to(pipeline.model.device) for k in pipeline.tokenizer.model_input_names}
+    outputs = pipeline.model(**model_inputs)
+    for candidate_pair, logits in zip(candidate_pairs, outputs['logits']):
+        model_outputs.append({
+            "candidate_pair": candidate_pair,
+            "sequence": base_sent,
+            "logits": logits,
+        })
+
+    logits = np.vstack([output["logits"].cpu().detach().numpy() for output in model_outputs]) / temperature
+    N = logits.shape[0]
+    n = len(candidate_pairs)
+    num_sequences = N // n
+    reshaped_outputs = logits.reshape((num_sequences, n, -1))
+
+    contra_id = pipeline.model.config.label2id['CONTRADICTION']
+    entail_logits = reshaped_outputs[..., pipeline.entailment_id]
+    contra_logits = reshaped_outputs[..., contra_id]
+
+    return {
+        "pairs": candidate_pairs,
+        "entailment_logits": entail_logits[0, ...],
+        "contradiction_logits": contra_logits[0, ...]
+    }
+
+
+def _apply_score_cutoff(scores_pairs, cutoff, renormalize=False):
+    idxes = np.argwhere(scores_pairs["scores"] > cutoff)[:,0].tolist()
+    res = {
+        "pairs": [scores_pairs["pairs"][i] for i in idxes],
+        "scores": scores_pairs["scores"][idxes],
+        "indices": idxes
+    }
+    if renormalize:
+        res["scores"] = res["scores"] / res["scores"].sum()
+    return res
+
+
 def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
     # Use a language model to pick random next sentences that are linguistically adequate to augment the dataset
-    import torch
-    from transformers import BertTokenizer, BertForNextSentencePrediction
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 
     if len(flat_data) == 0:
         return []
 
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    model = BertForNextSentencePrediction.from_pretrained('bert-base-uncased')
-    model.eval()
+    logger.info("Loading shuffling sequencer model")
+    tokenizer = AutoTokenizer.from_pretrained(stage_cfg.shuffle_model)
+    model = AutoModelForSequenceClassification.from_pretrained(stage_cfg.shuffle_model)
+    pipeline_ = pipeline("zero-shot-classification", tokenizer=tokenizer, model=model)
+    pipeline_.model.eval()
     if cfg.cuda:
-        model.cuda()
+        pipeline_.model.cuda()
 
-    def score_valid_next(first_sent, second_sents):
-        first_sent, second_sents = first_sent.lower(), [sent.lower() for sent in second_sents]
-        encoding = tokenizer([first_sent] * len(second_sents), second_sents, return_tensors='pt', padding=True)
-        encoding = {key: val.cuda() for key, val in encoding.items()}
-        logits = model(**encoding)[0]
-        softmax = torch.nn.functional.softmax(logits)
-        return [x[0] for x in softmax.tolist()]
+    res, num_fails = [], 0
+    cur_sent = random.choice(flat_data)
+    for _ in tqdm(range(math.floor(stage_cfg.num_shuffled_elems_frac * len(flat_data)))):
+        res.append(cur_sent)
 
-    remaining_data = deepcopy(flat_data)
-    total_data_len = len(flat_data)
-    flat_data = []
-    cur_sent = remaining_data.pop(random.randrange(len(remaining_data)))
-    num_fails = 0
-    for _ in tqdm(range(math.floor(stage_cfg.num_shuffled_elems_frac * total_data_len))):
-        flat_data.append(cur_sent)
-        found_next_sent = False
-        for _ in range(0, stage_cfg.shuffle_elem_find_tries, cfg.batch_size):
-            try_batch_idxs = [random.randrange(len(remaining_data)) for _ in range(cfg.batch_size)]
-            try_candidates = [remaining_data[idx]['english'] for idx in try_batch_idxs]
-            scores = score_valid_next(cur_sent['english'], try_candidates)
-            to_break = False
-            for score, batch_idx in zip(scores, try_batch_idxs):
-                candidate_idx = batch_idx
-                if score > stage_cfg.shuffle_elem_find_threshold:
-                    to_break = True
-                    break
-            if to_break:
-                found_next_sent = True
-                break
-        if not found_next_sent:
+        scores = {
+            "pairs": [],
+            "entailment_logits": [],
+            "contradiction_logits": []
+        }
+        tried_idxs = []
+        for _ in range(stage_cfg.shuffle_elem_find_tries // cfg.batch_size):
+            try_batch_idxs = [random.randrange(len(flat_data)) for _ in range(cfg.batch_size)]
+            try_candidates = [flat_data[idx] for idx in try_batch_idxs]
+
+            cur_scores = _score_for_concats(
+                cur_sent,
+                try_candidates,
+                pipeline_,
+                temperature=stage_cfg.shuffle_temperature
+            )
+            for key, val in cur_scores.items():
+                scores[key].extend(val)
+            tried_idxs.extend(try_batch_idxs)
+        scores = {
+            "entailment": {
+                "pairs": scores["pairs"],
+                "logits": np.array(scores["entailment_logits"])
+            },
+            "contradiction": {
+                "pairs": scores["pairs"],
+                "logits": np.array(scores["contradiction_logits"])
+            },
+        }
+        # This normalizes the scores to represent how much better than average the score is. This is needed because the
+        #   average score is 1 / shuffle_elem_find_tries.
+        scores["entailment"]["scores"] = stage_cfg.shuffle_elem_find_tries * \
+            np.exp(scores["entailment"]["logits"]) / np.exp(scores["entailment"]["logits"]).sum(-1, keepdims=True)
+        scores["contradiction"]["scores"] = stage_cfg.shuffle_elem_find_tries * \
+            np.exp(scores["contradiction"]["logits"]) / np.exp(scores["contradiction"]["logits"]).sum(-1, keepdims=True)
+
+        scores["entailment"] = _apply_score_cutoff(scores["entailment"], stage_cfg.shuffle_score_cutoffs.entailment)
+        scores["contradiction"] = _apply_score_cutoff(
+            scores["contradiction"], stage_cfg.shuffle_score_cutoffs.contradiction)
+
+        all_scores = np.concatenate([
+            (1 - stage_cfg.contradiction_probability) * scores["entailment"]["scores"] \
+                / stage_cfg.shuffle_elem_find_tries,
+            stage_cfg.contradiction_probability * scores["contradiction"]["scores"] / stage_cfg.shuffle_elem_find_tries
+        ])
+        all_scores = all_scores / all_scores.sum()
+        all_pairs = scores["entailment"]["pairs"]
+        all_pairs.extend(scores["contradiction"]["pairs"])
+
+        if len(all_scores) == 0:
             num_fails += 1
-        cur_sent = remaining_data.pop(candidate_idx)
+            cur_sent = random.choice(flat_data)
+        else:
+            candidate_idx = int(np.argwhere(np.random.default_rng().multinomial(1, all_scores) == 1))
+            cur_sent = all_pairs[candidate_idx]
     if num_fails > 0:
         logger.warning(f"    Number of times failed to find next sentence: {num_fails}")
-    return flat_data
+    return res
 
 
 def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
