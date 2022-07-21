@@ -1,2 +1,3 @@
-# Shuffle the sentences before concatenating
-shuffle_concats: false
+shuffle:
+  # Do not shuffle the sentences before concatenating
+  concats: false
