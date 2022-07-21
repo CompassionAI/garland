@@ -2,14 +2,14 @@ defaults:
   - input: 84000-parallel-sentences
   - output: uncased-no-accents
   - stages:
-    # - naive-unconcatted
+    - naive-unconcatted
     # - naive-concats
-    - naive-concats-shuffled
+    # - naive-concats-shuffled
     # - concatted-registers
-    # - concatted-registers-shuffled
+    - concatted-registers-shuffled
     # - unconcatted-registers-shuffled
     # - folio-registers
-    # - dictionary
+    - dictionary
   - processing: local-dask
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
@@ -25,7 +25,7 @@ seed: 12345
 
 output_dir: ${oc.env:CAI_TEMP_PATH}/enbo_data
 
-# These are used by BERT when shuffling
+# These are used by Hugging Face models when shuffling
 cuda: true
 batch_size: 16
 

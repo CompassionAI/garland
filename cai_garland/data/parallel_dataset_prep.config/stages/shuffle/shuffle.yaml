@@ -27,4 +27,4 @@ shuffle:
 shuffling_repetitions: 1
 
 # Number of shuffled examples to get from the flat data
-frac_shuffled: 1
+frac_shuffled: 0.5
