@@ -1,29 +1,30 @@
-# Shuffle the sentences before concatenating
-shuffle_concats: true
+shuffle:
+  # Shuffle the sentences before concatenating
+  concats: true
 
-# Hugging Face MNLI model to use for sequencing the sentences
-shuffle_model: typeform/distilbert-base-uncased-mnli
+  # Hugging Face MNLI model to use for sequencing the sentences
+  model: typeform/distilbert-base-uncased-mnli
 
-# Concatenate this many previous target sentences when finding the next one. Setting this to zero will only consider the
-#   current sentence when finding the next one.
-shuffle_lookback_window: 2
+  # Concatenate this many previous target sentences when finding the next one. Setting this to zero will only consider the
+  #   current sentence when finding the next one.
+  lookback_window: 2
 
-# Sampling temperature for sentence sequencing
-shuffle_temperature: 1.5
+  # Sampling temperature for sentence sequencing
+  temperature: 1.5
 
-# Score cutoffs to apply prior to sampling (never sample entirely irrelevant sentences)
-shuffle_score_cutoffs:
-  entailment: 1
-  contradiction: 12
+  # Score cutoffs to apply prior to sampling (never sample entirely irrelevant sentences)
+  score_cutoffs:
+    entailment: 1
+    contradiction: 12
 
-# Probability of drawing a contradiction instead of an entailment
-contradiction_probability: 0.1
+  # Probability of drawing a contradiction instead of an entailment
+  contradiction_probability: 0.1
+
+  # Number of candidates to evaluate in order to find the next sentence during shuffling
+  num_candidates: 64
 
 # Number of times to repeat the shuffle to get a larger dataset
-num_shuffling_repetitions: 1
+shuffling_repetitions: 1
 
-# Number of shuffled elements to get from the flat data
-num_shuffled_elems_frac: 1
-
-# Number of times to try to find the next sentences during shuffling
-shuffle_elem_find_tries: 64
+# Number of shuffled examples to get from the flat data
+frac_shuffled: 1

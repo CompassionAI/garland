@@ -150,8 +150,8 @@ def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
         return []
 
     logger.info("Loading shuffling sequencer model")
-    tokenizer = AutoTokenizer.from_pretrained(stage_cfg.shuffle_model)
-    model = AutoModelForSequenceClassification.from_pretrained(stage_cfg.shuffle_model)
+    tokenizer = AutoTokenizer.from_pretrained(stage_cfg.shuffle.model)
+    model = AutoModelForSequenceClassification.from_pretrained(stage_cfg.shuffle.model)
     pipeline_ = pipeline("zero-shot-classification", tokenizer=tokenizer, model=model)
     pipeline_.model.eval()
     if cfg.cuda:
@@ -159,9 +159,9 @@ def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
 
     res, num_fails = [], 0
     cur_sent = random.choice(flat_data)
-    for _ in tqdm(range(math.floor(stage_cfg.num_shuffled_elems_frac * len(flat_data)))):
+    for _ in tqdm(range(math.floor(stage_cfg.frac_shuffled * len(flat_data)))):
         base_sentence = ' '.join(
-            [x['english'] for x in res[-stage_cfg.shuffle_lookback_window:]] + [cur_sent['english']])
+            [x['english'] for x in res[-stage_cfg.shuffle.lookback_window:]] + [cur_sent['english']])
 
         res.append(cur_sent)
 
@@ -171,7 +171,7 @@ def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
             "contradiction_logits": []
         }
         tried_idxs = []
-        for _ in range(stage_cfg.shuffle_elem_find_tries // cfg.batch_size):
+        for _ in range(stage_cfg.shuffle.num_candidates // cfg.batch_size):
             try_batch_idxs = [random.randrange(len(flat_data)) for _ in range(cfg.batch_size)]
             try_candidates = [flat_data[idx] for idx in try_batch_idxs]
 
@@ -179,7 +179,7 @@ def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
                 base_sentence,
                 try_candidates,
                 pipeline_,
-                temperature=stage_cfg.shuffle_temperature
+                temperature=stage_cfg.shuffle.temperature
             )
             for key, val in cur_scores.items():
                 scores[key].extend(val)
@@ -195,20 +195,21 @@ def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
             },
         }
         # This normalizes the scores to represent how much better than average the score is. This is needed because the
-        #   average score is 1 / shuffle_elem_find_tries.
-        scores["entailment"]["scores"] = stage_cfg.shuffle_elem_find_tries * \
+        #   average score is 1 / shuffle.num_candidates.
+        scores["entailment"]["scores"] = stage_cfg.shuffle.num_candidates * \
             np.exp(scores["entailment"]["logits"]) / np.exp(scores["entailment"]["logits"]).sum(-1, keepdims=True)
-        scores["contradiction"]["scores"] = stage_cfg.shuffle_elem_find_tries * \
+        scores["contradiction"]["scores"] = stage_cfg.shuffle.num_candidates * \
             np.exp(scores["contradiction"]["logits"]) / np.exp(scores["contradiction"]["logits"]).sum(-1, keepdims=True)
 
-        scores["entailment"] = _apply_score_cutoff(scores["entailment"], stage_cfg.shuffle_score_cutoffs.entailment)
+        scores["entailment"] = _apply_score_cutoff(scores["entailment"], stage_cfg.shuffle.score_cutoffs.entailment)
         scores["contradiction"] = _apply_score_cutoff(
-            scores["contradiction"], stage_cfg.shuffle_score_cutoffs.contradiction)
+            scores["contradiction"], stage_cfg.shuffle.score_cutoffs.contradiction)
 
         all_scores = np.concatenate([
-            (1 - stage_cfg.contradiction_probability) * scores["entailment"]["scores"] \
-                / stage_cfg.shuffle_elem_find_tries,
-            stage_cfg.contradiction_probability * scores["contradiction"]["scores"] / stage_cfg.shuffle_elem_find_tries
+            (1 - stage_cfg.shuffle.contradiction_probability) * scores["entailment"]["scores"] \
+                / stage_cfg.shuffle.num_candidates,
+            stage_cfg.shuffle.contradiction_probability * scores["contradiction"]["scores"] \
+                / stage_cfg.shuffle.num_candidates
         ])
         all_scores = all_scores / all_scores.sum()
         all_pairs = scores["entailment"]["pairs"]
@@ -301,9 +302,9 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     val_flat_data = _preprocess_flat_data(val_flat_data, cfg)
     test_flat_data = _preprocess_flat_data(test_flat_data, cfg)
 
-    if stage_cfg.shuffle_concats:
+    if stage_cfg.shuffle.concats:
         shuffled_train_data, shuffled_val_data, shuffled_test_data = [], [], []
-        for _ in range(stage_cfg.num_shuffling_repetitions):
+        for _ in range(stage_cfg.shuffling_repetitions):
             shuffled_train_data.extend(_shuffle_concatted_dataset(train_flat_data, cfg, stage_cfg))
             shuffled_val_data.extend(_shuffle_concatted_dataset(val_flat_data, cfg, stage_cfg))
             shuffled_test_data.extend(_shuffle_concatted_dataset(test_flat_data, cfg, stage_cfg))
