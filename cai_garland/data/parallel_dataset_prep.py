@@ -97,7 +97,7 @@ def _score_for_concats(base_sent, candidate_pairs, pipeline, temperature=1, hypo
     model_outputs = []
     model_inputs = pipeline.tokenizer(
         [
-            (base_sent['english'], hypothesis_template.format(candidate_pair['english']))
+            (base_sent, hypothesis_template.format(candidate_pair['english']))
             for candidate_pair in candidate_pairs
         ],
         add_special_tokens=True,
@@ -110,7 +110,6 @@ def _score_for_concats(base_sent, candidate_pairs, pipeline, temperature=1, hypo
     for candidate_pair, logits in zip(candidate_pairs, outputs['logits']):
         model_outputs.append({
             "candidate_pair": candidate_pair,
-            "sequence": base_sent,
             "logits": logits,
         })
 
@@ -161,6 +160,9 @@ def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
     res, num_fails = [], 0
     cur_sent = random.choice(flat_data)
     for _ in tqdm(range(math.floor(stage_cfg.num_shuffled_elems_frac * len(flat_data)))):
+        base_sentence = ' '.join(
+            [x['english'] for x in res[-stage_cfg.shuffle_lookback_window:]] + [cur_sent['english']])
+
         res.append(cur_sent)
 
         scores = {
@@ -174,7 +176,7 @@ def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
             try_candidates = [flat_data[idx] for idx in try_batch_idxs]
 
             cur_scores = _score_for_concats(
-                cur_sent,
+                base_sentence,
                 try_candidates,
                 pipeline_,
                 temperature=stage_cfg.shuffle_temperature
@@ -214,6 +216,7 @@ def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
 
         if len(all_scores) == 0:
             num_fails += 1
+            logger.debug("Failed to find a next sentence!")
             cur_sent = random.choice(flat_data)
         else:
             candidate_idx = int(np.argwhere(np.random.default_rng().multinomial(1, all_scores) == 1))
