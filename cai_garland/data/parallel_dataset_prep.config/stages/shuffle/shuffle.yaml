@@ -4,8 +4,12 @@ shuffle_concats: true
 # Hugging Face MNLI model to use for sequencing the sentences
 shuffle_model: typeform/distilbert-base-uncased-mnli
 
+# Concatenate this many previous target sentences when finding the next one. Setting this to zero will only consider the
+#   current sentence when finding the next one.
+shuffle_lookback_window: 2
+
 # Sampling temperature for sentence sequencing
-shuffle_temperature: 1
+shuffle_temperature: 1.5
 
 # Score cutoffs to apply prior to sampling (never sample entirely irrelevant sentences)
 shuffle_score_cutoffs:
@@ -19,7 +23,7 @@ contradiction_probability: 0.1
 num_shuffling_repetitions: 1
 
 # Number of shuffled elements to get from the flat data
-num_shuffled_elems_frac: 0.5
+num_shuffled_elems_frac: 1
 
 # Number of times to try to find the next sentences during shuffling
-shuffle_elem_find_tries: 128
+shuffle_elem_find_tries: 64
