@@ -700,8 +700,11 @@ def main(cfg):
     np.random.seed(cfg.seed)
     ProcessorSymbolCleaningJSON.base_dir = os.path.dirname(__file__)
 
+    os.makedirs(cfg.output_dir, exist_ok=True)
+
     logger.info("Loading tokenizer")
     tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(cfg.input.tokenizer_name))
+    separator_ = cfg.output.get("separator", None)
 
     logger.info("Spinning up Dask cluster")
     dask_client = Client(LocalCluster(
@@ -801,6 +804,21 @@ def main(cfg):
             train_en, valid_en, test_en = [
                 [processor(datum) for datum in dataset] for dataset in [train_en, valid_en, test_en]]
 
+        logger.info("Filtering out skipped lines")
+        train_bo, train_en = _filter_skips(train_bo, train_en)
+        valid_bo, valid_en = _filter_skips(valid_bo, valid_en)
+        test_bo, test_en = _filter_skips(test_bo, test_en)
+
+        logger.info("Writing stage to disk")
+        stage_dir = os.path.join(cfg.output_dir, stage_name)
+        os.makedirs(stage_dir, exist_ok=True)
+        _write_to_file("train.bo", train_bo, stage_dir, separator=separator_)
+        _write_to_file("train.en", train_en, stage_dir)
+        _write_to_file("valid.bo", valid_bo, stage_dir, separator=separator_)
+        _write_to_file("valid.en", valid_en, stage_dir)
+        _write_to_file("test.bo", test_bo, stage_dir, separator=separator_)
+        _write_to_file("test.en", test_en, stage_dir)
+
         logger.info("Appending results")
         final_train_bo.extend(train_bo)
         final_train_en.extend(train_en)
@@ -810,14 +828,6 @@ def main(cfg):
         final_test_en.extend(test_en)
 
     logger.info("Writing final datasets to disk")
-
-    logger.info("Filtering out skipped lines")
-    final_train_bo, final_train_en = _filter_skips(final_train_bo, final_train_en)
-    final_valid_bo, final_valid_en = _filter_skips(final_valid_bo, final_valid_en)
-    final_test_bo, final_test_en = _filter_skips(final_test_bo, final_test_en)
-
-    os.makedirs(cfg.output_dir, exist_ok=True)
-    separator_ = cfg.output.get("separator", None)
     _write_to_file("train.bo", final_train_bo, cfg.output_dir, separator=separator_)
     _write_to_file("train.en", final_train_en, cfg.output_dir)
     _write_to_file("valid.bo", final_valid_bo, cfg.output_dir, separator=separator_)
