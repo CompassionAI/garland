@@ -139,6 +139,10 @@ def main(cfg):
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
     siamese = model.config.encoder.model_type == "siamese-encoder"
 
+    if "pretrained_checkpoint" in cfg:
+        logger.info(f"Loading pretrained weights from checkpoint {cfg.pretrained_checkpoint}")
+        model = type(model).from_pretrained(cfg.pretrained_checkpoint)
+
     logger.info("Loading training dataset")
     train_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.TRAIN)
     logger.info("Loading validation dataset")
