@@ -67,6 +67,8 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
             )
             logger.debug("    Constructing Siamese wrapper model")
             model = SiameseEncoderModel(siamese_config, base_encoder=base_model)
+            logger.debug("    Enabling register tokens in the tokenizer")
+            tokenizer.enable_siamese()
         else:
             local_ckpt = get_local_ckpt(cai_name)
 
