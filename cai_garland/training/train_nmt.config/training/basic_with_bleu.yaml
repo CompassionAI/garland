@@ -9,20 +9,20 @@ per_device_eval_batch_size: 24
 num_train_epochs: 9
 
 # Every how many training steps to run the evaluation loop
-logging_steps: 2000
+logging_steps: 100
 
 # Every how many training steps to save a model checkpoint
-save_steps: 2000
+save_steps: 100
 
 # How many model checkpoints to keep around
 save_total_limit: 50
 
 # Optimizer learning rate
-learning_rate: 1e-4
+learning_rate: 1e-5
 
 # Number of steps of the linear warmup in the LR scheduler
 #   (multiply by number of devices * per_device_train_batch_size to get number of warmup examples)
-warmup_steps: 3000
+warmup_steps: 100
 
 # Number of beams to use for evaluation. This argument will be passed to 'model.generate', which is used during
 #   'evaluate' and 'predict'
