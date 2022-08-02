@@ -37,6 +37,8 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "no_registers_no_splits": "processed_datasets/84000-parallel-sentences-no-registers",
         "raw": "processed_datasets/84000-parallel-sentences-raw",
         "raw_no_splits": "processed_datasets/84000-parallel-sentences-raw",
+        "raw_no_dict": "processed_datasets/84000-parallel-sentences-raw-no-dict",
+        "raw_no_dict_no_splits": "processed_datasets/84000-parallel-sentences-raw-no-dict",
         "registers_3": "processed_datasets/84000-parallel-sentences-3-registers",
         "registers_3_only": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_3_only_no_splits": "processed_datasets/84000-parallel-sentences-3-registers-only",
@@ -62,6 +64,17 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             name="raw_no_splits",
             version=datasets.Version("0.1.1", ""),
             description="Dataset for a Tibetan encoder from the raw parallel sentences and all splits concatenated",
+        ),
+        ParallelSentences84000Config(
+            name="raw_no_dict",
+            version=datasets.Version("0.1.1", ""),
+            description="Dataset for a Tibetan encoder from the raw parallel sentences and no dictionary",
+        ),
+        ParallelSentences84000Config(
+            name="raw_no_dict_no_splits",
+            version=datasets.Version("0.1.1", ""),
+            description="Dataset for a Tibetan encoder from the raw parallel sentences, no dictionary, and all splits "
+                        "concatenated",
         ),
         ParallelSentences84000Config(
             name="registers_3",
@@ -154,6 +167,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         logger.info(f"Loading parallel sentences from bo={bo_fn} and en={en_fn}")
         with open(bo_fn, encoding="utf-8") as bo_f, open(en_fn, encoding="utf-8") as en_f:
             for id_, (bo, en) in enumerate(zip(bo_f, en_f)):
+                id_ = bo_fn + '|' + str(id_)
                 yield id_, {
                     "tibetan": bo.strip(),
                     "english": en.strip()
