@@ -16,7 +16,7 @@ hydra:
 # training:
 #   evaluation_strategy: "NO"
 
-pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/champion
+# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/champion
 
 # Overwrite the cached training and evaluation sets
 overwrite_cache: false
