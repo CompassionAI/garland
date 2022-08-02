@@ -684,6 +684,23 @@ def _check_equal_lengths(bo_file_name, en_file_name, preprocess_location):
     assert bo_len == en_len
 
 
+def _dedupe_parallel(bo_lines, en_lines):
+    seen_lines = set()
+    bo_res, en_res = [], []
+    for bo_line, en_line in zip(bo_lines, en_lines):
+        if isinstance(bo_line, list):
+            seen_bo_line = '|'.join(bo_line)
+        else:
+            seen_bo_line = bo_line
+        seen_line = seen_bo_line + '|' + en_line
+        if seen_line in seen_lines:
+            continue
+        bo_res.append(bo_line)
+        en_res.append(en_line)
+        seen_lines.add(seen_line)
+    return bo_res, en_res
+
+
 @hydra.main(version_base="1.2", config_path="./parallel_dataset_prep.config", config_name="config")
 def main(cfg):
     logging.basicConfig(
@@ -828,10 +845,15 @@ def main(cfg):
         final_test_en.extend(test_en)
 
     logger.info("Writing final datasets to disk")
+    final_train_bo, final_train_en = _dedupe_parallel(final_train_bo, final_train_en)
     _write_to_file("train.bo", final_train_bo, cfg.output_dir, separator=separator_)
     _write_to_file("train.en", final_train_en, cfg.output_dir)
+
+    final_valid_bo, final_valid_en = _dedupe_parallel(final_valid_bo, final_valid_en)
     _write_to_file("valid.bo", final_valid_bo, cfg.output_dir, separator=separator_)
     _write_to_file("valid.en", final_valid_en, cfg.output_dir)
+
+    final_test_bo, final_test_en = _dedupe_parallel(final_test_bo, final_test_en)
     _write_to_file("test.bo", final_test_bo, cfg.output_dir, separator=separator_)
     _write_to_file("test.en", final_test_en, cfg.output_dir)
 
