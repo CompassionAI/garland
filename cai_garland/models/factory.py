@@ -27,11 +27,14 @@ def _make_named_tokenizer(packed_name):
         cai_config = get_cai_config(cai_name)
 
         if cai_config.get('is_derived', False):
-            return _make_named_tokenizer(cai_config['base_model_name'])
+            base_tokenizer = _make_named_tokenizer(cai_config['base_model_name'])
+            if cai_config.get('siamese', False):
+                base_tokenizer.enable_siamese()
+            return base_tokenizer
 
         tokenizer_name = cai_config['tokenizer_name']
         logger.debug(f"Loading tokenizer {tokenizer_name}")
-        tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(tokenizer_name))
+        tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(tokenizer_name), keep_accents=True)
     elif packed_name.startswith('hf:'):
         logging.debug(f"Loading tokenizer {packed_name} from Hugging Face")
 
@@ -68,7 +71,6 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
             logger.debug("    Constructing Siamese wrapper model")
             model = SiameseEncoderModel(siamese_config, base_encoder=base_model)
             logger.debug("    Enabling register tokens in the tokenizer")
-            tokenizer.enable_siamese()
         else:
             local_ckpt = get_local_ckpt(cai_name)
 
