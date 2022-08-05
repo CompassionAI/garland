@@ -95,6 +95,25 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
     return model
 
 
+def make_encoder(encoder_name: str):
+    """This is a configurable factory for the various models we experiment with for machine translation.
+
+    The rules for the names are:
+        cai:<model_name> - name of a checkpoint in the data registry.
+        hf:<model_name> - name of a pretrained model in the Hugging Face model registry.
+
+    Args:
+        encoder_name: Name of the encoder model.
+
+    Returns:
+        A tuple of the model and its tokenizer.
+    """
+
+    tokenizer = _make_named_tokenizer(encoder_name)
+    encoder = _make_named_model(encoder_name, AutoModel, tokenizer=tokenizer)
+    return encoder, tokenizer
+
+
 def make_bilingual_tokenizer(encoder_name: str, decoder_name: str):
     """This is a configurable factory for our bilingual tokenizers we use for machine translation.
 
