@@ -168,7 +168,6 @@ class Translator:
             prefix_fn = None
 
         if isinstance(encoder_outputs, list):
-            print(bo_tokens.shape)
             encoder_outputs = BaseModelOutputWithAttentionMask(
                 last_hidden_state=torch.cat(
                     [
