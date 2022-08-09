@@ -55,8 +55,8 @@ class SegmenterTargetTokenCount:
         if translator is None:
             raise ValueError("target_token_count_segmenter needs to have the translator helper class passed in")
         bo_segments = SegmenterOpeningShad()(bo_text)
-        available_space = \
-            translator.model.encoder.max_length - translator.tokenizer.num_special_tokens_to_add(pair=False)
+        available_space = kwargs.get("max_length", translator.model.encoder.max_length) - \
+            translator.tokenizer.num_special_tokens_to_add(pair=False)
 
         bo_token_lengths = [
             len(translator.tokenizer.encode(bo_segment, add_special_tokens=False))
