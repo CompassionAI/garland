@@ -1,9 +1,10 @@
 generation:
   method: beam-search
-  num_beams: 20
+  num_beams: 50
 
   retrospective_decoding: true
-  use_registers_for_retrospective_decoding: true
+  use_registers_for_retrospective_decoding: false
+  retrospection_window: 2
 
   generator_kwargs:
     repetition_penalty: 2.2
@@ -27,7 +28,7 @@ segmentation:
   #   The recommended segmenters are: SegmenterNone, SegmenterOpeningShad, SegmenterTargetTokenCount
   soft_segmentation:
     _target_: cai_garland.utils.segmenters.SegmenterTargetTokenCount
-  soft_segmenter_kwargs: {}
+  soft_segmenter_kwargs: {"max_length": 64}
 
 processing:
   # Preprocessing is applied after hard segmentation (if any) but before soft segmentation (if any).

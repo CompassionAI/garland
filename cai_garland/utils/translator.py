@@ -224,7 +224,9 @@ class Translator:
         tqdm=tqdm,      # pylint: disable=redefined-outer-name
         hard_segmenter_kwargs={},
         soft_segmenter_kwargs={},
+        retrospective_decoding=False,
         retrospective_registers=False,
+        retrospection_window=None,
         throw_translation_errors=False,
         generator_kwargs={}
     ):
@@ -236,9 +238,10 @@ class Translator:
 
             soft_segments = self.soft_segmenter(hard_segment, translator=self, **soft_segmenter_kwargs)
 
-            if retrospective_registers:
+            if retrospective_decoding:
                 src_registers, tgt_registers = [], []
-                num_registers = self.model.encoder.config.num_registers
+                if retrospection_window is None:
+                    retrospection_window = self.model.encoder.config.num_registers
 
                 all_encoder_outputs = []
                 for soft_segment in tqdm(soft_segments, desc="Encoding soft segments", leave=False):
@@ -250,9 +253,13 @@ class Translator:
                 desc="Translating soft segments",
                 leave=False
             ):
-                if retrospective_registers:
-                    input_ = self.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
+                if retrospective_decoding:
+                    if retrospective_registers:
+                        input_ = self.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
+                    else:
+                        input_ = ' '.join(src_registers + [soft_segment])
                     prefix = ' '.join(tgt_registers)
+                    encoder_outputs = None
                     encoder_outputs = [
                         all_encoder_outputs[seg_idx - i] for i in reversed(range(len(src_registers) + 1))]
                 else:
@@ -271,14 +278,14 @@ class Translator:
                         translation_err = True
                         tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
 
-                if retrospective_registers:
+                if retrospective_decoding:
                     if translation_err:
                         src_registers, tgt_registers = [], []
                     else:
                         tgt_segment = tgt_segment[len(prefix):].strip()
                         src_registers.append(soft_segment)
                         tgt_registers.append(tgt_segment)
-                        if len(src_registers) == num_registers:
+                        if len(src_registers) == retrospection_window:
                             src_registers.pop(0)
                             tgt_registers.pop(0)
 
