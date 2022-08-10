@@ -262,7 +262,7 @@ class Translator:
                             all_encoder_outputs[seg_idx - i] for i in reversed(range(len(src_registers) + 1))]
                     else:
                         input_ = ' '.join(src_registers + [soft_segment])
-                    prefix = ' '.join(tgt_registers)
+                    prefix = ''.join(tgt_registers)
                 else:
                     input_ = soft_segment
                     prefix = None
