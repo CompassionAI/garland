@@ -1,6 +1,6 @@
 defaults:
-  - data: 84000-parallel-sentences-3-registers
-  - model: olive-cormorant-x3-bart
+  - data: 84000-parallel-sentences-raw-no-splits
+  - model: olive-cormorant-bart
   - training: basic_with_bleu
   - training_preprocess: basic
   - override hydra/job_logging: colorlog
@@ -19,4 +19,4 @@ hydra:
 # pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/champion
 
 # Overwrite the cached training and evaluation sets
-overwrite_cache: false
+overwrite_cache: true
