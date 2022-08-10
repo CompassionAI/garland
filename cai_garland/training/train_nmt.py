@@ -138,6 +138,7 @@ def main(cfg):
     max_target_length = model.config.decoder.max_position_embeddings
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
     siamese = model.config.encoder.model_type == "siamese-encoder"
+    eor_token_id = tokenizer.source_tokenizer.eor_token_id if siamese else -1
 
     if "pretrained_checkpoint" in cfg:
         logger.info(f"Loading pretrained weights from checkpoint {cfg.pretrained_checkpoint}")
@@ -232,7 +233,7 @@ def main(cfg):
 
     logger.info("Filtering out long examples")
     is_not_long_example_lambda = lambda x: not is_long_example(
-        x, tokenizer.source_tokenizer.eor_token_id, cfg.model.max_source_length, max_target_length)
+        x, eor_token_id, cfg.model.max_source_length, max_target_length)
     pre_filter_len = len(train_dataset)
     train_dataset = train_dataset.filter(is_not_long_example_lambda, desc="Training filter")
     logger.info(f"Training: {1 - len(train_dataset) / pre_filter_len} has been filtered out, {len(train_dataset)} "
@@ -295,7 +296,7 @@ def main(cfg):
             data_collator = SiameseDataCollatorForSeq2Seq(
                 data_collator,
                 model.config.encoder.num_registers,
-                tokenizer.source_tokenizer.eor_token_id
+                eor_token_id
             )
 
     # Metric
