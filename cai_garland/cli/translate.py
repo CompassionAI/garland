@@ -69,6 +69,7 @@ def batch(translator, mode_cfg, generation_cfg):
                     out_f.write(src_segment + '\n')
                 out_f.write(tgt_segment + '\n')
                 out_f.write('\n')
+                out_f.flush()
 
 
 @hydra.main(version_base="1.2", config_path="./translate.config", config_name="config")
