@@ -1,6 +1,6 @@
 generation:
   method: beam-search
-  num_beams: 20
+  num_beams: 50
 
   retrospective_decoding: true
   use_registers_for_retrospective_decoding: true
