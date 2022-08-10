@@ -176,7 +176,7 @@ def main(cfg):
 
     if cfg.training_preprocess.shuffle_training_data:
         logger.info("Shuffling training dataset")
-        train_dataset = train_dataset.shuffle(seed=training_cfg.seed)
+        train_dataset = train_dataset.shuffle(seed=training_cfg.seed, buffer_size=200000)
 
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
