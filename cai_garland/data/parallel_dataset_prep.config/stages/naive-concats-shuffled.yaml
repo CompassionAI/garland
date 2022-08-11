@@ -13,3 +13,6 @@ naive-concats-shuffled:
 
   # Do not sort the parallel dataset by index of the English sentence in the parallel folio dataset
   sort_by_starting_index: false
+
+  # Number of shuffled examples to get from the flat data
+  frac_shuffled: 1
