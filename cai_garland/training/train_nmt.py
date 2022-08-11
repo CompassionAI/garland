@@ -176,7 +176,7 @@ def main(cfg):
 
     if cfg.training_preprocess.shuffle_training_data:
         logger.info("Shuffling training dataset")
-        train_dataset = train_dataset.shuffle(seed=training_cfg.seed, buffer_size=200000)
+        train_dataset = train_dataset.shuffle(seed=training_cfg.seed)
 
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
@@ -247,10 +247,13 @@ def main(cfg):
 
     if test_dataset is not None:
         pre_filter_len = len(test_dataset)
-        test_dataset = test_dataset.filter(is_not_long_example_lambda, desc="Test filter")
-        logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out.")
-        logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out, {len(test_dataset)} "
-                    "examples left.")
+        if pre_filter_len > 0:
+            test_dataset = test_dataset.filter(is_not_long_example_lambda, desc="Test filter")
+            logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out.")
+            logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out, {len(test_dataset)} "
+                        "examples left.")
+        else:
+            logger.info("No test data to filter.")
 
     logger.info(f"Original validation set, prior to rebalancing and resampling, size is {len(eval_dataset)}")
     validation_register_rebalance_frac = cfg.data.get('validation_register_rebalance_frac', None)
