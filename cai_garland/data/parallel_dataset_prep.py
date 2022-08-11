@@ -284,7 +284,7 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
             ["tohoku", "volume_number", "location", "start_idx"])[["tibetan", "english"]].dropna()
     test_df = test_df[["tibetan", "english"]]
 
-    if not stage_cfg.get('exclude_from_validation', False):
+    if not cfg.get('use_test_for_validation', False) and not stage_cfg.get('exclude_from_validation', False):
         logger.info("Splitting out validation data")
         train_df, val_df = train_test_split(train_df, test_size=cfg.output.validation_frac)
     else:
@@ -750,6 +750,10 @@ def main(cfg):
         del folio_df
         del dupes
 
+    use_test_for_validation = cfg.get('use_test_for_validation', False)
+    if use_test_for_validation:
+        logger.warning("Will use test set as validation set! Will output an empty test set!")
+
     logger.info("Processing datasets")
     final_train_bo, final_train_en = [], []
     final_valid_bo, final_valid_en = [], []
@@ -825,6 +829,10 @@ def main(cfg):
         train_bo, train_en = _filter_skips(train_bo, train_en)
         valid_bo, valid_en = _filter_skips(valid_bo, valid_en)
         test_bo, test_en = _filter_skips(test_bo, test_en)
+
+        if use_test_for_validation:
+            valid_bo, valid_en = test_bo, test_en
+            test_bo, test_en = [], []
 
         logger.info("Writing stage to disk")
         stage_dir = os.path.join(cfg.output_dir, stage_name)
