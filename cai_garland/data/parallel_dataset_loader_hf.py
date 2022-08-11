@@ -72,7 +72,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         ),
         ParallelSentences84000Config(
             name="raw_no_dict_no_splits",
-            version=datasets.Version("0.1.1", ""),
+            version=datasets.Version("0.1.2", ""),
             description="Dataset for a Tibetan encoder from the raw parallel sentences, no dictionary, and all splits "
                         "concatenated",
         ),
@@ -152,13 +152,15 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                 raise ValueError("Both input files must be either strings or lists of strings of the same length")
             # Read lists of parallel files for a split
             logger.info(f"Loading parallel sentences from bo=[{', '.join(bo_fn)}] and en=[{', '.join(en_fn)}]")
-            for bo_fn, en_fn in zip(bo_fn, en_fn):
-                with open(bo_fn, encoding="utf-8") as bo_f, open(en_fn, encoding="utf-8") as en_f:
+            for cur_bo_fn, cur_en_fn in zip(bo_fn, en_fn):
+                with open(cur_bo_fn, encoding="utf-8") as bo_f, open(cur_en_fn, encoding="utf-8") as en_f:
                     for id_, (bo, en) in enumerate(zip(bo_f, en_f)):
+                        id_ = cur_bo_fn + '|' + str(id_)
                         yield id_, {
                             "tibetan": bo.strip(),
                             "english": en.strip()
                         }
+            return
 
         if isinstance(en_fn, list):
             raise ValueError("Both input files must be either strings or lists of strings of the same length")
