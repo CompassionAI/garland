@@ -15,6 +15,9 @@ defaults:
   - override hydra/hydra_logging: colorlog
   - _self_
 
+# Use the test split as validation data, with no test data
+use_test_for_validation: true
+
 hydra:
   # verbose: cai_garland.data
   run:

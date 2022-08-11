@@ -17,7 +17,7 @@ forced_bos_token: ~
 
 # Name of the validation split to use in the overall dataset (defaults to "validation" if omitted)
 #   If set to train, will split the training data according to validation_sampling_rate
-validation_split_name: test
+validation_split_name: validation
 
 # Rate at which to subsample the validation data. Performed _after_ the register rebalancing, if any. With rebalancing,
 #   the approximate final size of the evaluation set is given by the following:
