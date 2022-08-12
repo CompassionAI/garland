@@ -1,9 +1,9 @@
 defaults:
-  - shuffle/shuffle@concatted-registers-shuffled
-  - registers@concatted-registers-shuffled
-  - concat/no-concat@concatted-registers-shuffled
+  - sequencing/nli@unconcatted-registers-sequenced
+  - concat/no-concat@unconcatted-registers-sequenced
+  - registers@unconcatted-registers-sequenced
 
-concatted-registers-shuffled:
+unconcatted-registers-sequenced:
   # Function to pull the dataset
   pull_func:
     _target_: cai_garland.data.parallel_dataset_prep._pull_parallel_dataset
