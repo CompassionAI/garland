@@ -684,7 +684,7 @@ def _check_equal_lengths(bo_file_name, en_file_name, preprocess_location):
     assert bo_len == en_len
 
 
-def _dedupe_parallel(bo_lines, en_lines):
+def _dedupe_parallel(bo_lines, en_lines, shuffle=False):
     seen_lines = set()
     bo_res, en_res = [], []
     for bo_line, en_line in zip(bo_lines, en_lines):
@@ -698,6 +698,10 @@ def _dedupe_parallel(bo_lines, en_lines):
         bo_res.append(bo_line)
         en_res.append(en_line)
         seen_lines.add(seen_line)
+    if shuffle:
+        shuffled_zipped = list(zip(bo_res, en_res))
+        random.shuffle(shuffled_zipped)
+        bo_res, en_res = list(zip(*shuffled_zipped))
     return bo_res, en_res
 
 
@@ -853,15 +857,15 @@ def main(cfg):
         final_test_en.extend(test_en)
 
     logger.info("Writing final datasets to disk")
-    final_train_bo, final_train_en = _dedupe_parallel(final_train_bo, final_train_en)
+    final_train_bo, final_train_en = _dedupe_parallel(final_train_bo, final_train_en, shuffle=cfg.output.shuffle)
     _write_to_file("train.bo", final_train_bo, cfg.output_dir, separator=separator_)
     _write_to_file("train.en", final_train_en, cfg.output_dir)
 
-    final_valid_bo, final_valid_en = _dedupe_parallel(final_valid_bo, final_valid_en)
+    final_valid_bo, final_valid_en = _dedupe_parallel(final_valid_bo, final_valid_en, shuffle=cfg.output.shuffle)
     _write_to_file("valid.bo", final_valid_bo, cfg.output_dir, separator=separator_)
     _write_to_file("valid.en", final_valid_en, cfg.output_dir)
 
-    final_test_bo, final_test_en = _dedupe_parallel(final_test_bo, final_test_en)
+    final_test_bo, final_test_en = _dedupe_parallel(final_test_bo, final_test_en, shuffle=cfg.output.shuffle)
     _write_to_file("test.bo", final_test_bo, cfg.output_dir, separator=separator_)
     _write_to_file("test.en", final_test_en, cfg.output_dir)
 

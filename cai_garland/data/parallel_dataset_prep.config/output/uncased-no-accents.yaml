@@ -14,6 +14,9 @@ validation_frac: 0.0002
 # Separator for datasets with multiple registers
 separator: "[eor]"
 
+# Shuffle before saving the final dataset
+shuffle: false
+
 # Postprocessing settings, after all stages are applied, right before outputting to disk.
 #
 # These are (possibly empty) lists of function classes in cai_garland.utils.str_processors, formatted like so:
