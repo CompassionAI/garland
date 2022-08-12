@@ -321,7 +321,8 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
                 break
             cur_datum['tibetan'] = new_bo
             cur_datum['english'] = new_en
-            if num_concats + 1 >= stage_cfg.concat_window:
+            if num_concats + 1 >= stage_cfg.concat_window or \
+                random.random() < stage_cfg.intermediate_segmentation_probability:
                 # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
                 break
         concatted_data.append(cur_datum)
@@ -361,7 +362,8 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
             cur_datum['english'] = new_en
             register_num_concats += 1
 
-            if register_num_concats >= stage_cfg.concat_window:
+            if register_num_concats >= stage_cfg.concat_window or \
+                random.random() < stage_cfg.intermediate_segmentation_probability:
                 # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
                 if len(cur_datum["tibetan"]) == stage_cfg.max_num_registers:
                     break
