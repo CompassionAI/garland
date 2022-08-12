@@ -19,6 +19,7 @@ from sklearn.model_selection import train_test_split
 from cai_common.data import ParallelTMXLoader, TeiLoader, KangyurLoader
 from cai_manas.tokenizer import CAITokenizer
 from cai_garland.utils.str_processors import ProcessorSymbolCleaningJSON
+from .parallel_dataset_sequencing import make_sequencer
 
 
 init_colorama()
@@ -302,8 +303,6 @@ def _prep_linear_dataset(flat_data, _cfg, _stage_cfg, _tokenizer):
 
 def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples
-    from .parallel_dataset_sequencing import make_sequencer
-
     logger.info("Creating sequencer object")
     sequencer = make_sequencer(cfg, stage_cfg.sequencing, flat_data)
 
@@ -332,73 +331,43 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
 def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples and split into
     #   source language registers of a given maximum length
-    from transformers import AutoTokenizer
+    logger.info("Creating sequencer object")
+    sequencer = make_sequencer(cfg, stage_cfg.sequencing, flat_data)
 
-    bo_tokenizer = tokenizer
-    en_tokenizer = AutoTokenizer.from_pretrained(cfg.output.tokenizer_name)
-    bo_token_lengths = [
-        len(bo_tokenizer.encode(datum['tibetan'], add_special_tokens=False))
-        for datum in tqdm(flat_data, desc="Calculating source token lengths")]
-    en_token_lengths = [
-        len(en_tokenizer.encode(datum['english'], add_special_tokens=False))
-        for datum in tqdm(flat_data, desc="Calculating target token lengths")]
+    logger.info("Sampling starting sentences")
+    starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
 
     concatted_data = []
-    for i in tqdm(range(len(flat_data)), total=len(flat_data), desc="Segmenting"):
-        # First, append the greedy segmentation
-        bo_registers, bo_length, en_length, en_line = [], 0, 0, ""
-        cur_idx = i
-        for _ in range(stage_cfg.max_num_registers):
-            bo_register, register_start = "", cur_idx
-            concat_count = 0
-            max_concat_count = stage_cfg.get("max_source_sentences_per_register", None)
-            while sum(bo_token_lengths[register_start:cur_idx + 1]) <= cfg.input.max_source_length - 2:
-                if cur_idx >= len(flat_data) or en_length + en_token_lengths[cur_idx] >= \
-                    cfg.output.max_target_length - 2:
+    for start_sent in tqdm(starting_sents, desc="Sequencing"):
+        cur_datum = {
+            "tibetan": [""],
+            "english": ""}
+        register_num_concats = 0
+        for cur_sent in sequencer.generate(start_sent):
+            new_bo = (cur_datum['tibetan'][-1] + ' ' + cur_sent['tibetan']).strip()
+            new_en = (cur_datum['english'] + ' ' + cur_sent['english']).strip()
+
+            if len(tokenizer.encode(new_bo)) > cfg.input.max_source_length:
+                if len(cur_datum["tibetan"]) == stage_cfg.max_num_registers:
                     break
-                bo_register += ' ' + flat_data[cur_idx]['tibetan']
-                en_line += ' ' + flat_data[cur_idx]['english']
-                bo_length += bo_token_lengths[cur_idx]
-                en_length += en_token_lengths[cur_idx]
-                cur_idx += 1
-                concat_count += 1
-                if max_concat_count is not None and concat_count >= max_concat_count:
+                cur_datum["tibetan"].append("")
+                new_bo = cur_sent['tibetan'].strip()
+                if len(tokenizer.encode(new_bo)) > cfg.input.max_source_length:
+                    # Entire example is just too long to begin with, even before appending
                     break
-            bo_register = bo_register.strip()
-            if len(bo_register) > 0:
-                bo_registers.append(bo_register)
-        if bo_length == 0:
-            continue
-        concatted_data.append({
-            'tibetan': bo_registers,
-            'english': en_line.strip()})
-        # Second, generate intermediate segmentations
-        while stage_cfg.get("generate_intermediate_segmentation", True):
-            if random.random() > stage_cfg.intermediate_segmentation_probability:
-                break
-            bo_registers, en_line, en_length = [], "", 0
-            cur_idx = i
-            for _ in range(stage_cfg.max_num_registers):
-                top_idx, top_en_length = cur_idx, en_length
-                while sum(bo_token_lengths[cur_idx:top_idx + 1]) <= cfg.input.max_source_length - 2:
-                    if top_idx >= len(flat_data) or \
-                       top_en_length + en_token_lengths[top_idx] >= cfg.output.max_target_length - 2:
-                        break
-                    top_en_length += en_token_lengths[top_idx]
-                    top_idx += 1
-                if top_idx == cur_idx:
+                register_num_concats = 0
+
+            cur_datum['tibetan'][-1] = new_bo
+            cur_datum['english'] = new_en
+            register_num_concats += 1
+
+            if register_num_concats >= stage_cfg.concat_window:
+                # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
+                if len(cur_datum["tibetan"]) == stage_cfg.max_num_registers:
                     break
-                break_point = math.ceil(random.random() * (top_idx - cur_idx))
-                break_data = flat_data[cur_idx:cur_idx + break_point]
-                bo_register = ' '.join([datum['tibetan'] for datum in break_data]).strip()
-                if len(bo_register) > 0:
-                    bo_registers.append(bo_register)
-                en_line += ' ' + ' '.join([datum['english'] for datum in break_data])
-                en_length += sum(en_token_lengths[cur_idx:cur_idx + break_point])
-                cur_idx += break_point
-            concatted_data.append({
-                'tibetan': bo_registers,
-                'english': en_line.strip()})
+                cur_datum["tibetan"].append("")
+                register_num_concats = 0
+        concatted_data.append(cur_datum)
     return concatted_data
 
 
