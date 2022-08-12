@@ -13,6 +13,35 @@ init_colorama()
 logger = logging.getLogger(__name__)
 
 
+class InOrderSequencer:
+    """Sequencer for parallel dataset preparation that just returns sentences in order they appear."""
+
+    def __init__(self, inference_cfg, sequencing_cfg, flat_data):
+        self.flat_data = flat_data
+        self.inference_cfg = inference_cfg
+        self.sequencing_cfg = sequencing_cfg
+        self.num_fails = 0
+
+    def generate(self, start_example=None):
+        """Generate a sequence of adequate sentence fragments using the NLI model specified in the Hydra config.
+
+        Args:
+            start_example (str): Example to start generating the adequate sequence from. If None, pick a starting
+                example at random."""
+        if len(self.flat_data) == 0:
+            return
+
+        if start_example is None:
+            start_example = random.choice(self.flat_data)
+        cur_idx = self.flat_data.index(start_example)
+
+        while True:
+            if cur_idx >= len(self.flat_data):
+                return
+            yield self.flat_data[cur_idx]
+            cur_idx += 1
+
+
 @dataclass
 class NLISequencerInferenceConfig:
     cuda: bool
@@ -180,3 +209,11 @@ class NLISequencer:
             else:
                 candidate_idx = int(np.argwhere(np.random.default_rng().multinomial(1, all_scores) == 1))
                 cur_sent = all_pairs[candidate_idx]
+
+
+def make_sequencer(inference_cfg, sequencing_cfg, flat_data):
+    if sequencing_cfg.type == "nli":
+        sequencer = NLISequencer
+    elif sequencing_cfg.type == "in-order":
+        sequencer = InOrderSequencer
+    return sequencer(inference_cfg, sequencing_cfg, flat_data)

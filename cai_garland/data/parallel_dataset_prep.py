@@ -302,10 +302,10 @@ def _prep_linear_dataset(flat_data, _cfg, _stage_cfg, _tokenizer):
 
 def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples
-    from .parallel_dataset_sequencing import NLISequencer
+    from .parallel_dataset_sequencing import make_sequencer
 
     logger.info("Creating sequencer object")
-    sequencer = NLISequencer(cfg, stage_cfg.sequencing, flat_data)
+    sequencer = make_sequencer(cfg, stage_cfg.sequencing, flat_data)
 
     logger.info("Sampling starting sentences")
     starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
