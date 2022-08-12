@@ -90,143 +90,6 @@ def _pipeline_preprocess(pipeline_, inputs, candidate_labels=None, hypothesis_te
         }
 
 
-def _score_for_concats(base_sent, candidate_pairs, pipeline, temperature=1, hypothesis_template="{}"):
-    # This is ripped out from the zero-shot classification pipeline code, with contradictions added
-    from transformers.tokenization_utils import TruncationStrategy
-
-    model_outputs = []
-    model_inputs = pipeline.tokenizer(
-        [
-            (base_sent, hypothesis_template.format(candidate_pair['english']))
-            for candidate_pair in candidate_pairs
-        ],
-        add_special_tokens=True,
-        return_tensors="pt",
-        padding=True,
-        truncation=TruncationStrategy.LONGEST_FIRST
-    )
-    model_inputs = {k: model_inputs[k].to(pipeline.model.device) for k in pipeline.tokenizer.model_input_names}
-    outputs = pipeline.model(**model_inputs)
-    for candidate_pair, logits in zip(candidate_pairs, outputs['logits']):
-        model_outputs.append({
-            "candidate_pair": candidate_pair,
-            "logits": logits,
-        })
-
-    logits = np.vstack([output["logits"].cpu().detach().numpy() for output in model_outputs]) / temperature
-    N = logits.shape[0]
-    n = len(candidate_pairs)
-    num_sequences = N // n
-    reshaped_outputs = logits.reshape((num_sequences, n, -1))
-
-    contra_id = pipeline.model.config.label2id['CONTRADICTION']
-    entail_logits = reshaped_outputs[..., pipeline.entailment_id]
-    contra_logits = reshaped_outputs[..., contra_id]
-
-    return {
-        "pairs": candidate_pairs,
-        "entailment_logits": entail_logits[0, ...],
-        "contradiction_logits": contra_logits[0, ...]
-    }
-
-
-def _apply_score_cutoff(scores_pairs, cutoff, renormalize=False):
-    idxes = np.argwhere(scores_pairs["scores"] > cutoff)[:,0].tolist()
-    res = {
-        "pairs": [scores_pairs["pairs"][i] for i in idxes],
-        "scores": scores_pairs["scores"][idxes],
-        "indices": idxes
-    }
-    if renormalize:
-        res["scores"] = res["scores"] / res["scores"].sum()
-    return res
-
-
-def _shuffle_concatted_dataset(flat_data, cfg, stage_cfg):
-    # Use a language model to pick random next sentences that are linguistically adequate to augment the dataset
-    from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
-
-    if len(flat_data) == 0:
-        return []
-
-    logger.info("Loading shuffling sequencer model")
-    tokenizer = AutoTokenizer.from_pretrained(stage_cfg.shuffle.model)
-    model = AutoModelForSequenceClassification.from_pretrained(stage_cfg.shuffle.model)
-    pipeline_ = pipeline("zero-shot-classification", tokenizer=tokenizer, model=model)
-    pipeline_.model.eval()
-    if cfg.cuda:
-        pipeline_.model.cuda()
-
-    res, num_fails = [], 0
-    cur_sent = random.choice(flat_data)
-    for _ in tqdm(range(math.floor(stage_cfg.frac_shuffled * len(flat_data)))):
-        base_sentence = ' '.join(
-            [x['english'] for x in res[-stage_cfg.shuffle.lookback_window:]] + [cur_sent['english']])
-
-        res.append(cur_sent)
-
-        scores = {
-            "pairs": [],
-            "entailment_logits": [],
-            "contradiction_logits": []
-        }
-        tried_idxs = []
-        for _ in range(stage_cfg.shuffle.num_candidates // cfg.batch_size):
-            try_batch_idxs = [random.randrange(len(flat_data)) for _ in range(cfg.batch_size)]
-            try_candidates = [flat_data[idx] for idx in try_batch_idxs]
-
-            cur_scores = _score_for_concats(
-                base_sentence,
-                try_candidates,
-                pipeline_,
-                temperature=stage_cfg.shuffle.temperature
-            )
-            for key, val in cur_scores.items():
-                scores[key].extend(val)
-            tried_idxs.extend(try_batch_idxs)
-        scores = {
-            "entailment": {
-                "pairs": scores["pairs"],
-                "logits": np.array(scores["entailment_logits"])
-            },
-            "contradiction": {
-                "pairs": scores["pairs"],
-                "logits": np.array(scores["contradiction_logits"])
-            },
-        }
-        # This normalizes the scores to represent how much better than average the score is. This is needed because the
-        #   average score is 1 / shuffle.num_candidates.
-        scores["entailment"]["scores"] = stage_cfg.shuffle.num_candidates * \
-            np.exp(scores["entailment"]["logits"]) / np.exp(scores["entailment"]["logits"]).sum(-1, keepdims=True)
-        scores["contradiction"]["scores"] = stage_cfg.shuffle.num_candidates * \
-            np.exp(scores["contradiction"]["logits"]) / np.exp(scores["contradiction"]["logits"]).sum(-1, keepdims=True)
-
-        scores["entailment"] = _apply_score_cutoff(scores["entailment"], stage_cfg.shuffle.score_cutoffs.entailment)
-        scores["contradiction"] = _apply_score_cutoff(
-            scores["contradiction"], stage_cfg.shuffle.score_cutoffs.contradiction)
-
-        all_scores = np.concatenate([
-            (1 - stage_cfg.shuffle.contradiction_probability) * scores["entailment"]["scores"] \
-                / stage_cfg.shuffle.num_candidates,
-            stage_cfg.shuffle.contradiction_probability * scores["contradiction"]["scores"] \
-                / stage_cfg.shuffle.num_candidates
-        ])
-        all_scores = all_scores / all_scores.sum()
-        all_pairs = scores["entailment"]["pairs"]
-        all_pairs.extend(scores["contradiction"]["pairs"])
-
-        if len(all_scores) == 0:
-            num_fails += 1
-            logger.debug("Failed to find a next sentence!")
-            cur_sent = random.choice(flat_data)
-        else:
-            candidate_idx = int(np.argwhere(np.random.default_rng().multinomial(1, all_scores) == 1))
-            cur_sent = all_pairs[candidate_idx]
-    if num_fails > 0:
-        logger.warning(f"    Number of times failed to find next sentence: {num_fails}")
-    return res
-
-
 def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     # Loads flat training and test datasets of parallel sentences into memory from Dask
     logger.info("Loading Dask dataframe")
@@ -301,14 +164,6 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     train_flat_data = _preprocess_flat_data(train_flat_data, cfg)
     val_flat_data = _preprocess_flat_data(val_flat_data, cfg)
     test_flat_data = _preprocess_flat_data(test_flat_data, cfg)
-
-    if stage_cfg.shuffle.concats:
-        shuffled_train_data, shuffled_val_data, shuffled_test_data = [], [], []
-        for _ in range(stage_cfg.shuffling_repetitions):
-            shuffled_train_data.extend(_shuffle_concatted_dataset(train_flat_data, cfg, stage_cfg))
-            shuffled_val_data.extend(_shuffle_concatted_dataset(val_flat_data, cfg, stage_cfg))
-            shuffled_test_data.extend(_shuffle_concatted_dataset(test_flat_data, cfg, stage_cfg))
-        train_flat_data, val_flat_data, test_flat_data = shuffled_train_data, shuffled_val_data, shuffled_test_data
 
     return train_flat_data, val_flat_data, test_flat_data
 
@@ -447,27 +302,30 @@ def _prep_linear_dataset(flat_data, _cfg, _stage_cfg, _tokenizer):
 
 def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples
-    bo_token_lengths = [
-        len(tokenizer.encode(datum['tibetan'], add_special_tokens=False))
-        for datum in tqdm(flat_data, desc="Calculating token lengths")]
+    from .parallel_dataset_sequencing import NLISequencer
 
-    concat_window = stage_cfg.concat_window
+    logger.info("Creating sequencer object")
+    sequencer = NLISequencer(cfg, stage_cfg.sequencing, flat_data)
+
+    logger.info("Sampling starting sentences")
+    starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
+
     concatted_data = []
-    for i in tqdm(range(len(flat_data)), total=len(flat_data), desc="Concatenating"):
+    for start_sent in tqdm(starting_sents, desc="Sequencing"):
         cur_datum = {
             "tibetan": "",
             "english": ""}
-        bo_token_count = 2
-        for j in range(concat_window):
-            if i + j < len(flat_data):
-                bo_token_count += bo_token_lengths[i + j]
-                if bo_token_count > cfg.input.max_source_length:
-                    continue
-                cur_datum = deepcopy(cur_datum)
-                cur_datum['tibetan'] = (cur_datum['tibetan'] + ' ' + flat_data[i + j]['tibetan']).strip()
-                cur_datum['english'] = (cur_datum['english'] + ' ' + flat_data[i + j]['english']).strip()
-                concatted_data.append(cur_datum)
-
+        for num_concats, cur_sent in enumerate(sequencer.generate(start_sent)):
+            new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
+            new_en = (cur_datum['english'] + ' ' + cur_sent['english']).strip()
+            if len(tokenizer.encode(new_bo)) > cfg.input.max_source_length:
+                break
+            cur_datum['tibetan'] = new_bo
+            cur_datum['english'] = new_en
+            if num_concats + 1 >= stage_cfg.concat_window:
+                # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
+                break
+        concatted_data.append(cur_datum)
     return concatted_data
 
 

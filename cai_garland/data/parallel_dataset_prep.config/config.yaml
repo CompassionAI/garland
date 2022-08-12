@@ -4,10 +4,10 @@ defaults:
   - stages:
     # - naive-unconcatted
     # - naive-concats
-    - naive-concats-shuffled
+    - naive-concats-sequenced
     # - concatted-registers
-    # - concatted-registers-shuffled
-    # - unconcatted-registers-shuffled
+    # - concatted-registers-sequenced
+    # - unconcatted-registers-sequenced
     # - folio-registers
     # - dictionary
   - processing: local-dask

@@ -1,5 +1,5 @@
 # Concatenate up to this many consecutive sentences to form longer training examples
-concat_window: 3
+concat_window: 1
 
 # Augment the dataset by generating non-greedy registers segmentations whenever possible
 generate_intermediate_segmentation: true

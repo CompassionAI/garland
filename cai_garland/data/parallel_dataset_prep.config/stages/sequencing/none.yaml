@@ -1,0 +1,3 @@
+sequencing:
+  # Do nothing to pick out a next sentence, just take the next one
+  type: in-order

@@ -1,8 +1,8 @@
 defaults:
-  - shuffle/shuffle@naive-concats-shuffled
-  - concat/concat@naive-concats-shuffled
+  - sequencing/nli@naive-concats-sequenced
+  - concat/concat@naive-concats-sequenced
 
-naive-concats-shuffled:
+naive-concats-sequenced:
   # Function to pull the dataset
   pull_func:
     _target_: cai_garland.data.parallel_dataset_prep._pull_parallel_dataset
@@ -14,5 +14,5 @@ naive-concats-shuffled:
   # Do not sort the parallel dataset by index of the English sentence in the parallel folio dataset
   sort_by_starting_index: false
 
-  # Number of shuffled examples to get from the flat data
-  frac_shuffled: 1
+  # Number of sequenced examples to get from the flat data
+  frac_sequenced: 1
