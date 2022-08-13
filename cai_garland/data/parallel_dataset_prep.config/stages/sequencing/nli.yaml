@@ -1,6 +1,6 @@
-shuffle:
-  # Shuffle the sentences before concatenating
-  concats: true
+sequencing:
+  # Use an NLI model to find the next sentence
+  type: nli
 
   # Hugging Face MNLI model to use for sequencing the sentences
   model: typeform/distilbert-base-uncased-mnli
@@ -20,11 +20,8 @@ shuffle:
   # Probability of drawing a contradiction instead of an entailment
   contradiction_probability: 0.1
 
-  # Number of candidates to evaluate in order to find the next sentence during shuffling
+  # Number of candidates to evaluate in order to find the next sentence
   num_candidates: 64
 
-# Number of times to repeat the shuffle to get a larger dataset
-shuffling_repetitions: 1
-
-# Number of shuffled examples to get from the flat data
-frac_shuffled: 0.5
+# Number of quasi-synthetic examples to get from the flat data
+frac_sequenced: 0.5

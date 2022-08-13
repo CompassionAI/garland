@@ -1,8 +1,6 @@
 # Concatenate up to this many consecutive sentences to form longer training examples
 concat_window: 3
 
-# Augment the dataset by generating non-greedy registers segmentations whenever possible
-generate_intermediate_segmentation: true
-
-# Maximum number of source sentences to concatenate into a register, use ~ for only max_source_length constraints
-max_source_sentences_per_register: ~
+# Augment the dataset by generating partial segmentations. Every candidate pulled from the sequencer will have this
+#   probability of being the last candidate in the segmentation.
+intermediate_segmentation_probability: 0.05

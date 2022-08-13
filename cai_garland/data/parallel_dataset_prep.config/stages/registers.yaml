@@ -1,8 +1,8 @@
 # Maximum number of source language registers
 max_num_registers: 3
 
-# Probability of (fraction of) intermediate, as opposed to greedy, segmentations
+# Probability of (fraction of) intermediate, as opposed to greedy, segmentations. Used only for folios.
 intermediate_segmentation_probability: 0.5
 
-# Number of times to try to make an intermediate segmentation
+# Number of times to try to make an intermediate segmentation. Used only for folios.
 num_intermediate_tries: 10

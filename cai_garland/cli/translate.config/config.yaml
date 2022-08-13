@@ -1,6 +1,6 @@
 defaults:
-  - model: olive-cormorant-bart-x3
-  - generation: medium-beam-x3
+  - model: olive-cormorant-bart
+  - generation: medium-beam-long-inputs
   - mode: interactive
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog

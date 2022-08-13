@@ -1,3 +1,0 @@
-shuffle:
-  # Do not shuffle the sentences before concatenating
-  concats: false
