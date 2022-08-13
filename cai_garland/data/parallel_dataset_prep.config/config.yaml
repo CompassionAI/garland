@@ -4,9 +4,9 @@ defaults:
   - stages:
     # - naive-unconcatted
     # - naive-concats
-    # - naive-concats-sequenced
+    - naive-concats-sequenced
     # - concatted-registers
-    - concatted-registers-sequenced
+    # - concatted-registers-sequenced
     # - unconcatted-registers-sequenced
     # - folio-registers
     # - dictionary
