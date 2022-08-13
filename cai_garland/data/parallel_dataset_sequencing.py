@@ -257,7 +257,6 @@ class ConsecutiveNLISequencer(NLISequencer):
                 return_array=True
             )
             next_score = 1 - np.exp(next_score[0][2]) / np.exp(next_score[0]).sum()
-            print(cur_sent, self.flat_data[cur_idx + 1], next_score)
 
             if next_score < self.sequencing_cfg.score_cutoff:
                 return
