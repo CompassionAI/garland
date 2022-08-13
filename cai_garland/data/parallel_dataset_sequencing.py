@@ -81,7 +81,9 @@ class NLISequencer:
         self.sequencing_cfg = sequencing_cfg
         self.num_fails = 0
 
-    def _score_for_concats(self, base_sent, candidate_pairs, pipeline_, temperature=1, hypothesis_template="{}"):
+    def _score_for_concats(
+        self, base_sent, candidate_pairs, pipeline_, temperature=1, hypothesis_template="{}", return_array=False
+    ):
         # This is ripped out from the zero-shot classification pipeline code, with contradictions added
         model_outputs = []
         model_inputs = pipeline_.tokenizer(
@@ -109,13 +111,18 @@ class NLISequencer:
         reshaped_outputs = logits.reshape((num_sequences, n, -1))
 
         contra_id = pipeline_.model.config.label2id['CONTRADICTION']
+        neither_id = list({0, 1, 2} - {pipeline_.entailment_id, contra_id})[0]
         entail_logits = reshaped_outputs[..., pipeline_.entailment_id]
         contra_logits = reshaped_outputs[..., contra_id]
+        neither_logits = reshaped_outputs[..., neither_id]
 
+        if return_array:
+            return np.hstack([entail_logits, contra_logits, neither_logits])
         return {
             "pairs": candidate_pairs,
             "entailment_logits": entail_logits[0, ...],
-            "contradiction_logits": contra_logits[0, ...]
+            "contradiction_logits": contra_logits[0, ...],
+            "neither_logits": neither_logits[0, ...]
         }
 
     def _apply_score_cutoff(self, scores_pairs, cutoff, renormalize=False):
@@ -130,7 +137,7 @@ class NLISequencer:
         return res
 
     def generate(self, start_example=None):
-        """Generate a sequence of adequate sentence fragments using the NLI model specified in the Hydra config.
+        """Generate a sequence of adequate sentence fragments using the NLI model specified in the sequencing config.
 
         Args:
             start_example (str): Example to start generating the adequate sequence from. If None, pick a starting
@@ -167,7 +174,8 @@ class NLISequencer:
                     temperature=self.sequencing_cfg.temperature
                 )
                 for key, val in cur_scores.items():
-                    scores[key].extend(val)
+                    if key in scores:
+                        scores[key].extend(val)
                 tried_idxs.extend(try_batch_idxs)
             scores = {
                 "entailment": {
@@ -211,9 +219,58 @@ class NLISequencer:
                 cur_sent = all_pairs[candidate_idx]
 
 
+class ConsecutiveNLISequencer(NLISequencer):
+    """Sequencer for parallel dataset preparation that uses an NLI model to stop in-order walks of the flat data when
+        it looks like the sentence has changed."""
+
+    def __init__(self, inference_cfg, sequencing_cfg, flat_data):
+        super().__init__(inference_cfg, sequencing_cfg, flat_data)
+
+    def generate(self, start_example=None):
+        """Generate a sequence of adequate sentence fragments using the NLI model specified in the sequencing config.
+
+        Args:
+            start_example (str): Example to start generating the adequate sequence from. If None, pick a starting
+                example at random."""
+        if len(self.flat_data) == 0:
+            return
+
+        if start_example is None:
+            start_example = random.choice(self.flat_data)
+        cur_idx = self.flat_data.index(start_example)
+
+        generated = []
+        while True:
+            if cur_idx == len(self.flat_data):
+                return
+            cur_sent = self.flat_data[cur_idx]
+            yield cur_sent
+
+            base_sentence = ' '.join(
+                [x['english'] for x in generated[-self.sequencing_cfg.lookback_window:]] + [cur_sent['english']])
+            generated.append(cur_sent)
+
+            next_score = self._score_for_concats(
+                base_sentence,
+                [self.flat_data[cur_idx + 1]],
+                self.pipeline_,
+                return_array=True
+            )
+            next_score = 1 - np.exp(next_score[0][2]) / np.exp(next_score[0]).sum()
+            print(cur_sent, self.flat_data[cur_idx + 1], next_score)
+
+            if next_score < self.sequencing_cfg.score_cutoff:
+                return
+            cur_idx += 1
+
+
 def make_sequencer(inference_cfg, sequencing_cfg, flat_data):
     if sequencing_cfg.type == "nli":
         sequencer = NLISequencer
+    elif sequencing_cfg.type == "consecutive-nli":
+        sequencer = ConsecutiveNLISequencer
     elif sequencing_cfg.type == "in-order":
         sequencer = InOrderSequencer
+    else:
+        raise ValueError(f"Unknown sequencer {sequencing_cfg.type}")
     return sequencer(inference_cfg, sequencing_cfg, flat_data)
