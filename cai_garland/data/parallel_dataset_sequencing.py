@@ -312,12 +312,7 @@ class ConsecutiveCosineSequencer:
             generated_embed = self.model(
                 **self.tokenizer(base_sentence, return_tensors="pt").to(self.model.device)
             ).logits[-1].cpu().detach().numpy()
-
             similarity = distance.cosine(cur_sent_embed[0], generated_embed[0])
-            print(base_sentence)
-            print(self.flat_data[cur_idx + 1]['english'])
-            print(similarity)
-            print()
 
             if similarity < self.sequencing_cfg.score_cutoff:
                 return
