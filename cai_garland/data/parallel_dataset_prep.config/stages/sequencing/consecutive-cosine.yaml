@@ -1,0 +1,16 @@
+sequencing:
+  # Use a cosine similarity in the pre-trained embedding space to find the next sentence
+  type: consecutive-cosine
+
+  # Hugging Face model to use for sequencing the sentences
+  model: bert-large-uncased-whole-word-masking
+
+  # Concatenate this many previous target sentences when finding the next one. Setting this to zero will only consider the
+  #   current sentence when finding the next one.
+  lookback_window: 2
+
+  # Score cutoff to decide whether the next sentence is adequate
+  score_cutoff: 0.05
+
+# Number of quasi-synthetic examples to get from the flat data
+frac_sequenced: 0.5

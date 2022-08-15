@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from colorama import init as init_colorama
 
 import numpy as np
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForMaskedLM, pipeline
 from transformers.tokenization_utils import TruncationStrategy
 
 
@@ -263,11 +263,74 @@ class ConsecutiveNLISequencer(NLISequencer):
             cur_idx += 1
 
 
+class ConsecutiveCosineSequencer:
+    """Sequencer for parallel dataset preparation that uses cosine similarity in the pre-trained embedding space to stop
+        in-order walks of the flat data when it looks like the sentence has changed."""
+
+    def __init__(self, inference_cfg, sequencing_cfg, flat_data):
+        logger.info("Loading shuffling sequencer model")
+        self.tokenizer = AutoTokenizer.from_pretrained(sequencing_cfg.model)
+        self.model = AutoModelForMaskedLM.from_pretrained(sequencing_cfg.model)
+        self.model.eval()
+        if inference_cfg.cuda:
+            self.model.cuda()
+        self.flat_data = flat_data
+        self.inference_cfg = inference_cfg
+        self.sequencing_cfg = sequencing_cfg
+        self.num_fails = 0
+
+
+    def generate(self, start_example=None):
+        """Generate a sequence of adequate sentence fragments using the NLI model specified in the sequencing config.
+
+        Args:
+            start_example (str): Example to start generating the adequate sequence from. If None, pick a starting
+                example at random."""
+        from scipy.spatial import distance
+
+        if len(self.flat_data) == 0:
+            return
+
+        if start_example is None:
+            start_example = random.choice(self.flat_data)
+        cur_idx = self.flat_data.index(start_example)
+
+        generated = []
+        while True:
+            if cur_idx == len(self.flat_data):
+                return
+            cur_sent = self.flat_data[cur_idx]
+            yield cur_sent
+
+            base_sentence = ' '.join(
+                [x['english'] for x in generated[-self.sequencing_cfg.lookback_window:]] + [cur_sent['english']])
+            generated.append(cur_sent)
+
+            cur_sent_embed = self.model(
+                **self.tokenizer(self.flat_data[cur_idx + 1]['english'], return_tensors="pt"
+            ).to(self.model.device)).logits[-1].cpu().detach().numpy()
+            generated_embed = self.model(
+                **self.tokenizer(base_sentence, return_tensors="pt").to(self.model.device)
+            ).logits[-1].cpu().detach().numpy()
+
+            similarity = distance.cosine(cur_sent_embed[0], generated_embed[0])
+            print(base_sentence)
+            print(self.flat_data[cur_idx + 1]['english'])
+            print(similarity)
+            print()
+
+            if similarity < self.sequencing_cfg.score_cutoff:
+                return
+            cur_idx += 1
+
+
 def make_sequencer(inference_cfg, sequencing_cfg, flat_data):
     if sequencing_cfg.type == "nli":
         sequencer = NLISequencer
     elif sequencing_cfg.type == "consecutive-nli":
         sequencer = ConsecutiveNLISequencer
+    elif sequencing_cfg.type == "consecutive-cosine":
+        sequencer = ConsecutiveCosineSequencer
     elif sequencing_cfg.type == "in-order":
         sequencer = InOrderSequencer
     else:
