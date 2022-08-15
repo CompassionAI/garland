@@ -1,5 +1,5 @@
 defaults:
-  - sequencing/nli@naive-concats-sequenced
+  - sequencing/follows-anywhere@naive-concats-sequenced
   - concat/concat@naive-concats-sequenced
 
 naive-concats-sequenced:
