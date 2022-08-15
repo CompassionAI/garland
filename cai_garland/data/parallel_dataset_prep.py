@@ -308,7 +308,7 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     logger.info("Sampling starting sentences")
     starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
 
-    concatted_data = []
+    concatted_data, concatted_lens = [], {}
     for start_sent in tqdm(starting_sents, desc="Sequencing"):
         cur_datum = {
             "tibetan": "",
@@ -324,7 +324,12 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
                 random.random() < stage_cfg.intermediate_segmentation_probability:
                 # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
                 break
+        concatted_lens[num_concats + 1] = concatted_lens.get(num_concats + 1, 0) + 1
         concatted_data.append(cur_datum)
+    for len_ in sorted(list(concatted_lens.keys())):
+        count_ = concatted_lens[len_]
+        logger.info(f"Sentences of length {len_}: {count_ / sum(concatted_lens.values()):.2%} of the data.")
+
     return concatted_data
 
 
