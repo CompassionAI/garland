@@ -4,7 +4,6 @@ import sys
 import math
 import random
 from itertools import zip_longest
-from copy import deepcopy
 
 import hydra
 from hydra.utils import instantiate
