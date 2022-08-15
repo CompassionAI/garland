@@ -1,0 +1,7 @@
+sequencing:
+  # If the next English sentence ever follows the current sentence, then it is adequate
+  type: follows-anywhere
+
+  # As a sanity check, count number of examples in the parallel sentences that don't appear in any translation. This
+  #   takes a very long time, so is off by default
+  count_examples_not_in_any_translation: false

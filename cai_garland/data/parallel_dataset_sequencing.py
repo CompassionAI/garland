@@ -1,6 +1,10 @@
+import re
+import string
 import random
 import logging
+import unicodedata
 from dataclasses import dataclass
+from tqdm.auto import tqdm
 
 from colorama import init as init_colorama
 
@@ -319,6 +323,86 @@ class ConsecutiveCosineSequencer:
             cur_idx += 1
 
 
+class FollowsAnywhereSequencer:
+    """Sequencer for parallel dataset preparation that takes a next adequate sentence to be whenever the next in-order
+        sentence ever shows up as the next following sentence in any translation of any text.
+
+    The sentences are first stripped of accents, lower-cased, consecutive spaces are removed, and then everything is
+        removed except spaces and lowercase English letters. The search is performed in this.
+    """
+
+    def _preprocess(self, text):
+        nfkd_form = unicodedata.normalize('NFKD', text)
+        text = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+        text = re.sub(r'\s+', ' ', text).strip()
+        text = text.lower()
+
+        final_allowed = set(string.ascii_lowercase)
+        final_allowed.add(" ")
+        text = ''.join([c for c in text if c in final_allowed])
+
+        return text
+
+    def __init__(self, inference_cfg, sequencing_cfg, flat_data):
+        logger.info("Loading folios for sequencer")
+
+        # This assumes a Dask cluster is already configured
+        from cai_common.data import TeiLoader
+        folio_df = TeiLoader('kangyur').dataframe.compute()
+        self.all_translations = {}
+        for _, row in folio_df.iterrows():
+            self.all_translations[row.tohoku_number] = self.all_translations.get(row.tohoku_number, "") + " " + row.text
+        self.all_translations = {
+            key: self._preprocess(val)
+            for key, val in self.all_translations.items()
+        }
+
+        if sequencing_cfg.count_examples_not_in_any_translation:
+            concat_translations = ' '.join(self.all_translations.values())
+            counts = [(self._preprocess(ex['english']) in concat_translations) for ex in tqdm(flat_data)]
+            logger.info(f"There are {len(flat_data) - sum(counts)} parallel sentences that don't match any full length "
+                        f"translation text. This works out to {1 - sum(counts) / len(flat_data):.2%} of the data.")
+
+        self.flat_data = flat_data
+        self.inference_cfg = inference_cfg
+        self.sequencing_cfg = sequencing_cfg
+        self.num_fails = 0
+
+    def generate(self, start_example=None):
+        """Generate a sequence of adequate sentence fragments using the follows-anywhere rule described in the docstring
+            for this class.
+
+        Args:
+            start_example (str): Example to start generating the adequate sequence from. If None, pick a starting
+                example at random."""
+        if len(self.flat_data) == 0:
+            return
+
+        if start_example is None:
+            start_example = random.choice(self.flat_data)
+        cur_idx = self.flat_data.index(start_example)
+
+        while True:
+            if cur_idx == len(self.flat_data):
+                return
+            cur_sent = self.flat_data[cur_idx]
+            yield cur_sent
+
+            cur_sent = self._preprocess(cur_sent['english'])
+            next_sent = self._preprocess(self.flat_data[cur_idx + 1]['english'])
+            for translation in self.all_translations.values():
+                all_cur_sent_idxs = [m.start() for m in re.finditer(cur_sent, translation)]
+                all_next_sent_idxs = [m.start() for m in re.finditer(next_sent, translation)]
+                found = any([(j - i - len(cur_sent)) <= 1 for i in all_cur_sent_idxs for j in all_next_sent_idxs])
+                if found:
+                    break
+
+            if not found:
+                self.num_fails += 1
+                return
+            cur_idx += 1
+
+
 def make_sequencer(inference_cfg, sequencing_cfg, flat_data):
     if sequencing_cfg.type == "nli":
         sequencer = NLISequencer
@@ -326,6 +410,8 @@ def make_sequencer(inference_cfg, sequencing_cfg, flat_data):
         sequencer = ConsecutiveNLISequencer
     elif sequencing_cfg.type == "consecutive-cosine":
         sequencer = ConsecutiveCosineSequencer
+    elif sequencing_cfg.type == "follows-anywhere":
+        sequencer = FollowsAnywhereSequencer
     elif sequencing_cfg.type == "in-order":
         sequencer = InOrderSequencer
     else:
