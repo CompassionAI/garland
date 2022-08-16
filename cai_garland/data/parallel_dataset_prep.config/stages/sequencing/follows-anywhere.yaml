@@ -5,3 +5,6 @@ sequencing:
   # As a sanity check, count number of examples in the parallel sentences that don't appear in any translation. This
   #   takes a very long time, so is off by default
   count_examples_not_in_any_translation: false
+
+# Number of sequenced examples to get from the flat data
+frac_sequenced: 1

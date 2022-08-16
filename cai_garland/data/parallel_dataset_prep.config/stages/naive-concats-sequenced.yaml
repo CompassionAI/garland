@@ -13,6 +13,3 @@ naive-concats-sequenced:
 
   # Do not sort the parallel dataset by index of the English sentence in the parallel folio dataset
   sort_by_starting_index: false
-
-  # Number of sequenced examples to get from the flat data
-  frac_sequenced: 1
