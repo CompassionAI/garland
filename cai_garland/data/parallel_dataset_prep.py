@@ -321,7 +321,7 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
             cur_datum['tibetan'] = new_bo
             cur_datum['english'] = new_en
             if num_concats + 1 >= stage_cfg.concat_window or \
-                random.random() < stage_cfg.intermediate_segmentation_probability:
+                random.random() < stage_cfg.segmentation_early_stopping_probability:
                 # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
                 break
         concatted_lens[num_concats + 1] = concatted_lens.get(num_concats + 1, 0) + 1
@@ -355,11 +355,11 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
             if len(tokenizer.encode(new_bo)) > cfg.input.max_source_length:
                 if len(cur_datum["tibetan"]) == stage_cfg.max_num_registers:
                     break
-                cur_datum["tibetan"].append("")
                 new_bo = cur_sent['tibetan'].strip()
                 if len(tokenizer.encode(new_bo)) > cfg.input.max_source_length:
                     # Entire example is just too long to begin with, even before appending
                     break
+                cur_datum["tibetan"].append("")
                 register_num_concats = 0
 
             cur_datum['tibetan'][-1] = new_bo
@@ -367,7 +367,7 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
             register_num_concats += 1
 
             if register_num_concats >= stage_cfg.concat_window or \
-                random.random() < stage_cfg.intermediate_segmentation_probability:
+                random.random() < stage_cfg.segmentation_early_stopping_probability:
                 # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
                 if len(cur_datum["tibetan"]) == stage_cfg.max_num_registers:
                     break
@@ -414,9 +414,9 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
             'english': datum['english']})
         # Second, generate intermediate segmentations
         while True:
-            if random.random() > stage_cfg.intermediate_segmentation_probability:
+            if random.random() > stage_cfg.alternative_segmentation_probability:
                 break
-            for num_tries in range(stage_cfg.num_intermediate_tries):
+            for num_tries in range(stage_cfg.num_alternative_tries):
                 bo_registers, register_start, register_idx = [], 0, 0
                 for _ in range(stage_cfg.max_num_registers - 1):
                     while sum(bo_token_lengths[register_start:register_idx + 1]) <= cfg.input.max_source_length - 2:
@@ -435,7 +435,7 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
                     'tibetan': bo_registers,
                     'english': datum['english']})
                 break
-            if num_tries == stage_cfg.num_intermediate_tries:
+            if num_tries == stage_cfg.num_alternative_tries:
                 print("Intermediate segmentation failed for a folio!")
 
     return concatted_data

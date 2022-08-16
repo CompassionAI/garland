@@ -2,7 +2,7 @@
 dataset_loader: cai_garland/data/parallel_dataset_loader_hf.py
 
 # The name of the dataset to load from the loader file
-dataset_config: registers_3_only_no_splits
+dataset_config: registers_3_only
 
 # Source language id for translation
 source_lang: bo
@@ -17,11 +17,16 @@ forced_bos_token: ~
 
 # Name of the validation split to use in the overall dataset (defaults to "validation" if omitted)
 #   If set to train, will split the training data according to validation_sampling_rate
-validation_split_name: train
-validation_sampling_rate: 0.005
+validation_split_name: validation
 
-# Name of the validation split to use in the overall dataset (defaults to "test" if omitted, skipped if ~)
-test_split_name: ~
+# Fraction at which to rebalance the validation data to contain entries with registers. Only valid if registers are
+#   used. Will subsample the non-register data before subsampling the overall dataset. So if your test data is, say 20%
+#   registers, your validation dataset size _before subsampling_ will be approximately
+#
+#     (1 + validation_register_rebalance_frac) * 20% 
+#
+# Leave out or set to ~ (None) to skip rebalancing or if not using registers.
+validation_register_rebalance_frac: ~
 
 # Rate at which to subsample the validation data. Performed _after_ the register rebalancing, if any. With rebalancing,
 #   the approximate final size of the evaluation set is given by the following:
