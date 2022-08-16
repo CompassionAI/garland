@@ -373,6 +373,12 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
                     break
                 cur_datum["tibetan"].append("")
                 register_num_concats = 0
+        while len(cur_datum['tibetan'][-1]) == 0:
+            cur_datum['tibetan'].pop()
+            if len(cur_datum['tibetan']) == 0:
+                break
+        if len(cur_datum['tibetan']) == 0:
+            continue
         concatted_lens[num_concats + 1] = concatted_lens.get(num_concats + 1, 0) + 1
         register_lens[len(cur_datum["tibetan"])] = register_lens.get(len(cur_datum["tibetan"]), 0) + 1
         concatted_data.append(cur_datum)
