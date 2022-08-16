@@ -342,13 +342,13 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     logger.info("Sampling starting sentences")
     starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
 
-    concatted_data = []
+    concatted_data, concatted_lens, register_lens = [], {}, {}
     for start_sent in tqdm(starting_sents, desc="Sequencing"):
         cur_datum = {
             "tibetan": [""],
             "english": ""}
         register_num_concats = 0
-        for cur_sent in sequencer.generate(start_sent):
+        for num_concats, cur_sent in enumerate(sequencer.generate(start_sent)):
             new_bo = (cur_datum['tibetan'][-1] + ' ' + cur_sent['tibetan']).strip()
             new_en = (cur_datum['english'] + ' ' + cur_sent['english']).strip()
 
@@ -373,7 +373,16 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
                     break
                 cur_datum["tibetan"].append("")
                 register_num_concats = 0
+        concatted_lens[num_concats + 1] = concatted_lens.get(num_concats + 1, 0) + 1
+        register_lens[len(cur_datum["tibetan"])] = register_lens.get(len(cur_datum["tibetan"]), 0) + 1
         concatted_data.append(cur_datum)
+    for len_ in sorted(list(concatted_lens.keys())):
+        count_ = concatted_lens[len_]
+        logger.info(f"Sentences of length {len_}: {count_ / sum(concatted_lens.values()):.2%} of the data.")
+    for len_ in sorted(list(register_lens.keys())):
+        count_ = register_lens[len_]
+        logger.info(f"Examples with {len_} registers: {count_ / sum(register_lens.values()):.2%} of the data.")
+
     return concatted_data
 
 
