@@ -383,13 +383,14 @@ class FollowsAnywhereSequencer:
         cur_idx = self.flat_data.index(start_example)
 
         while True:
-            if cur_idx == len(self.flat_data):
-                return
             cur_sent = self.flat_data[cur_idx]
             yield cur_sent
+            cur_idx += 1
+            if cur_idx == len(self.flat_data):
+                return
 
             cur_sent = self._preprocess(cur_sent['english'])
-            next_sent = self._preprocess(self.flat_data[cur_idx + 1]['english'])
+            next_sent = self._preprocess(self.flat_data[cur_idx]['english'])
             for translation in self.all_translations.values():
                 all_cur_sent_idxs = [m.start() for m in re.finditer(cur_sent, translation)]
                 all_next_sent_idxs = [m.start() for m in re.finditer(next_sent, translation)]
@@ -400,7 +401,6 @@ class FollowsAnywhereSequencer:
             if not found:
                 self.num_fails += 1
                 return
-            cur_idx += 1
 
 
 def make_sequencer(inference_cfg, sequencing_cfg, flat_data):
