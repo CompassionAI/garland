@@ -14,3 +14,7 @@ concatted-registers-sequenced:
 
   # Do not sort the parallel dataset by index of the English sentence in the parallel folio dataset
   sort_by_starting_index: false
+
+  # Augment the dataset by generating partial segmentations. Every candidate pulled from the sequencer will have this
+  #   probability of being the last candidate in the segmentation.
+  segmentation_early_stopping_probability: 0.25
