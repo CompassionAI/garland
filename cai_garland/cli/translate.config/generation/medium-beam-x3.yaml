@@ -4,9 +4,10 @@ generation:
 
   retrospective_decoding: true
   use_registers_for_retrospective_decoding: true
+  retrospection_window: 3
 
   generator_kwargs:
-    repetition_penalty: 2.2
+    repetition_penalty: 1.2
     no_repeat_ngram_size: 3
 
 segmentation:
@@ -27,7 +28,7 @@ segmentation:
   #   The recommended segmenters are: SegmenterNone, SegmenterOpeningShad, SegmenterTargetTokenCount
   soft_segmentation:
     _target_: cai_garland.utils.segmenters.SegmenterTargetTokenCount
-  soft_segmenter_kwargs: {}
+  soft_segmenter_kwargs: {"max_length": 64}
 
 processing:
   # Preprocessing is applied after hard segmentation (if any) but before soft segmentation (if any).
