@@ -1,5 +1,5 @@
 defaults:
-  - shuffle/no-shuffle@naive-concats
+  - sequencing/in-order@naive-concats
   - concat/no-concat@naive-concats
 
 naive-concats:
