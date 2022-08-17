@@ -1,5 +1,6 @@
 import os
 import sys
+import copy
 import logging
 import glob
 
@@ -27,10 +28,12 @@ def batch(translator, mode_cfg, generation_cfg):
                          "command line.")
     os.makedirs(mode_cfg.output_dir, exist_ok=True)
     in_fns = glob.glob(mode_cfg.input_glob)
+    original_cfg = copy.deepcopy(generation_cfg)
     for in_fn in tqdm(in_fns, desc="Files"):
         with open(in_fn, encoding=mode_cfg.input_encoding) as in_f:
             bo_text = in_f.read()
 
+        generation_cfg = copy.deepcopy(original_cfg)
         in_cfg_fn = os.path.join(os.path.dirname(in_fn), os.path.splitext(os.path.basename(in_fn))[0] + '.config.yaml')
         if os.path.isfile(in_cfg_fn):
             in_cfg = OmegaConf.load(in_cfg_fn)
