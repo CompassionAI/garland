@@ -1,5 +1,5 @@
 # Concatenate up to this many consecutive sentences to form longer training examples
-concat_window: 3
+concat_window: 2
 
 # Augment the dataset by generating partial segmentations. Every candidate pulled from the sequencer will have this
 #   probability of being the last candidate in the segmentation.

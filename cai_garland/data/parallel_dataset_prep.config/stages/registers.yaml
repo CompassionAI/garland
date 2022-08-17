@@ -1,5 +1,5 @@
 # Maximum number of source language registers
-max_num_registers: 3
+max_num_registers: 2
 
 # Probability of (fraction of) alternative intermediate, as opposed to greedy, segmentations. Used only for folios.
 alternative_segmentation_probability: 0.5
