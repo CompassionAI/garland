@@ -3,6 +3,8 @@ import re
 import json
 import unicodedata
 
+from cai_common.dict import tibetan_digits, tibetan_halves
+
 
 class ProcessorStrip:
     def __call__(self, segment: str) -> str:
@@ -22,6 +24,11 @@ class ProcessorReplaceNewLineWithSpace:
 class ProcessorRemoveConsecutiveSpaces:
     def __call__(self, segment: str) -> str:
         return re.sub(r'\s+', ' ', segment).strip()
+
+
+class ProcessorRemoveLineNumbers:
+    def __call__(self, segment: str) -> str:
+        return re.sub(f"[{''.join(tibetan_digits)}{''.join(tibetan_halves)}]+༽", '', segment).strip()
 
 
 class ProcessorLowerCase:
