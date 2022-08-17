@@ -243,10 +243,10 @@ class Translator:
                 if retrospection_window is None:
                     retrospection_window = self.model.encoder.config.num_registers
 
-                if retrospective_registers:
-                    all_encoder_outputs = []
-                    for soft_segment in tqdm(soft_segments, desc="Encoding soft segments", leave=False):
-                        all_encoder_outputs.append(self._encode_text(soft_segment))
+                # if retrospective_registers:
+                #     all_encoder_outputs = []
+                #     for soft_segment in tqdm(soft_segments, desc="Encoding soft segments", leave=False):
+                #         all_encoder_outputs.append(self._encode_text(soft_segment))
 
             for seg_idx, soft_segment in tqdm(
                 enumerate(soft_segments),
@@ -258,11 +258,13 @@ class Translator:
                     encoder_outputs = None
                     if retrospective_registers:
                         input_ = self.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
-                        encoder_outputs = [
-                            all_encoder_outputs[seg_idx - i] for i in reversed(range(len(src_registers) + 1))]
+                        # encoder_outputs = [
+                        #     all_encoder_outputs[seg_idx - i] for i in reversed(range(len(src_registers) + 1))]
                     else:
                         input_ = ' '.join(src_registers + [soft_segment])
                     prefix = ''.join(tgt_registers)
+                    if len(prefix) > 0:
+                        prefix += ' '
                 else:
                     input_ = soft_segment
                     prefix = None
