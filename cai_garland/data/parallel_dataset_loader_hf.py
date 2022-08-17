@@ -42,6 +42,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "registers_3": "processed_datasets/84000-parallel-sentences-3-registers",
         "registers_3_only": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_3_only_no_splits": "processed_datasets/84000-parallel-sentences-3-registers-only",
+        "registers_2_only": "processed_datasets/84000-parallel-sentences-2-registers-only",
     }
 
     BUILDER_CONFIGS = [
@@ -90,6 +91,11 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             name="registers_3_only_no_splits",
             version=datasets.Version("0.1.2", ""),
             description="Dataset for a Tibetan encoder with 3 registers, no augmentation, and all splits concatenated",
+        ),
+        ParallelSentences84000Config(
+            name="registers_2_only",
+            version=datasets.Version("0.1.2", ""),
+            description="Dataset for a Tibetan encoder with 2 registers and no augmentation",
         ),
     ]
 
