@@ -238,6 +238,9 @@ class Translator:
 
             soft_segments = self.soft_segmenter(hard_segment, translator=self, **soft_segmenter_kwargs)
 
+            for preproc_func in self.soft_segment_preprocessors:
+                soft_segments = list(map(preproc_func, soft_segments))
+
             if retrospective_decoding:
                 src_registers, tgt_registers = [], []
                 if retrospection_window is None:
