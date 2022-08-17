@@ -1,4 +1,5 @@
 defaults:
+  - datasets/84000-parallel-sentences@concatted-registers-sequenced
   - sequencing/follows-anywhere@concatted-registers-sequenced
   - concat/concat@concatted-registers-sequenced
   - registers@concatted-registers-sequenced

@@ -38,8 +38,8 @@ def _preprocess_flat_data(flat_data, cfg):
     # Preprocess training data and pack it into source-target dictionaries
     if len(flat_data) == 0:
         return []
-    src_processors = [instantiate(proc) for proc in cfg.input.preprocessing.source_lang]
-    tgt_processors = [instantiate(proc) for proc in cfg.input.preprocessing.target_lang]
+    src_processors = [instantiate(proc) for proc in cfg.dataset.preprocessing.source_lang]
+    tgt_processors = [instantiate(proc) for proc in cfg.dataset.preprocessing.target_lang]
     procs_zip = zip_longest(src_processors, tgt_processors, fillvalue=lambda x: x)
     if isinstance(flat_data[0]['tibetan'], list):
         for src_processor, tgt_processor in procs_zip:
@@ -115,7 +115,7 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     # Loads flat training and test datasets of parallel sentences into memory from Dask
     logger.info("Loading Dask dataframe")
 
-    ParallelTMXLoader.data_glob = os.path.join(cfg.input.parallel_dataset_location, "*.tmx")
+    ParallelTMXLoader.data_glob = os.path.join(stage_cfg.dataset.parallel_dataset_location, "*.tmx")
     if stage_cfg.sort_by_starting_index:
         logger.info("Preparing indexed join between translations and parallel sentences")
         folio_df = TeiLoader('kangyur').recto_verso_pagination().dataframe
@@ -168,7 +168,7 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
             ["tohoku", "volume_number", "location", "start_idx"])[["tibetan", "english"]].dropna()
     test_df = test_df[["tibetan", "english"]]
 
-    if not cfg.get('use_test_for_validation', False) and not stage_cfg.get('exclude_from_validation', False):
+    if not cfg.output.get('use_test_for_validation', False) and not stage_cfg.get('exclude_from_validation', False):
         logger.info("Splitting out validation data")
         train_df, val_df = train_test_split(train_df, test_size=cfg.output.validation_frac)
     else:
@@ -182,9 +182,9 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
         val_df.to_dict(orient="records"), test_df.to_dict(orient="records")
 
     logger.info("Pre-processing")
-    train_flat_data = _preprocess_flat_data(train_flat_data, cfg)
-    val_flat_data = _preprocess_flat_data(val_flat_data, cfg)
-    test_flat_data = _preprocess_flat_data(test_flat_data, cfg)
+    train_flat_data = _preprocess_flat_data(train_flat_data, stage_cfg)
+    val_flat_data = _preprocess_flat_data(val_flat_data, stage_cfg)
+    test_flat_data = _preprocess_flat_data(test_flat_data, stage_cfg)
 
     return train_flat_data, val_flat_data, test_flat_data
 
@@ -280,9 +280,9 @@ def _pull_folio_dataset(_dask_client, cfg, stage_cfg):
     test_flat_data = test_df[["tibetan", "english"]].to_dict(orient="records")
 
     logger.info("Pre-processing")
-    train_flat_data = _preprocess_flat_data(train_flat_data, cfg)
-    val_flat_data = _preprocess_flat_data(val_flat_data, cfg)
-    test_flat_data = _preprocess_flat_data(test_flat_data, cfg)
+    train_flat_data = _preprocess_flat_data(train_flat_data, stage_cfg)
+    val_flat_data = _preprocess_flat_data(val_flat_data, stage_cfg)
+    test_flat_data = _preprocess_flat_data(test_flat_data, stage_cfg)
 
     return train_flat_data, val_flat_data, test_flat_data
 
@@ -294,14 +294,14 @@ def _pull_dictionary_dataset(_dask_client, cfg, stage_cfg):
     from cai_common.dict.dict import TibetanDict, TibetanEncoding
     flat_data = []
     dict_ = TibetanDict(
-        glob_override=stage_cfg.dictionary_augment_glob,
+        glob_override=stage_cfg.dataset.dictionary_augment_glob,
         default_encoding=TibetanEncoding.UNICODE)
     for bo, ens in dict_.items():
         if not bo[-1] == '་':
             bo += '་'
-        if stage_cfg.pick_best_word:
+        if stage_cfg.dataset.pick_best_word:
             en_lengths = max(map(len, ens))
-            if en_lengths < stage_cfg.well_defined_word_max_en_len:
+            if en_lengths < stage_cfg.dataset.well_defined_word_max_en_len:
                 ens = [en_split.strip() for en in ens for en_split in en.split(',')]
                 en_lengths = list(map(len, ens))
                 flat_data.append({
@@ -314,7 +314,7 @@ def _pull_dictionary_dataset(_dask_client, cfg, stage_cfg):
                     "english": en})
 
     logger.info("Pre-processing")
-    flat_data = _preprocess_flat_data(flat_data, cfg)
+    flat_data = _preprocess_flat_data(flat_data, stage_cfg)
 
     return flat_data, [], []
 
@@ -327,7 +327,7 @@ def _prep_linear_dataset(flat_data, _cfg, _stage_cfg, _tokenizer):
 def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples
     logger.info("Creating sequencer object")
-    sequencer = make_sequencer(cfg, stage_cfg.sequencing, flat_data)
+    sequencer = make_sequencer(cfg.compute, stage_cfg.sequencing, flat_data)
 
     logger.info("Sampling starting sentences")
     starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
@@ -361,7 +361,7 @@ def _prep_concatted_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples and split into
     #   source language registers of a given maximum length
     logger.info("Creating sequencer object")
-    sequencer = make_sequencer(cfg, stage_cfg.sequencing, flat_data)
+    sequencer = make_sequencer(cfg.compute, stage_cfg.sequencing, flat_data)
 
     logger.info("Sampling starting sentences")
     starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
@@ -503,7 +503,7 @@ def _check_for_unks(f_name, cfg):
     en_tokenizer = AutoTokenizer.from_pretrained(cfg.output.tokenizer_name)
 
     decoded, encoded = [], []
-    with open(os.path.join(cfg.output_dir, f_name), mode="r", encoding="utf-8") as f:
+    with open(os.path.join(cfg.output.output_dir, f_name), mode="r", encoding="utf-8") as f:
         for line in tqdm(f.readlines(), desc=f_name):
             decoded.append(line)
             encoded.append(en_tokenizer.encode(line, add_special_tokens=False))
@@ -589,11 +589,11 @@ def main(cfg):
     if cfg.input.test_tohoku_numbers is None:
         cfg.input.test_tohoku_numbers = []
 
-    random.seed(cfg.seed)
-    np.random.seed(cfg.seed)
+    random.seed(cfg.compute.seed)
+    np.random.seed(cfg.compute.seed)
     ProcessorSymbolCleaningJSON.base_dir = os.path.dirname(__file__)
 
-    os.makedirs(cfg.output_dir, exist_ok=True)
+    os.makedirs(cfg.output.output_dir, exist_ok=True)
 
     logger.info("Loading tokenizer")
     tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(cfg.input.tokenizer_name))
@@ -607,7 +607,7 @@ def main(cfg):
     logger.info(
         f"Dashboard is at {dask_client.dashboard_link}")
 
-    if cfg.skip_duplicate_folio_check:
+    if cfg.input.skip_duplicate_folio_check:
         logger.warning("Skipping check for duplicate folios!!! This is a bad idea.")
     else:
         logger.info("Checking for duplicate folios")
@@ -626,7 +626,7 @@ def main(cfg):
         del folio_df
         del dupes
 
-    use_test_for_validation = cfg.get('use_test_for_validation', False)
+    use_test_for_validation = cfg.output.get('use_test_for_validation', False)
     if use_test_for_validation:
         logger.warning("Will use test set as validation set! Will output an empty test set!")
 
@@ -691,7 +691,7 @@ def main(cfg):
             cfg.output.postprocessing.source_lang,
             [train_bo, valid_bo, test_bo])
 
-        if cfg.filter_longer_than_max_source_length:
+        if cfg.output.filter_longer_than_max_source_length:
             logger.info("Filtering out Tibetan examples that tokenize longer than max_source_length")
             train_bo, train_en = _filter_src_lengths(train_bo, train_en, cfg, tokenizer)
             valid_bo, valid_en = _filter_src_lengths(valid_bo, valid_en, cfg, tokenizer)
@@ -712,7 +712,7 @@ def main(cfg):
             test_bo, test_en = [], []
 
         logger.info("Writing stage to disk")
-        stage_dir = os.path.join(cfg.output_dir, stage_name)
+        stage_dir = os.path.join(cfg.output.output_dir, stage_name)
         os.makedirs(stage_dir, exist_ok=True)
         _write_to_file("train.bo", train_bo, stage_dir, separator=separator_)
         _write_to_file("train.en", train_en, stage_dir)
@@ -731,24 +731,24 @@ def main(cfg):
 
     logger.info("Writing final datasets to disk")
     final_train_bo, final_train_en = _dedupe_parallel(final_train_bo, final_train_en, shuffle=cfg.output.shuffle)
-    _write_to_file("train.bo", final_train_bo, cfg.output_dir, separator=separator_)
-    _write_to_file("train.en", final_train_en, cfg.output_dir)
+    _write_to_file("train.bo", final_train_bo, cfg.output.output_dir, separator=separator_)
+    _write_to_file("train.en", final_train_en, cfg.output.output_dir)
 
     final_valid_bo, final_valid_en = _dedupe_parallel(final_valid_bo, final_valid_en, shuffle=cfg.output.shuffle)
-    _write_to_file("valid.bo", final_valid_bo, cfg.output_dir, separator=separator_)
-    _write_to_file("valid.en", final_valid_en, cfg.output_dir)
+    _write_to_file("valid.bo", final_valid_bo, cfg.output.output_dir, separator=separator_)
+    _write_to_file("valid.en", final_valid_en, cfg.output.output_dir)
 
     final_test_bo, final_test_en = _dedupe_parallel(final_test_bo, final_test_en, shuffle=cfg.output.shuffle)
-    _write_to_file("test.bo", final_test_bo, cfg.output_dir, separator=separator_)
-    _write_to_file("test.en", final_test_en, cfg.output_dir)
+    _write_to_file("test.bo", final_test_bo, cfg.output.output_dir, separator=separator_)
+    _write_to_file("test.en", final_test_en, cfg.output.output_dir)
 
     logger.info("Checking for equal lengths")
     logger.info("    Trainining")
-    _check_equal_lengths("train.bo", "train.en", cfg.output_dir)
+    _check_equal_lengths("train.bo", "train.en", cfg.output.output_dir)
     logger.info("    Validation")
-    _check_equal_lengths("valid.bo", "valid.en", cfg.output_dir)
+    _check_equal_lengths("valid.bo", "valid.en", cfg.output.output_dir)
     logger.info("    Test")
-    _check_equal_lengths("test.bo", "test.en", cfg.output_dir)
+    _check_equal_lengths("test.bo", "test.en", cfg.output.output_dir)
 
     if cfg.output.check_for_en_unks:
         logger.info("Checking for unknown tokens")

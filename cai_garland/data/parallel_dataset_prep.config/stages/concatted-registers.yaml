@@ -1,4 +1,5 @@
 defaults:
+  - datasets/84000-parallel-sentences@concatted-registers
   - shuffle/no-shuffle@concatted-registers
   - registers@concatted-registers
   - concat/concat@concatted-registers

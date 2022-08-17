@@ -1,4 +1,5 @@
 defaults:
+  - datasets/84000-parallel-folios@folio-registers
   - registers@folio-registers
 
 folio-registers:

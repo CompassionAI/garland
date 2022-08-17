@@ -1,4 +1,5 @@
 defaults:
+  - datasets/84000-parallel-sentences@naive-concats
   - shuffle/no-shuffle@naive-concats
   - concat/concat@naive-concats
 

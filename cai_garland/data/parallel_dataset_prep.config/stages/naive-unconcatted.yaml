@@ -1,8 +1,9 @@
 defaults:
-  - sequencing/in-order@naive-concats
-  - concat/no-concat@naive-concats
+  - datasets/84000-parallel-sentences@naive-unconcatted
+  - sequencing/in-order@naive-unconcatted
+  - concat/no-concat@naive-unconcatted
 
-naive-concats:
+naive-unconcatted:
   # Function to pull the dataset
   pull_func:
     _target_: cai_garland.data.parallel_dataset_prep._pull_parallel_dataset
