@@ -1,0 +1,48 @@
+generation:
+  method: beam-search
+  num_beams: 50
+
+  retrospective_decoding: true
+  use_registers_for_retrospective_decoding: true
+  retrospection_window: 2
+
+  generator_kwargs:
+    repetition_penalty: 1.2
+    no_repeat_ngram_size: 3
+
+segmentation:
+  # Hard segmentation is applied before preprocessing. Hard segments reset the beam generation state. Note that file
+  #   boundaries always count as hard segments.
+  #
+  #   This is a single function class in cai_garland.utils.segmenters
+  #
+  #   The recommended segmenters are: SegmenterNone, SegmenterOpeningShad, SegmenterLineBreak, SegmenterDoubleShad
+  hard_segmentation:
+    _target_: cai_garland.utils.segmenters.SegmenterNone
+  hard_segmenter_kwargs: {}
+
+  # Soft segmentation is applied before preprocessing. Soft segments do _not_ reset the beam generation state.
+  #
+  #   This is a single function class in cai_garland.utils.segmenters
+  #
+  #   The recommended segmenters are: SegmenterNone, SegmenterOpeningShad, SegmenterTargetTokenCount
+  soft_segmentation:
+    _target_: cai_garland.utils.segmenters.SegmenterTargetTokenCount
+  soft_segmenter_kwargs: {"max_length": 64}
+
+processing:
+  # Preprocessing is applied after hard segmentation (if any) but before soft segmentation (if any).
+  #
+  #   This is a (possibly empty) list of function classes in cai_garland.utils.str_processors, formatted like so:
+  #     - _target_: cai_garland.utils.str_processors.ProcessorSampleFunc1
+  #     - _target_: cai_garland.utils.str_processors.ProcessorSampleFunc2
+  #     - ...
+  preprocessing:
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveNewLine
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
+
+  # Preprocessing is applied to the decoded text.
+  #
+  #   This is a (possibly empty) list of function classes in cai_garland.utils.str_processors
+  postprocessing:
+    - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
