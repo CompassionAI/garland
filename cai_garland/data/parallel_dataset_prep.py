@@ -40,37 +40,58 @@ def _preprocess_flat_data(flat_data, cfg):
         return []
     src_processors = [instantiate(proc) for proc in cfg.input.preprocessing.source_lang]
     tgt_processors = [instantiate(proc) for proc in cfg.input.preprocessing.target_lang]
-    for src_processor, tgt_processor in zip_longest(src_processors, tgt_processors, fillvalue=lambda x: x):
-        if isinstance(flat_data[0]['tibetan'], list):
+    procs_zip = zip_longest(src_processors, tgt_processors, fillvalue=lambda x: x)
+    if isinstance(flat_data[0]['tibetan'], list):
+        for src_processor, tgt_processor in procs_zip:
             flat_data = [
                 {
                     "tibetan": [src_processor(subdatum) for subdatum in datum["tibetan"]],
                     "english": tgt_processor(datum["english"])}
                 for datum in flat_data
             ]
-            res = []
-            for example in flat_data:
-                if len(example['english']) == 0:
-                    continue
-                example['tibetan'] = [datum for datum in example['tibetan'] if len(datum) > 0]
-                if max([len(datum) for datum in example['tibetan']]) == 0:
-                    continue
-                res.append(example)
-        else:
+        res = []
+        for example in flat_data:
+            if len(example['english']) == 0:
+                continue
+            example['tibetan'] = [datum for datum in example['tibetan'] if len(datum) > 0]
+            if max([len(datum) for datum in example['tibetan']]) == 0:
+                continue
+            res.append(example)
+    else:
+        for src_processor, tgt_processor in procs_zip:
             flat_data = [
                 {
                     "tibetan": src_processor(datum["tibetan"]),
                     "english": tgt_processor(datum["english"])}
                 for datum in flat_data
             ]
-            res = []
-            for example in flat_data:
-                if len(example['tibetan']) == 0:
-                    continue
-                if len(example['english']) == 0:
-                    continue
-                res.append(example)
+        res = []
+        for example in flat_data:
+            if len(example['tibetan']) == 0:
+                continue
+            if len(example['english']) == 0:
+                continue
+            res.append(example)
     return res
+
+
+def _apply_processors_unpacked(processors, datasets):
+    for processor in processors:
+        processor = instantiate(processor)
+        res = []
+        for dataset in datasets:
+            if len(dataset) == 0:
+                dataset = []        # Make a copy
+            elif isinstance(dataset[0], list):
+                dataset = [
+                    [processor(subdatum) for subdatum in datum]
+                    for datum in dataset
+                ]
+            else:
+                dataset = [processor(datum) for datum in dataset]
+            res.append(dataset)
+        datasets = res
+    return datasets
 
 
 def _pipeline_preprocess(pipeline_, inputs, candidate_labels=None, hypothesis_template="This example is {}."):
@@ -239,8 +260,11 @@ def _pull_folio_dataset(_dask_client, cfg, stage_cfg):
             "text": "english"})[["tibetan", "english", "tohoku_number"]]
 
     logger.info("Splitting training and test data")
-    test_tohoku_nums = ['toh' + str(num) if not str(num)[0] == 't' else str(num)
-        for num in cfg.input.test_tohoku_numbers]
+    if stage_cfg.get("exclude_from_test", False):
+        test_tohoku_nums = []
+    else:
+        test_tohoku_nums = ['toh' + str(num) if not str(num)[0] == 't' else str(num)
+            for num in cfg.input.test_tohoku_numbers]
     train_df = local_df[~local_df.tohoku_number.isin(test_tohoku_nums)]
     test_df = local_df[local_df.tohoku_number.isin(test_tohoku_nums)]
 
@@ -618,13 +642,26 @@ def main(cfg):
         skip_validation = stage_cfg.get('exclude_from_validation', False)
         if skip_validation:
             logger.info(f"{ForeColor.CYAN}Skipping generating validation data from stage {stage_name}")
+        skip_test = stage_cfg.get('exclude_from_test', False)
+        if skip_test:
+            logger.info(f"{ForeColor.CYAN}Skipping generating test data from stage {stage_name}")
 
         logger.info("Pulling data")
         train_flat_data, valid_flat_data, test_flat_data = instantiate(stage_cfg.pull_func, dask_client, cfg, stage_cfg)
         if skip_validation and len(valid_flat_data) > 0:
             raise ValueError(
                 f"Validation data should have been skipped but {len(valid_flat_data)} records were returned")
+        if skip_test and len(test_flat_data) > 0:
+            raise ValueError(
+                f"Test data should have been skipped but {len(test_flat_data)} records were returned")
 
+        if "save_func" in stage_cfg:
+            logger.info("Preparing dataset")
+            all_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg, tokenizer)
+            logger.info("Saving dataset")
+            instantiate(stage_cfg.save_func, all_data, cfg, stage_cfg)
+            logger.warning("This stage has its own saving function! It will not be part of the overall dataset!")
+            continue
         logger.info("Preparing training dataset")
         train_concat_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg, tokenizer)
         if not skip_validation:
@@ -650,20 +687,9 @@ def main(cfg):
             train_bo = [bo_segments.split('|') for bo_segments in train_bo]
 
         logger.info("Post-processing Tibetan dataset")
-
-        for processor in cfg.output.postprocessing.source_lang:
-            processor = instantiate(processor)
-            if isinstance(train_bo[0], list):
-                train_bo, valid_bo, test_bo = [
-                    [
-                        [processor(subdatum) for subdatum in datum]
-                        for datum in dataset
-                    ]
-                    for dataset in (train_bo, valid_bo, test_bo)
-                ]
-            else:
-                train_bo, valid_bo, test_bo = [
-                    [processor(datum) for datum in dataset] for dataset in (train_bo, valid_bo, test_bo)]
+        train_bo, valid_bo, test_bo = _apply_processors_unpacked(
+            cfg.output.postprocessing.source_lang,
+            [train_bo, valid_bo, test_bo])
 
         if cfg.filter_longer_than_max_source_length:
             logger.info("Filtering out Tibetan examples that tokenize longer than max_source_length")
@@ -672,10 +698,9 @@ def main(cfg):
             test_bo, test_en = _filter_src_lengths(test_bo, test_en, cfg, tokenizer)
 
         logger.info("Post-processing English dataset")
-        for processor in tqdm(cfg.output.postprocessing.target_lang):
-            processor = instantiate(processor)
-            train_en, valid_en, test_en = [
-                [processor(datum) for datum in dataset] for dataset in [train_en, valid_en, test_en]]
+        train_en, valid_en, test_en = _apply_processors_unpacked(
+            cfg.output.postprocessing.target_lang,
+            [train_en, valid_en, test_en])
 
         logger.info("Filtering out skipped lines")
         train_bo, train_en = _filter_skips(train_bo, train_en)
