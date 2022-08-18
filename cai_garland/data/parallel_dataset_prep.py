@@ -1,4 +1,5 @@
 import logging
+import re
 import os
 import sys
 import math
@@ -486,33 +487,39 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     return concatted_data
 
 
-def _prep_context_dataset(flat_data, cfg, _stage_cfg, _tokenizer):
+def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     # Dataset of contextual embeddings of the flat data. Prepares contextual embeddings for all stages already dumped to
     #   disk by this point. Should follow all the stages you want context for in the stages list in the Hydra config.
 
-    contexts_en = []
+    fragments = []
     for dir_name in os.listdir(cfg.output.output_dir):
         dir_name = os.path.join(cfg.output.output_dir, dir_name)
         if os.path.isdir(dir_name):
             for fns in [os.path.join(dir_name, x) for x in ["train", "valid", "test"]]:
-                with open(fns + ".en") as en_f:
-                    contexts_en.extend(en_f.readlines())
+                with open(fns + ".en") as f:
+                    fragments.extend(f.readlines())
 
     logger.info("Postprocessing translations")
     flat_data = _apply_processors_unpacked(cfg.output.postprocessing.source_lang, [flat_data])[0]
 
-    num_fails = 0
-    for context_en in tqdm(contexts_en, desc="Embedding"):
-        context_en = context_en.strip()
+    contexts, num_fails = [], 0
+    for fragment in tqdm(fragments, desc="Embedding"):
+        fragment = fragment.strip()
         fail = True
         for translated in flat_data:
-            if context_en in translated:
+            if fragment in translated:
                 fail = False
+                ctx_idx = random.choice([m.start() for m in re.finditer(re.escape(fragment), translated)])
+                context = translated[ctx_idx - stage_cfg.max_context_length:ctx_idx]
+                context = ' '.join(context.split(' ')[-stage_cfg.context_window:])
+                contexts.append(context)
+                break
         if fail:
             num_fails += 1
+            contexts.append("")
     if num_fails > 0:
         logger.warning(f"Failed finding parallel text in folio dataset {num_fails} times! This is "
-                       f"{num_fails / len(contexts_en):.2%} of the data.")
+                       f"{num_fails / len(fragments):.2%} of the data.")
     return flat_data
 
 

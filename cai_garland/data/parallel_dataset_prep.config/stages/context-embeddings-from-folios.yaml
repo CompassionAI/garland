@@ -17,3 +17,9 @@ context-embeddings-from-folios:
   # This stage puts all loaded data in the training split
   exclude_from_test: true
   exclude_from_validation: true
+
+  # How many target language words (not tokens) to go back for previous context
+  context_window: 50
+
+  # At most how many characters can the context be
+  max_context_length: 1000
