@@ -392,8 +392,8 @@ class FollowsAnywhereSequencer:
             cur_sent = self._preprocess(cur_sent['english'])
             next_sent = self._preprocess(self.flat_data[cur_idx]['english'])
             for translation in self.all_translations.values():
-                all_cur_sent_idxs = [m.start() for m in re.finditer(cur_sent, translation)]
-                all_next_sent_idxs = [m.start() for m in re.finditer(next_sent, translation)]
+                all_cur_sent_idxs = [m.start() for m in re.finditer(re.escape(cur_sent), translation)]
+                all_next_sent_idxs = [m.start() for m in re.finditer(re.escape(next_sent), translation)]
                 found = any([(j - i - len(cur_sent)) <= 1 for i in all_cur_sent_idxs for j in all_next_sent_idxs])
                 if found:
                     break
