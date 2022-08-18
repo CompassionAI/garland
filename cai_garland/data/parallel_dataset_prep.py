@@ -566,8 +566,8 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
 
 
 def _save_context_dataset(dataset, cfg, _stage_cfg):
-    with open(os.path.join(cfg.output.output_dir, "context_encodings.pkl"), "wb") as f:
-        pickle.dump(dataset, f)
+    with open(os.path.join(cfg.output.output_dir, "context_encodings.npz"), "wb") as f:
+        np.savez(f, **dataset)
 
 
 def _filter_skips(bo_lines, en_lines):
