@@ -54,9 +54,9 @@ class ProcessorRemoveDanglingShads:
 
 class ProcessorRemoveBracketed:
     def __init__(self, opening: str, closing: str) -> None:
-        self.opening = opening
-        self.closing = closing
-        self._re = re.compile(f"[{opening}].*?[{closing}]")
+        self.opening = opening.replace("[", r"\[").replace("]", r"\]")
+        self.closing = closing.replace("[", r"\[").replace("]", r"\]")
+        self._re = re.compile(f"[{self.opening}].*?[{self.closing}]")
 
     def __call__(self, segment: str) -> str:
         return self._re.sub("", segment)
