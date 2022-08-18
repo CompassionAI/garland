@@ -505,7 +505,6 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     flat_data = _apply_processors_unpacked(cfg.output.postprocessing.source_lang, [flat_data])[0]
 
     contexts, num_fails = [], 0
-    fragments = fragments[:1000]
     for fragment in tqdm(fragments, desc="Finding contexts"):
         fail = True
         for translated in flat_data:
