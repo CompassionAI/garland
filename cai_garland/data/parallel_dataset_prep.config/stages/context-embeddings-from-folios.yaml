@@ -23,3 +23,7 @@ context-embeddings-from-folios:
 
   # At most how many characters can the context be
   max_context_length: 1000
+
+  # Hugging Face model name to use for context encoding
+  context_encoder: facebook/bart-base
+  model_is_encoder_decoder: true

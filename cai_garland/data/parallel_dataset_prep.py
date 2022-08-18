@@ -5,6 +5,7 @@ import sys
 import math
 import shutil
 import random
+import pickle
 from itertools import zip_longest
 
 import hydra
@@ -498,13 +499,14 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
             for fns in [os.path.join(dir_name, x) for x in ["train", "valid", "test"]]:
                 with open(fns + ".en") as f:
                     fragments.extend(f.readlines())
+    fragments = [fragment.strip() for fragment in fragments]
 
     logger.info("Postprocessing translations")
     flat_data = _apply_processors_unpacked(cfg.output.postprocessing.source_lang, [flat_data])[0]
 
     contexts, num_fails = [], 0
-    for fragment in tqdm(fragments, desc="Embedding"):
-        fragment = fragment.strip()
+    fragments = fragments[:1000]
+    for fragment in tqdm(fragments, desc="Finding contexts"):
         fail = True
         for translated in flat_data:
             if fragment in translated:
@@ -520,7 +522,33 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     if num_fails > 0:
         logger.warning(f"Failed finding parallel text in folio dataset {num_fails} times! This is "
                        f"{num_fails / len(fragments):.2%} of the data.")
-    return flat_data
+
+    logger.info("Loading context encoding model")
+    from transformers import AutoTokenizer, AutoModelForMaskedLM
+    tokenizer = AutoTokenizer.from_pretrained(stage_cfg.context_encoder)
+    model = AutoModelForMaskedLM.from_pretrained(stage_cfg.context_encoder)
+    if stage_cfg.model_is_encoder_decoder:
+        model = model.model.encoder
+    model.eval()
+    if cfg.compute.cuda:
+        model.cuda()
+
+    encodings = []
+    for batch_idx in tqdm(range(len(contexts) // cfg.compute.batch_size), desc="Encoding"):
+        batch = contexts[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
+        batch = tokenizer(batch, return_tensors="pt", padding=True)
+        encoded = model(**batch.to(model.device)).last_hidden_state.cpu().detach().numpy()
+        batch = batch.input_ids.cpu().numpy()
+        for tokens, encoding in zip(batch, encoded):
+            end_idx = np.where(tokens == tokenizer.eos_token_id)[0][0]
+            encodings.append(encoding[:end_idx + 1])
+
+    return dict(zip(fragments, encodings))
+
+
+def _save_context_dataset(dataset, cfg, _stage_cfg):
+    with open(os.path.join(cfg.output.output_dir, "context_encodings.pkl"), "wb") as f:
+        pickle.dump(dataset, f)
 
 
 def _filter_skips(bo_lines, en_lines):
