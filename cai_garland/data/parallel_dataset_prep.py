@@ -14,6 +14,7 @@ from tqdm import tqdm
 from colorama import init as init_colorama, Fore as ForeColor
 
 from dask.distributed import Client, LocalCluster
+from multiprocessing import Pool
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -488,6 +489,24 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     return concatted_data
 
 
+def _find_context(args):
+    fragments, flat_data, max_context_length, context_window = args
+    res = []
+    for fragment in fragments:
+        fail = True
+        for translated in flat_data:
+            if fragment in translated:
+                fail = False
+                ctx_idx = random.choice([m.start() for m in re.finditer(re.escape(fragment), translated)])
+                context = translated[ctx_idx - max_context_length:ctx_idx]
+                context = ' '.join(context.split(' ')[-context_window:])
+                res.append(context)
+                break
+        if fail:
+            res.append(None)
+    return res
+
+
 def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     # Dataset of contextual embeddings of the flat data. Prepares contextual embeddings for all stages already dumped to
     #   disk by this point. Should follow all the stages you want context for in the stages list in the Hydra config.
@@ -505,19 +524,20 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     flat_data = _apply_processors_unpacked(cfg.output.postprocessing.source_lang, [flat_data])[0]
 
     contexts, num_fails = [], 0
-    for fragment in tqdm(fragments, desc="Finding contexts"):
-        fail = True
-        for translated in flat_data:
-            if fragment in translated:
-                fail = False
-                ctx_idx = random.choice([m.start() for m in re.finditer(re.escape(fragment), translated)])
-                context = translated[ctx_idx - stage_cfg.max_context_length:ctx_idx]
-                context = ' '.join(context.split(' ')[-stage_cfg.context_window:])
-                contexts.append(context)
-                break
-        if fail:
-            num_fails += 1
-            contexts.append("")
+
+    logger.info("Finding contexts")
+    bs = len(fragments) // cfg.compute.pool_size
+    frag_batches = [fragments[i : i + bs] for i in range(0, len(fragments), bs)]
+    with Pool(cfg.compute.pool_size) as pool:
+        context_batches = list(
+            pool.imap(
+                _find_context,
+                [
+                    (batch, flat_data, stage_cfg.max_context_length, stage_cfg.context_window)
+                    for batch in frag_batches]))
+    contexts = [c for b in context_batches for c in b]
+    num_fails = sum([context is None for context in contexts])
+    contexts = [context if context is not None else "" for context in contexts]
     if num_fails > 0:
         logger.warning(f"Failed finding parallel text in folio dataset {num_fails} times! This is "
                        f"{num_fails / len(fragments):.2%} of the data.")

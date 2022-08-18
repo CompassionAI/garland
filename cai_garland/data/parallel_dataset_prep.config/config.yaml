@@ -58,3 +58,6 @@ compute:
   # These are used by Hugging Face models when shuffling
   cuda: true
   batch_size: 16
+
+  # These are used by things that use the multiprocess pool
+  pool_size: 20
