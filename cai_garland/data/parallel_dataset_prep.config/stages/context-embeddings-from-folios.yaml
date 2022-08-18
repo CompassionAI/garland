@@ -1,0 +1,19 @@
+defaults:
+  - datasets/84000-full-translations@context-embeddings-from-folios
+
+context-embeddings-from-folios:
+  # Function to pull the dataset
+  pull_func:
+    _target_: cai_garland.data.parallel_dataset_prep._pull_translated_dataset
+
+  # Function to prepare the dataset
+  prep_func:
+    _target_: cai_garland.data.parallel_dataset_prep._prep_context_dataset
+
+  # Function to save the dataset. This overrides the rest of the processing for this data.
+  save_func:
+    _target_: cai_garland.data.parallel_dataset_prep._save_context_dataset
+
+  # This stage puts all loaded data in the training split
+  exclude_from_test: true
+  exclude_from_validation: true

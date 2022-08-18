@@ -1,12 +1,13 @@
 defaults:
   - output: uncased-no-accents
   - stages:
-    # - naive-unconcatted
+    - naive-unconcatted
     # - naive-concats
     # - naive-concats-sequenced
     # - concatted-registers
-    - concatted-registers-sequenced
+    # - concatted-registers-sequenced
     # - unconcatted-registers-sequenced
+    - context-embeddings-from-folios
     # - folio-registers
     # - dictionary
   - processing: local-dask

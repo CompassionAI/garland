@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import math
+import shutil
 import random
 from itertools import zip_longest
 
@@ -287,6 +288,20 @@ def _pull_folio_dataset(_dask_client, cfg, stage_cfg):
     return train_flat_data, val_flat_data, test_flat_data
 
 
+def _pull_translated_dataset(_dask_client, _cfg, stage_cfg):
+    folio_df = TeiLoader('kangyur').dataframe.compute()
+    all_translations = {}
+    for _, row in folio_df.iterrows():
+        all_translations[row.tohoku_number] = all_translations.get(row.tohoku_number, "") + " " + row.text
+    all_translations = list(all_translations.values())
+
+    proc_funs = [instantiate(proc) for proc in stage_cfg.dataset.preprocessing.target_lang]
+    for proc_func in proc_funs:
+        all_translations = [proc_func(t) for t in all_translations]
+
+    return all_translations, [], []
+
+
 def _pull_dictionary_dataset(_dask_client, cfg, stage_cfg):
     # Loads flat training dataset of dictionary words into memory from Dask. The test dataset is always empty.
     #   Optionally also applies simple length-based heuristics to only pick out well-defined words without long
@@ -471,6 +486,36 @@ def _prep_folio_register_dataset(flat_data, cfg, stage_cfg, tokenizer):
     return concatted_data
 
 
+def _prep_context_dataset(flat_data, cfg, _stage_cfg, _tokenizer):
+    # Dataset of contextual embeddings of the flat data. Prepares contextual embeddings for all stages already dumped to
+    #   disk by this point. Should follow all the stages you want context for in the stages list in the Hydra config.
+
+    contexts_en = []
+    for dir_name in os.listdir(cfg.output.output_dir):
+        dir_name = os.path.join(cfg.output.output_dir, dir_name)
+        if os.path.isdir(dir_name):
+            for fns in [os.path.join(dir_name, x) for x in ["train", "valid", "test"]]:
+                with open(fns + ".en") as en_f:
+                    contexts_en.extend(en_f.readlines())
+
+    logger.info("Postprocessing translations")
+    flat_data = _apply_processors_unpacked(cfg.output.postprocessing.source_lang, [flat_data])[0]
+
+    num_fails = 0
+    for context_en in tqdm(contexts_en, desc="Embedding"):
+        context_en = context_en.strip()
+        fail = True
+        for translated in flat_data:
+            if context_en in translated:
+                fail = False
+        if fail:
+            num_fails += 1
+    if num_fails > 0:
+        logger.warning(f"Failed finding parallel text in folio dataset {num_fails} times! This is "
+                       f"{num_fails / len(contexts_en):.2%} of the data.")
+    return flat_data
+
+
 def _filter_skips(bo_lines, en_lines):
     bo_res, en_res = [], []
     for bo_line, en_line in zip(bo_lines, en_lines):
@@ -593,7 +638,10 @@ def main(cfg):
     np.random.seed(cfg.compute.seed)
     ProcessorSymbolCleaningJSON.base_dir = os.path.dirname(__file__)
 
-    os.makedirs(cfg.output.output_dir, exist_ok=True)
+    logger.info("Resetting output dir")
+    if os.path.isdir(cfg.output.output_dir):
+        shutil.rmtree(cfg.output.output_dir)
+    os.makedirs(cfg.output.output_dir)
 
     logger.info("Loading tokenizer")
     tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(cfg.input.tokenizer_name))
