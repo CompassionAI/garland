@@ -48,6 +48,6 @@ class ContextDataCollatorForSeq2Seq:
         if not return_tensors == "pt":
             raise ValueError("Only PyTorch tensors currently supported")
         res[attention_key] = torch.LongTensor(res[attention_key])
-        res[context_key] = torch.DoubleTensor(res[context_key])
+        res[context_key] = torch.FloatTensor(res[context_key])
 
         return res
