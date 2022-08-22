@@ -36,6 +36,7 @@ from datasets import load_dataset, load_metric
 
 from cai_garland.models.factory import make_encoder_decoder
 from cai_garland.data.siamese_collator import SiameseDataCollatorForSeq2Seq
+from cai_garland.data.context_injection_dataset import ContextInjectionDataset
 
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
 from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint
@@ -277,6 +278,11 @@ def main(cfg):
         eval_dataset = eval_dataset.train_test_split(
             train_size=validation_subsampling_rate, seed=training_cfg.seed)['train']
         logger.info(f"Subsampled validation set to size {len(eval_dataset)}")
+
+    if cfg.data.get("context_injection", False):
+        train_dataset = ContextInjectionDataset(train_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
+        eval_dataset = ContextInjectionDataset(eval_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
+        test_dataset = ContextInjectionDataset(test_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
 
     # Data collator
     quantize_padding = (training_cfg.fp16 or training_cfg.bf16) and not cfg.training_preprocess.no_padding_quantization

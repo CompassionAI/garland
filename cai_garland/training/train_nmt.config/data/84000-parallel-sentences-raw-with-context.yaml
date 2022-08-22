@@ -10,6 +10,11 @@ source_lang: bo
 # Source language id for translation
 target_lang: en
 
+# Use context injection
+context_injection: true
+context_file: 84000-parallel-sentences-raw-with-context/context_encodings.npz
+context_lookup_key: english
+
 # The token to force as the first generated token after the 'decoder_start_token_id'. Useful for multilingual models
 #   like mBART where the first generated token needs to be the target language token. Usually it is the target
 #   language token

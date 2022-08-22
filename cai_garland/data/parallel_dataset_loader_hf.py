@@ -43,6 +43,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "registers_3_only": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_3_only_no_splits": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_2_only": "processed_datasets/84000-parallel-sentences-2-registers-only",
+        "raw_with_context": "processed_datasets/84000-parallel-sentences-raw-with-context",
     }
 
     BUILDER_CONFIGS = [
@@ -96,6 +97,11 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             name="registers_2_only",
             version=datasets.Version("0.2.0", ""),
             description="Dataset for a Tibetan encoder with 2 registers and no augmentation",
+        ),
+        ParallelSentences84000Config(
+            name="raw_with_context",
+            version=datasets.Version("0.2.0", ""),
+            description="Dataset for a Tibetan encoder with no registers, no augmentation, and context embeddings",
         ),
     ]
 
@@ -177,7 +183,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
 
     def _generate_examples(self, bo_fn, en_fn):     # pylint: disable=arguments-differ
         for id_, bo, en in self._read_from_files(bo_fn, en_fn):
-            bo, en = bo.strip, en.strip()
+            bo, en = bo.strip(), en.strip()
             yield id_, {
                 "tibetan": bo,
                 "english": en
