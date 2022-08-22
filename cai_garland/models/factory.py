@@ -14,6 +14,7 @@ from transformers import (
 from .bilingual_tokenizer import BilingualTokenizer
 from .siamese_encoder import SiameseEncoderConfig, SiameseEncoderModel
 from .pooled_context_decoder import BartWithPooledContextForCausalLM
+from .cai_encoder_decoder import CAIEncoderDecoderModel, CAIEncoderDecoderConfig
 
 
 logger = logging.getLogger(__name__)
@@ -163,8 +164,8 @@ def make_encoder_decoder(encoder_name: str, decoder_name: str):
     decoder.config.is_decoder = True
     decoder.config.add_cross_attention = True
 
-    config = EncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config)
-    model = EncoderDecoderModel(encoder=encoder, decoder=decoder, config=config)
+    config = CAIEncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config)
+    model = CAIEncoderDecoderModel(encoder=encoder, decoder=decoder, config=config)
 
     model.config.decoder_start_token_id = tokenizer.target_tokenizer.cls_token_id
     model.config.pad_token_id = tokenizer.target_tokenizer.pad_token_id

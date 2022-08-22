@@ -18,10 +18,10 @@ class ContextInjectionDataset(TorchDataset):
         context_file (str): The npz file with preprocessed contexts, under $CAI_DATA_BASE_PATH/processed_datasets.
         context_lookup_key (str): The name of the key in the base dataset to use to look up the context.
         context_name_key (str, optional): The name of the context key in the datums returned by the wrapper object.
-            Defaults to 'context'.
+            Defaults to 'context_embedding'.
     """
 
-    def __init__(self, base_dataset, context_file, context_lookup_key, context_name_key="context"):
+    def __init__(self, base_dataset, context_file, context_lookup_key, context_name_key="context_embedding"):
         super().__init__()
         if not context_file.endswith(".npz"):
             raise ValueError("The context file should be a .npz file, instead got " + context_file)
