@@ -45,6 +45,8 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             output_attentions,
             output_hidden_states,
             return_dict,
+            decoder_context_embedding=context_embedding,
+            decoder_context_embedding_attention_mask=context_embedding_attention_mask,
             **kwargs
         )
 
