@@ -63,3 +63,6 @@ class ContextInjectionDataset(TorchDataset):
             context_embed = self.empty_embedding
         base_item[self.context_name_key] = context_embed
         return base_item
+
+    def __len__(self):
+        return len(self.base_dataset)
