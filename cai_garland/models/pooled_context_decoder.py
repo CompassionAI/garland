@@ -57,8 +57,15 @@ class BartDecoderWithPooledContext(BartDecoder):
         return_dict=None,
         **kwargs
     ):
+        if inputs_embeds is not None:
+            raise ValueError("Don't specify inputs_embeds to a decoder with context!")
+        input = input_ids
+        input_shape = input.shape
+        input_ids = input_ids.view(-1, input_shape[-1])
+        inputs_embeds = self.embed_tokens(input) * self.embed_scale
+
         return super().forward(
-            input_ids,
+            None,
             attention_mask,
             encoder_hidden_states,
             encoder_attention_mask,
