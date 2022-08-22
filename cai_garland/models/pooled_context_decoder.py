@@ -6,6 +6,7 @@ from torch import nn
 from torch.nn import CrossEntropyLoss
 
 from transformers import AutoConfig, AutoModel, BartConfig, BartPretrainedModel, BartForCausalLM
+from transformers.activations import GELUActivation
 from transformers.models.bart.modeling_bart import BartDecoder, CausalLMOutputWithCrossAttentions
 from transformers.utils import logging
 
@@ -33,11 +34,9 @@ class BartDecoderWithPooledContext(BartDecoder):
     """
 
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
-        # EUG!!!
-        if embed_tokens is None:
-            embed_tokens = nn.Embedding(config.vocab_size, config.d_model, config.pad_token_id)
-        # embed_tokens = wrapper_with_pooled_context_injection(embed_tokens)
-        super().__init__(config, embed_tokens=embed_tokens)
+        super().__init__(config)
+        self.context_fc = nn.Linear(in_features=config.d_model, out_features=config.d_model)
+        self.context_activation_fn = GELUActivation()
 
     def forward(
         self,
@@ -63,6 +62,12 @@ class BartDecoderWithPooledContext(BartDecoder):
         input_shape = input.shape
         input_ids = input_ids.view(-1, input_shape[-1])
         inputs_embeds = self.embed_tokens(input) * self.embed_scale
+
+        context_embedding_attention_mask = (
+            context_embedding_attention_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
+        )
+        features = self.context_fc(context_embedding_attention_mask * context_embedding)
+        features = self.context_activation_fn(features)
 
         return super().forward(
             None,
