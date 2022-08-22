@@ -2,6 +2,7 @@
 import copy
 from typing import Optional
 
+import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
@@ -68,6 +69,9 @@ class BartDecoderWithPooledContext(BartDecoder):
         )
         features = self.context_fc(context_embedding_attention_mask * context_embedding)
         features = self.context_activation_fn(features)
+
+        features = features.sum(axis=1).unsqueeze(1)
+        inputs_embeds = torch.cat([features, inputs_embeds[:,1:,:]], dim=1)
 
         return super().forward(
             None,
