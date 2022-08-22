@@ -13,6 +13,7 @@ from transformers import (
 
 from .bilingual_tokenizer import BilingualTokenizer
 from .siamese_encoder import SiameseEncoderConfig, SiameseEncoderModel
+from .pooled_context_decoder import BartWithPooledContextForCausalLM
 
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,11 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
             )
             logger.debug("    Constructing Siamese wrapper model")
             model = SiameseEncoderModel(siamese_config, base_encoder=base_model)
-            logger.debug("    Enabling register tokens in the tokenizer")
+        elif cai_config.get('pooled-context-injection', False):
+            logger.debug("Constructing a decoder with pooled context injection")
+            logger.debug("    Constructing PCI wrapper model")
+            model = _make_named_model(
+                cai_config['base_model_name'], BartWithPooledContextForCausalLM, tokenizer=tokenizer)
         else:
             local_ckpt = get_local_ckpt(cai_name)
 
