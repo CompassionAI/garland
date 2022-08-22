@@ -62,6 +62,7 @@ class ContextInjectionDataset(TorchDataset):
         else:
             context_embed = self.empty_embedding
         base_item[self.context_name_key] = context_embed
+        base_item[self.context_name_key + "_attention_mask"] = np.ones((context_embed.shape[:-1]))
         return base_item
 
     def __len__(self):

@@ -19,6 +19,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         decoder_input_ids=None,
         decoder_attention_mask=None,
         context_embedding=None,
+        context_embedding_attention_mask=None,
         encoder_outputs=None,
         past_key_values=None,
         inputs_embeds=None,

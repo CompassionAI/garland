@@ -36,6 +36,7 @@ from datasets import load_dataset, load_metric
 
 from cai_garland.models.factory import make_encoder_decoder
 from cai_garland.data.siamese_collator import SiameseDataCollatorForSeq2Seq
+from cai_garland.data.context_collator import ContextDataCollatorForSeq2Seq
 from cai_garland.data.context_injection_dataset import ContextInjectionDataset
 
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
@@ -183,6 +184,7 @@ def main(cfg):
     max_target_length = model.config.decoder.max_position_embeddings
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
     siamese = model.config.encoder.model_type == "siamese-encoder"
+    context_injection = cfg.data.get("context_injection", False)
 
     logger.info("Preprocessing training dataset")
     with training_cfg.main_process_first(desc="train dataset map pre-processing"):
@@ -279,7 +281,7 @@ def main(cfg):
             train_size=validation_subsampling_rate, seed=training_cfg.seed)['train']
         logger.info(f"Subsampled validation set to size {len(eval_dataset)}")
 
-    if cfg.data.get("context_injection", False):
+    if context_injection:
         train_dataset = ContextInjectionDataset(train_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
         eval_dataset = ContextInjectionDataset(eval_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
         test_dataset = ContextInjectionDataset(test_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
@@ -306,6 +308,12 @@ def main(cfg):
                 data_collator,
                 model.config.encoder.num_registers,
                 eor_token_id
+            )
+        if context_injection:
+            logger.debug("Wrapping in ContextDataCollatorForSeq2Seq")
+            data_collator = ContextDataCollatorForSeq2Seq(
+                data_collator,
+                train_dataset.context_name_key
             )
 
     # Metric
