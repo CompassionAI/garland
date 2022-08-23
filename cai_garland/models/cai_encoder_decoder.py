@@ -77,6 +77,22 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         self.cur_context_embedding = None
         self.cur_context_embedding_attention_mask = None
 
+    def _prepare_decoder_input_ids_for_generation(
+        self,
+        batch_size,
+        decoder_start_token_id=None,
+        bos_token_id=None,
+        model_kwargs=None,
+        device=None,
+    ):
+        if model_kwargs is not None and "decoder_input_ids" in model_kwargs:
+            return model_kwargs.pop("decoder_input_ids")
+        else:
+            decoder_start_token_id = self._get_decoder_start_token_id(decoder_start_token_id, bos_token_id)
+            if device is None:
+                device = self.device
+            return torch.ones((batch_size, 2), dtype=torch.long, device=device) * decoder_start_token_id
+
     @torch.no_grad()
     def generate(
         self,
