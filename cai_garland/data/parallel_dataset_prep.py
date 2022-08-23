@@ -552,22 +552,22 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     if cfg.compute.cuda:
         model.cuda()
 
-    zarr_store = zarr.DirectoryStore(os.path.join(cfg.output.output_dir, "context_encodings.zarr"))
-    seen_hashes = set()
-    outputs = zarr.group(store=zarr_store, overwrite=True)
-    for batch_idx in tqdm(range(len(contexts) // cfg.compute.batch_size), desc="Encoding"):
-        batch_fragments = fragments[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
-        batch = contexts[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
-        batch = tokenizer(batch, return_tensors="pt", padding=True)
-        encoded = model(**batch.to(model.device)).last_hidden_state.cpu().detach().numpy()
-        batch = batch.input_ids.cpu().numpy()
-        for frag_name, tokens, encoding in zip(batch_fragments, batch, encoded):
-            end_idx = np.where(tokens == tokenizer.eos_token_id)[0][0]
-            frag_name = ContextInjectionDataset.hash_key(frag_name)
-            if frag_name in seen_hashes:
-                raise ValueError("Hash collision!")
-            seen_hashes.add(frag_name)
-            outputs.array(frag_name, encoding[:end_idx + 1])
+    with zarr.LMDBStore(os.path.join(cfg.output.output_dir, "context_encodings.mdb")) as zarr_store:
+        seen_hashes = set()
+        outputs = zarr.group(store=zarr_store, overwrite=True)
+        for batch_idx in tqdm(range(len(contexts) // cfg.compute.batch_size), desc="Encoding"):
+            batch_fragments = fragments[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
+            batch = contexts[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
+            batch = tokenizer(batch, return_tensors="pt", padding=True)
+            encoded = model(**batch.to(model.device)).last_hidden_state.cpu().detach().numpy()
+            batch = batch.input_ids.cpu().numpy()
+            for frag_name, tokens, encoding in zip(batch_fragments, batch, encoded):
+                end_idx = np.where(tokens == tokenizer.eos_token_id)[0][0]
+                frag_name = ContextInjectionDataset.hash_key(frag_name)
+                if frag_name in seen_hashes:
+                    raise ValueError("Hash collision!")
+                seen_hashes.add(frag_name)
+                outputs.array(frag_name, encoding[:end_idx + 1])
 
 
 def _filter_skips(bo_lines, en_lines):

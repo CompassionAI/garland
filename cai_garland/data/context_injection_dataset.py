@@ -30,8 +30,8 @@ class ContextInjectionDataset(TorchDataset):
 
     def __init__(self, base_dataset, context_file, context_lookup_key, context_name_key="context_embedding"):
         super().__init__()
-        if not context_file.endswith(".zarr"):
-            raise ValueError("The context file end with .zarr, instead got " + context_file)
+        if not context_file.endswith(".mdb"):
+            raise ValueError("The context filename should end with .mdb, instead got " + context_file)
         self.context_store = os.path.join(DATA_BASE_PATH, f"processed_datasets/{context_file}")
         self.context_lookup_key, self.context_name_key = context_lookup_key, context_name_key
         self.base_dataset = base_dataset
@@ -40,11 +40,11 @@ class ContextInjectionDataset(TorchDataset):
             return
 
         logger.info("Loading prebuilt contexts")
-        self.zarr_store = zarr.DirectoryStore(self.context_store)
-        self.contexts = zarr.group(store=self.zarr_store)
-        self.all_context_keys = set(self.contexts.array_keys())
-
-        self.embed_dim = self.contexts[next(iter(self.all_context_keys))].shape[-1]
+        self.zarr_store, self.contexts = None, None
+        with zarr.LMDBStore(self.context_store) as zarr_store:
+            contexts = zarr.group(store=zarr_store)
+            self.all_context_keys = set(contexts.array_keys())
+            self.embed_dim = contexts[next(iter(self.all_context_keys))].shape[-1]
         self.empty_embedding = np.empty((0, self.embed_dim))
 
         logger.info("Testing alignment with base dataset")
@@ -60,9 +60,14 @@ class ContextInjectionDataset(TorchDataset):
                 logger.info(f"   {key}")
 
     def __del__(self):
-        self.zarr_store.close()
+        if self.zarr_store is not None:
+            self.zarr_store.close()
 
     def __getitem__(self, index):
+        if self.zarr_store is None:
+            self.zarr_store = zarr.LMDBStore(self.context_store)
+            self.contexts = zarr.group(store=self.zarr_store)
+
         base_item = self.base_dataset[index]
         context_key = self.hash_key(base_item[self.context_lookup_key])
         if context_key in self.all_context_keys:
