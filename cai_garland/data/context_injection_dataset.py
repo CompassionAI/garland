@@ -41,7 +41,7 @@ class ContextInjectionDataset(TorchDataset):
 
         logger.info("Loading prebuilt contexts")
         self.zarr_store, self.contexts = None, None
-        with zarr.LMDBStore(self.context_store, map_size=int(5e10)) as zarr_store:
+        with zarr.LMDBStore(self.context_store, readonly=True) as zarr_store:
             contexts = zarr.group(store=zarr_store)
             self.all_context_keys = set(contexts.array_keys())
             self.embed_dim = contexts[next(iter(self.all_context_keys))].shape[-1]
@@ -65,7 +65,7 @@ class ContextInjectionDataset(TorchDataset):
 
     def __getitem__(self, index):
         if self.zarr_store is None:
-            self.zarr_store = zarr.LMDBStore(self.context_store, map_size=int(5e10))
+            self.zarr_store = zarr.LMDBStore(self.context_store, readonly=True)
             self.contexts = zarr.group(store=self.zarr_store)
 
         base_item = self.base_dataset[index]
