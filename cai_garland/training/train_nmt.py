@@ -38,6 +38,7 @@ from cai_garland.models.factory import make_encoder_decoder
 from cai_garland.data.siamese_collator import SiameseDataCollatorForSeq2Seq
 from cai_garland.data.context_collator import ContextDataCollatorForSeq2Seq
 from cai_garland.data.context_injection_dataset import ContextInjectionDataset
+from cai_garland.training.cai_trainer_seq2seq import CAISeq2SeqTrainer
 
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
 from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint
@@ -357,7 +358,8 @@ def main(cfg):
 
     # Initialize our Trainer
     logger.info("Initializing trainer")
-    trainer = Seq2SeqTrainer(
+    trainer = CAISeq2SeqTrainer if context_injection else Seq2SeqTrainer
+    trainer = trainer(
         model=model,
         args=training_cfg,
         train_dataset=train_dataset,

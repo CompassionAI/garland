@@ -1,4 +1,10 @@
+import torch
+
+from contextlib import contextmanager
+
 from transformers import AutoModel, EncoderDecoderModel, EncoderDecoderConfig
+from transformers.generation_logits_process import LogitsProcessorList
+from transformers.generation_stopping_criteria import StoppingCriteriaList
 
 
 class CAIEncoderDecoderConfig(EncoderDecoderConfig):
@@ -11,6 +17,16 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
 
     config_class = CAIEncoderDecoderConfig
     base_model_prefix = "encoder_decoder_with_context"
+
+    def __init__(
+        self,
+        config=None,
+        encoder=None,
+        decoder=None
+    ):
+        super().__init__(config, encoder, decoder)
+        self.cur_context_embedding = None
+        self.cur_context_embedding_attention_mask = None
 
     def forward(
         self,
@@ -31,6 +47,9 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         return_dict=None,
         **kwargs
     ):
+        if context_embedding is None:
+            context_embedding = self.cur_context_embedding
+            context_embedding_attention_mask = self.cur_context_embedding_attention_mask
         return super().forward(
             input_ids,
             attention_mask,
@@ -48,6 +67,110 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             decoder_context_embedding=context_embedding,
             decoder_context_embedding_attention_mask=context_embedding_attention_mask,
             **kwargs
+        )
+
+    @contextmanager
+    def prepare_model_for_generation(self, context_embedding, context_embedding_attention_mask):
+        self.cur_context_embedding = context_embedding.to(self.device)
+        self.cur_context_embedding_attention_mask = context_embedding_attention_mask.to(self.device)
+        yield
+        self.cur_context_embedding = None
+        self.cur_context_embedding_attention_mask = None
+
+    @torch.no_grad()
+    def generate(
+        self,
+        inputs=None,
+        max_length=None,
+        min_length=None,
+        do_sample=None,
+        early_stopping=None,
+        num_beams=None,
+        temperature=None,
+        top_k=None,
+        top_p=None,
+        typical_p=None,
+        repetition_penalty=None,
+        bad_words_ids=None,
+        force_words_ids=None,
+        bos_token_id=None,
+        pad_token_id=None,
+        eos_token_id=None,
+        length_penalty=None,
+        no_repeat_ngram_size=None,
+        encoder_no_repeat_ngram_size=None,
+        num_return_sequences=None,
+        max_time=None,
+        max_new_tokens=None,
+        decoder_start_token_id=None,
+        use_cache=None,
+        num_beam_groups=None,
+        diversity_penalty=None,
+        prefix_allowed_tokens_fn=None,
+        logits_processor=LogitsProcessorList(),
+        renormalize_logits=None,
+        stopping_criteria=StoppingCriteriaList(),
+        constraints=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        output_scores=None,
+        return_dict_in_generate=None,
+        forced_bos_token_id=None,
+        forced_eos_token_id=None,
+        remove_invalid_values=None,
+        synced_gpus=False,
+        exponential_decay_length_penalty=None,
+        **model_kwargs,
+    ):
+        if self.cur_context_embedding is None:
+            raise ValueError("Specify context embeddings for generation using prepare_model_for_generation")
+        num_beams = num_beams if num_beams is not None else self.config.num_beams
+        self.cur_context_embedding = self.cur_context_embedding.repeat_interleave(num_beams, dim=0)
+        self.cur_context_embedding_attention_mask = self.cur_context_embedding_attention_mask.repeat_interleave(
+            num_beams, dim=0
+        )
+        return super().generate(
+            inputs,
+            max_length,
+            min_length,
+            do_sample,
+            early_stopping,
+            num_beams,
+            temperature,
+            top_k,
+            top_p,
+            typical_p,
+            repetition_penalty,
+            bad_words_ids,
+            force_words_ids,
+            bos_token_id,
+            pad_token_id,
+            eos_token_id,
+            length_penalty,
+            no_repeat_ngram_size,
+            encoder_no_repeat_ngram_size,
+            num_return_sequences,
+            max_time,
+            max_new_tokens,
+            decoder_start_token_id,
+            use_cache,
+            num_beam_groups,
+            diversity_penalty,
+            prefix_allowed_tokens_fn,
+            logits_processor,
+            renormalize_logits,
+            stopping_criteria,
+            constraints,
+            output_attentions,
+            output_hidden_states,
+            output_scores,
+            return_dict_in_generate,
+            forced_bos_token_id,
+            forced_eos_token_id,
+            remove_invalid_values,
+            synced_gpus,
+            exponential_decay_length_penalty,
+            **model_kwargs
         )
 
 
