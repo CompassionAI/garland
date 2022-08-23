@@ -10,9 +10,8 @@ context-embeddings-from-folios:
   prep_func:
     _target_: cai_garland.data.parallel_dataset_prep._prep_context_dataset
 
-  # Function to save the dataset. This overrides the rest of the processing for this data.
-  save_func:
-    _target_: cai_garland.data.parallel_dataset_prep._save_context_dataset
+  # Override the rest of the processing for this data.
+  stop_after_prep: true
 
   # This stage puts all loaded data in the training split
   exclude_from_test: true

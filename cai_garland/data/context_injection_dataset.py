@@ -1,8 +1,11 @@
 import os
+import zarr
+import hashlib
 import logging
 
 import numpy as np
 from torch.utils.data.dataset import Dataset as TorchDataset
+from tqdm.auto import tqdm
 
 
 DATA_BASE_PATH = os.environ['CAI_DATA_BASE_PATH']
@@ -21,11 +24,15 @@ class ContextInjectionDataset(TorchDataset):
             Defaults to 'context_embedding'.
     """
 
+    @staticmethod
+    def hash_key(key):
+        return hashlib.sha224(key.encode("utf-8")).hexdigest()
+
     def __init__(self, base_dataset, context_file, context_lookup_key, context_name_key="context_embedding"):
         super().__init__()
-        if not context_file.endswith(".npz"):
-            raise ValueError("The context file should be a .npz file, instead got " + context_file)
-        self.context_file = os.path.join(DATA_BASE_PATH, f"processed_datasets/{context_file}")
+        if not context_file.endswith(".zarr"):
+            raise ValueError("The context file end with .zarr, instead got " + context_file)
+        self.context_store = os.path.join(DATA_BASE_PATH, f"processed_datasets/{context_file}")
         self.context_lookup_key, self.context_name_key = context_lookup_key, context_name_key
         self.base_dataset = base_dataset
 
@@ -33,16 +40,17 @@ class ContextInjectionDataset(TorchDataset):
             return
 
         logger.info("Loading prebuilt contexts")
-        self.contexts = np.load(self.context_file)
+        self.zarr_store = zarr.DirectoryStore(self.context_store)
+        self.contexts = zarr.group(store=self.zarr_store)
+        self.all_context_keys = set(self.contexts.array_keys())
 
-        self.embed_dim = self.contexts[self.contexts.files[0]].shape[-1]
+        self.embed_dim = self.contexts[next(iter(self.all_context_keys))].shape[-1]
         self.empty_embedding = np.empty((0, self.embed_dim))
 
         logger.info("Testing alignment with base dataset")
-        self.all_context_keys = set(self.contexts.files)
         not_found = []
-        for ex in base_dataset:
-            if not ex['english'] in self.all_context_keys:
+        for ex in tqdm(base_dataset):
+            if not self.hash_key(ex['english']) in self.all_context_keys:
                 not_found.append(ex['english'])
         logger.info(
             f"Not found {len(not_found)} examples, this is {len(not_found) / len(base_dataset):.2%} of the data")
@@ -52,11 +60,11 @@ class ContextInjectionDataset(TorchDataset):
                 logger.info(f"   {key}")
 
     def __del__(self):
-        self.contexts.close()
+        self.zarr_store.close()
 
     def __getitem__(self, index):
         base_item = self.base_dataset[index]
-        context_key = base_item[self.context_lookup_key]
+        context_key = self.hash_key(base_item[self.context_lookup_key])
         if context_key in self.all_context_keys:
             context_embed = self.contexts[context_key]
         else:

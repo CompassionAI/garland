@@ -2,10 +2,10 @@ import logging
 import re
 import os
 import sys
+import zarr
 import math
 import shutil
 import random
-import pickle
 from itertools import zip_longest
 
 import hydra
@@ -22,6 +22,7 @@ from sklearn.model_selection import train_test_split
 from cai_common.data import ParallelTMXLoader, TeiLoader, KangyurLoader
 from cai_manas.tokenizer import CAITokenizer
 from cai_garland.utils.str_processors import ProcessorSymbolCleaningJSON
+from .context_injection_dataset import ContextInjectionDataset
 from .parallel_dataset_sequencing import make_sequencer
 
 
@@ -510,7 +511,6 @@ def _find_context(args):
 def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     # Dataset of contextual embeddings of the flat data. Prepares contextual embeddings for all stages already dumped to
     #   disk by this point. Should follow all the stages you want context for in the stages list in the Hydra config.
-
     fragments = []
     for dir_name in os.listdir(cfg.output.output_dir):
         dir_name = os.path.join(cfg.output.output_dir, dir_name)
@@ -518,7 +518,7 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
             for fns in [os.path.join(dir_name, x) for x in ["train", "valid", "test"]]:
                 with open(fns + ".en") as f:
                     fragments.extend(f.readlines())
-    fragments = [fragment.strip() for fragment in fragments]
+    fragments = sorted(list(set([fragment.strip() for fragment in fragments])))
 
     logger.info("Postprocessing translations")
     flat_data = _apply_processors_unpacked(cfg.output.postprocessing.source_lang, [flat_data])[0]
@@ -552,22 +552,22 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     if cfg.compute.cuda:
         model.cuda()
 
-    encodings = []
+    zarr_store = zarr.DirectoryStore(os.path.join(cfg.output.output_dir, "context_encodings.zarr"))
+    seen_hashes = set()
+    outputs = zarr.group(store=zarr_store, overwrite=True)
     for batch_idx in tqdm(range(len(contexts) // cfg.compute.batch_size), desc="Encoding"):
+        batch_fragments = fragments[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
         batch = contexts[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
         batch = tokenizer(batch, return_tensors="pt", padding=True)
         encoded = model(**batch.to(model.device)).last_hidden_state.cpu().detach().numpy()
         batch = batch.input_ids.cpu().numpy()
-        for tokens, encoding in zip(batch, encoded):
+        for frag_name, tokens, encoding in zip(batch_fragments, batch, encoded):
             end_idx = np.where(tokens == tokenizer.eos_token_id)[0][0]
-            encodings.append(encoding[:end_idx + 1])
-
-    return dict(zip(fragments, encodings))
-
-
-def _save_context_dataset(dataset, cfg, _stage_cfg):
-    with open(os.path.join(cfg.output.output_dir, "context_encodings.npz"), "wb") as f:
-        np.savez(f, **dataset)
+            frag_name = ContextInjectionDataset.hash_key(frag_name)
+            if frag_name in seen_hashes:
+                raise ValueError("Hash collision!")
+            seen_hashes.add(frag_name)
+            outputs.array(frag_name, encoding[:end_idx + 1])
 
 
 def _filter_skips(bo_lines, en_lines):
@@ -757,12 +757,10 @@ def main(cfg):
             raise ValueError(
                 f"Test data should have been skipped but {len(test_flat_data)} records were returned")
 
-        if "save_func" in stage_cfg:
+        if stage_cfg.get("stop_after_prep", False):
             logger.info("Preparing dataset")
-            all_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg, tokenizer)
-            logger.info("Saving dataset")
-            instantiate(stage_cfg.save_func, all_data, cfg, stage_cfg)
-            logger.warning("This stage has its own saving function! It will not be part of the overall dataset!")
+            instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg, tokenizer)
+            logger.warning("This stage indicates to stop here! It will not be part of the overall dataset!")
             continue
         logger.info("Preparing training dataset")
         train_concat_data = instantiate(stage_cfg.prep_func, train_flat_data, cfg, stage_cfg, tokenizer)
