@@ -51,3 +51,5 @@ skip_memory_metrics: true
 # fp16: true
 bf16: true
 # tf32: true
+
+dataloader_num_workers: 50
