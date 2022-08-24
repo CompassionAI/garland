@@ -18,7 +18,7 @@ class ContextInjectionDataset(TorchDataset):
 
     Args:
         base_dataset (Dataset): A PyTorch Dataset object to wrap.
-        context_file (str): The npz file with preprocessed contexts, under $CAI_DATA_BASE_PATH/processed_datasets.
+        context_file (str): The npz file with preprocessed contexts, under $CAI_DATA_BASE_PATH.
         context_lookup_key (str): The name of the key in the base dataset to use to look up the context.
         context_name_key (str, optional): The name of the context key in the datums returned by the wrapper object.
             Defaults to 'context_embedding'.
@@ -32,7 +32,7 @@ class ContextInjectionDataset(TorchDataset):
         super().__init__()
         if not context_file.endswith(".mdb"):
             raise ValueError("The context filename should end with .mdb, instead got " + context_file)
-        self.context_store = os.path.join(DATA_BASE_PATH, f"processed_datasets/{context_file}")
+        self.context_store = os.path.join(DATA_BASE_PATH, f"{context_file}")
         self.context_lookup_key, self.context_name_key = context_lookup_key, context_name_key
         self.base_dataset = base_dataset
 
