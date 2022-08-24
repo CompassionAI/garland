@@ -35,15 +35,10 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
     dataset_locations = {
         "no_registers": "processed_datasets/84000-parallel-sentences-no-registers",
         "no_registers_no_splits": "processed_datasets/84000-parallel-sentences-no-registers",
-        "raw": "processed_datasets/84000-parallel-sentences-raw",
-        "raw_no_splits": "processed_datasets/84000-parallel-sentences-raw",
-        "raw_no_dict": "processed_datasets/84000-parallel-sentences-raw-no-dict",
-        "raw_no_dict_no_splits": "processed_datasets/84000-parallel-sentences-raw-no-dict",
-        "registers_3": "processed_datasets/84000-parallel-sentences-3-registers",
         "registers_3_only": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_3_only_no_splits": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_2_only": "processed_datasets/84000-parallel-sentences-2-registers-only",
-        "raw_with_context": "processed_datasets/84000-parallel-sentences-raw-with-context",
+        "raw_with_context": "experiments/84000-parallel-sentences-raw-with-context",
     }
 
     BUILDER_CONFIGS = [
@@ -56,32 +51,6 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             name="no_registers_no_splits",
             version=datasets.Version("0.2.0", ""),
             description="Dataset for a Tibetan encoder with no registers and all splits concatenated",
-        ),
-        ParallelSentences84000Config(
-            name="raw",
-            version=datasets.Version("0.2.0", ""),
-            description="Dataset for a Tibetan encoder from the raw parallel sentences",
-        ),
-        ParallelSentences84000Config(
-            name="raw_no_splits",
-            version=datasets.Version("0.2.0", ""),
-            description="Dataset for a Tibetan encoder from the raw parallel sentences and all splits concatenated",
-        ),
-        ParallelSentences84000Config(
-            name="raw_no_dict",
-            version=datasets.Version("0.2.0", ""),
-            description="Dataset for a Tibetan encoder from the raw parallel sentences and no dictionary",
-        ),
-        ParallelSentences84000Config(
-            name="raw_no_dict_no_splits",
-            version=datasets.Version("0.2.0", ""),
-            description="Dataset for a Tibetan encoder from the raw parallel sentences, no dictionary, and all splits "
-                        "concatenated",
-        ),
-        ParallelSentences84000Config(
-            name="registers_3",
-            version=datasets.Version("0.2.0", ""),
-            description="Dataset for a Tibetan encoder with 3 registers",
         ),
         ParallelSentences84000Config(
             name="registers_3_only",
