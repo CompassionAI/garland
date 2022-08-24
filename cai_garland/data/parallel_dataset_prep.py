@@ -552,7 +552,7 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
     if cfg.compute.cuda:
         model.cuda()
 
-    with zarr.LMDBStore(os.path.join(cfg.output.output_dir, "context_encodings.mdb"), map_size=int(5e10)) as zarr_store:
+    with zarr.DirectoryStore(os.path.join(cfg.output.output_dir, "context_encodings.zarr")) as zarr_store:
         seen_hashes = set()
         outputs = zarr.group(store=zarr_store, overwrite=True)
         for batch_idx in tqdm(range(len(contexts) // cfg.compute.batch_size), desc="Encoding"):
