@@ -227,9 +227,15 @@ class Translator:
         retrospective_decoding=False,
         retrospective_registers=False,
         retrospection_window=None,
+        contextual_decoding=False,
+        context_window_words=50,
+        context_window_characters=1000,
         throw_translation_errors=False,
         generator_kwargs={}
     ):
+        if retrospective_decoding and contextual_decoding:
+            raise ValueError("Specify either retrospective or contextual decoding, not both.")
+
         hard_segments = self.hard_segmenter(bo_text, translator=self, **hard_segmenter_kwargs)
 
         for hard_segment in tqdm(hard_segments, desc="Hard segments", leave=False):
@@ -250,6 +256,8 @@ class Translator:
                 #     all_encoder_outputs = []
                 #     for soft_segment in tqdm(soft_segments, desc="Encoding soft segments", leave=False):
                 #         all_encoder_outputs.append(self._encode_text(soft_segment))
+            if contextual_decoding:
+                context_window = ""
 
             for seg_idx, soft_segment in tqdm(
                 enumerate(soft_segments),
@@ -284,6 +292,9 @@ class Translator:
                         translation_err = True
                         tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
 
+                for postproc_func in self.postprocessors:
+                    tgt_segment = postproc_func(tgt_segment)
+
                 if retrospective_decoding:
                     if translation_err:
                         src_registers, tgt_registers = [], []
@@ -294,8 +305,10 @@ class Translator:
                         if len(src_registers) == retrospection_window:
                             src_registers.pop(0)
                             tgt_registers.pop(0)
-
-                for postproc_func in self.postprocessors:
-                    tgt_segment = postproc_func(tgt_segment)
+                if contextual_decoding:
+                    if not tgt_segment.startswith(' ') and not context_window.endswith(' '):
+                        context_window += ' '
+                    context_window = (context_window + tgt_segment)[-context_window_characters:]
+                    context_window = ' '.join(context_window.split(' ')[-context_window_words:]).strip()
 
                 yield soft_segment, tgt_segment

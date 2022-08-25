@@ -41,10 +41,16 @@ def batch(translator, mode_cfg, generation_cfg):
 
         out_fn = os.path.join(
             mode_cfg.output_dir, os.path.splitext(os.path.basename(in_fn))[0] + '.' + mode_cfg.output_extension)
-        retrospective_decoding = generation_cfg.generation.get("retrospective_decoding", False)
-        retrospective_registers = translator.model.encoder.config.model_type == "siamese-encoder" and \
-            generation_cfg.generation.get("use_registers_for_retrospective_decoding", True)
-        retrospection_window = generation_cfg.generation.get("retrospection_window", None)
+        translation_kwargs = {}
+        translation_kwargs["retrospective_decoding"] = generation_cfg.generation.get("retrospective_decoding", False)
+        translation_kwargs["retrospective_registers"] = \
+            translator.model.encoder.config.model_type == "siamese-encoder" \
+            and generation_cfg.generation.get("use_registers_for_retrospective_decoding", True)
+        translation_kwargs["retrospection_window"] = generation_cfg.generation.get("retrospection_window", None)
+        translation_kwargs["contextual_decoding"] = hasattr(generation_cfg.generation, "pooled_context")
+        if translation_kwargs["contextual_decoding"]:
+            translation_kwargs["context_window_words"] = 50
+            translation_kwargs["context_window_characters"] = 1000
         with open(out_fn, mode='w') as out_f:
             translator.hard_segmenter = instantiate(generation_cfg.segmentation.hard_segmentation)
             translator.preprocessors = [
@@ -66,11 +72,9 @@ def batch(translator, mode_cfg, generation_cfg):
                 tqdm=tqdm,
                 hard_segmenter_kwargs=dict(generation_cfg.segmentation.hard_segmenter_kwargs),
                 soft_segmenter_kwargs=dict(generation_cfg.segmentation.soft_segmenter_kwargs),
-                retrospective_decoding=retrospective_decoding,
-                retrospective_registers=retrospective_registers,
-                retrospection_window=retrospection_window,
                 throw_translation_errors=not mode_cfg.skip_long_inputs,
-                generator_kwargs=dict(generation_cfg.generation.get("generator_kwargs", {}))
+                generator_kwargs=dict(generation_cfg.generation.get("generator_kwargs", {})),
+                **translation_kwargs
             ):
                 if mode_cfg.output_parallel_translation:
                     out_f.write(src_segment + '\n')
