@@ -69,9 +69,10 @@ class BartDecoderWithPooledContext(BartDecoder):
         )
         features = self.context_fc(context_embedding_attention_mask * context_embedding)
         features = self.context_activation_fn(features)
-
         features = features.sum(axis=1).unsqueeze(1)
-        inputs_embeds = torch.cat([features, inputs_embeds[:,1:,:]], dim=1)
+
+        if inputs_embeds.shape[1] > 1:
+            inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
 
         return super().forward(
             None,

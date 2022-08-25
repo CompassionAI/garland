@@ -19,4 +19,4 @@ hydra:
 # pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/champion
 
 # Overwrite the cached training and evaluation sets
-overwrite_cache: true
+overwrite_cache: false
