@@ -51,6 +51,11 @@ def batch(translator, mode_cfg, generation_cfg):
         if translation_kwargs["contextual_decoding"]:
             translation_kwargs["context_window_words"] = 50
             translation_kwargs["context_window_characters"] = 1000
+            translator.prepare_context_encoder(
+                generation_cfg.generation.pooled_context.context_encoder.hf_model_name,
+                is_encoder_decoder=generation_cfg.generation.pooled_context.context_encoder.model_is_encoder_decoder
+            )
+
         with open(out_fn, mode='w') as out_f:
             translator.hard_segmenter = instantiate(generation_cfg.segmentation.hard_segmentation)
             translator.preprocessors = [

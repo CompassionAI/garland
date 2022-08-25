@@ -7,6 +7,10 @@ generation:
       words: 50
       characters: 1000
 
+    context_encoder:
+      hf_model_name: facebook/bart-base
+      model_is_encoder_decoder: true
+
   generator_kwargs:
     repetition_penalty: 2.2
     no_repeat_ngram_size: 3

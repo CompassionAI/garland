@@ -5,6 +5,7 @@ import logging
 from typing import Optional, Dict, Any
 import torch
 from tqdm.auto import tqdm
+from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_garland.models.factory import make_bilingual_tokenizer
@@ -79,14 +80,37 @@ class Translator:
 
         self.num_beams = 20
         self._cuda = False
+        self.context_encoder = None
 
     def cuda(self) -> None:
         self._cuda = True
         self.model.cuda()
+        if self.context_encoder is not None:
+            self.context_encoder.cuda()
 
     def cpu(self) -> None:
         self._cuda = False
         self.model.cpu()
+        if self.context_encoder is not None:
+            self.context_encoder.cpu()
+
+    def prepare_context_encoder(self, hf_model_name, is_encoder_decoder=False):
+        """Prepare a context encoder for translation with context.
+        
+        Args:
+            hf_model_name: A model name in the Hugging Face model registry for context encoding.
+            is_encoder_decoder: Is the model an encoder-decoder architecture? Is yes, take the encoder for the context
+                model. For example, this argument is True for BART and False for RoBERTa.
+        """
+        logger.info("Loading context tokenizer")
+        self.context_tokenizer = AutoTokenizer.from_pretrained(hf_model_name)
+        logger.info("Loading context encoder")
+        self.context_encoder = AutoModelForMaskedLM.from_pretrained(hf_model_name)
+        if is_encoder_decoder:
+            self.context_encoder = self.context_encoder.model.encoder
+        self.context_encoder.eval()
+        if self._cuda:
+            self.context_encoder.cuda()
 
     def _encode_text(
         self,
@@ -129,6 +153,7 @@ class Translator:
         self,
         bo_text: str,
         prefix: Optional[str]=None,
+        context: Optional[str]=None,
         encoder_outputs: Any = None,
         generator_kwargs: Dict[Any, Any]={},
     ) -> str:
@@ -137,13 +162,23 @@ class Translator:
         Args:
             bo_text: The Tibetan text (not tokens) to translate, as a unicode string.
             prefix (optional): Prefix text, in the target language, to force the generator to produce.
+            context (optional): Context, in the target language, for the the causal language model. Note that this
+                requires a model with a decoder that accepts context and is trained with context, otherwise your
+                translation will crash. You need to initialize the context model by calling prepare_context_encoder
+                before running this.
             encoder_outputs (optional): Pre-computed encoder outputs. If not specified, the model will run the encoder.
             generator_kwargs (optional): Any additional keyword arguments to pass to the generator function.
 
         Returns:
             The translated text (not tokens)."""
 
+        if context is not None and self.context_encoder is None:
+            raise ValueError("Must specify a context encoder if translating with context. Call prepare_context_encoder "
+                             "to do this.")
+
         bo_tokens = self.tokenizer(bo_text, return_tensors="pt").input_ids
+        if context is not None:
+            ctx_tokens = self.context_tokenizer(context, return_tensors="pt")
 
         if isinstance(self.model.encoder, SiameseEncoderModel):
             splits = self.model.encoder.split_tokens_into_registers(bo_tokens)['input_ids']
@@ -155,9 +190,16 @@ class Translator:
                 raise TokenizationTooLongException(f"Translation input too long: encoder maximum length is "
                     f"{self.model.encoder.max_length}, input tokenizes to {len(bo_tokens[0])} "
                     f"tokens.")
+        if context is not None:
+            if len(ctx_tokens.input_ids[0]) > self.context_tokenizer.model_max_length:
+                raise TokenizationTooLongException(f"Context too long: context encoder maximum length is "
+                    f"{self.context_encoder.max_length}, input tokenizes to {len(ctx_tokens.input_ids[0])} "
+                    f"tokens.")
 
         logger.debug(f"Tokenized input: {bo_tokens[0]}")
         logger.debug(f"Tokenized input length: {len(bo_tokens[0])}")
+        if context is not None:
+            logger.debug(f"Tokenized context length: {len(ctx_tokens.input_ids[0])}")
 
         if prefix is not None:
             with self.tokenizer.as_target_tokenizer():
@@ -166,6 +208,13 @@ class Translator:
                     batch_id, input_ids, prefix_tokens)
         else:
             prefix_fn = None
+
+        if context is not None:
+            logger.debug("Encoding context")
+            ctx_embedding = self.context_encoder(**ctx_tokens.to(self.context_encoder.device)).last_hidden_state
+            ctx_mask = ctx_tokens.attention_mask
+        else:
+            ctx_embedding, ctx_mask = None, None
 
         if isinstance(encoder_outputs, list):
             encoder_outputs = BaseModelOutputWithAttentionMask(
@@ -202,13 +251,14 @@ class Translator:
         if encoder_outputs is not None:
             generator_kwargs['encoder_outputs'] = encoder_outputs
             generator_kwargs['attention_mask'] = encoder_outputs.attention_mask
-        preds = self.model.generate(
-            bo_tokens,
-            max_length=self.model.decoder.max_length,
-            num_beams=self.num_beams,
-            prefix_allowed_tokens_fn=prefix_fn,
-            **generator_kwargs
-        )[0]
+        with self.model.prepare_model_for_generation(ctx_embedding, ctx_mask):
+            preds = self.model.generate(
+                bo_tokens,
+                max_length=self.model.decoder.max_length,
+                num_beams=self.num_beams,
+                prefix_allowed_tokens_fn=prefix_fn,
+                **generator_kwargs
+            )[0]
         if self._cuda:
             preds = preds.cpu()
 
@@ -258,6 +308,8 @@ class Translator:
                 #         all_encoder_outputs.append(self._encode_text(soft_segment))
             if contextual_decoding:
                 context_window = ""
+            else:
+                context_window = None
 
             for seg_idx, soft_segment in tqdm(
                 enumerate(soft_segments),
@@ -284,7 +336,12 @@ class Translator:
                 translation_err = False
                 try:
                     tgt_segment = self.translate(
-                        input_, prefix=prefix, encoder_outputs=encoder_outputs, generator_kwargs=generator_kwargs)
+                        input_,
+                        prefix=prefix,
+                        context=context_window,
+                        encoder_outputs=encoder_outputs,
+                        generator_kwargs=generator_kwargs
+                    )
                 except TokenizationTooLongException as err:
                     if throw_translation_errors:
                         raise err
