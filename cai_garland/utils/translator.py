@@ -11,7 +11,7 @@ from cai_garland.models.factory import make_bilingual_tokenizer
 from cai_garland.utils.segmenters import SegmenterNone, SegmenterOpeningShad
 from cai_garland.models.siamese_encoder import SiameseEncoderModel, BaseModelOutputWithAttentionMask
 
-from transformers import EncoderDecoderModel
+from cai_garland.models.cai_encoder_decoder import CAIEncoderDecoderModel
 
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class Translator:
         local_ckpt = get_local_ckpt(model_ckpt, model_dir=True)
         logger.info(f"Local model checkpoint {model_ckpt} resolved to {local_ckpt}")
 
-        self.model = EncoderDecoderModel.from_pretrained(local_ckpt)
+        self.model = CAIEncoderDecoderModel.from_pretrained(local_ckpt)
         logger.debug(f"Encoder: {self.model.encoder}")
         logger.debug(f"Decoder: {self.model.decoder}")
 
