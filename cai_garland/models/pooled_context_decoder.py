@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
-from transformers import AutoConfig, AutoModel, BartConfig, BartPretrainedModel, BartForCausalLM
+from transformers import AutoConfig, AutoModelForCausalLM, BartConfig, BartPretrainedModel, BartForCausalLM
 from transformers.activations import GELUActivation
 from transformers.models.bart.modeling_bart import BartDecoder, CausalLMOutputWithCrossAttentions
 from transformers.utils import logging
@@ -187,4 +187,4 @@ class BartWithPooledContextForCausalLM(BartForCausalLM):
 
 # This injects our new model type into the Hugging Face factory for models without having to modify their code base. If
 #   ever this is contributed to the Transformers main branch, this should be moved.
-AutoModel.register(BartWithPooledContextConfig, BartWithPooledContextForCausalLM)
+AutoModelForCausalLM.register(BartWithPooledContextConfig, BartWithPooledContextForCausalLM)
