@@ -32,7 +32,7 @@ segmentation:
   #
   #   The recommended segmenters are: SegmenterNone, SegmenterOpeningShad, SegmenterTargetTokenCount
   soft_segmentation:
-    _target_: cai_garland.utils.segmenters.SegmenterTargetTokenCount
+    _target_: cai_garland.utils.segmenters.SegmenterOpeningShad
   soft_segmenter_kwargs: {}
 
 processing:
