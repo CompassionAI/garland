@@ -64,15 +64,18 @@ class BartDecoderWithPooledContext(BartDecoder):
         input_ids = input_ids.view(-1, input_shape[-1])
         inputs_embeds = self.embed_tokens(input) * self.embed_scale
 
-        context_embedding_attention_mask = (
-            context_embedding_attention_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
-        )
-        features = self.context_fc(context_embedding_attention_mask * context_embedding)
-        features = self.context_activation_fn(features)
-        features = features.sum(axis=1).unsqueeze(1)
+        if context_embedding is not None:
+            if context_embedding_attention_mask is None:
+                raise ValueError("If passing in a context embedding, must also pass in a context attention mask")
+            context_embedding_attention_mask = (
+                context_embedding_attention_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
+            )
+            features = self.context_fc(context_embedding_attention_mask * context_embedding)
+            features = self.context_activation_fn(features)
+            features = features.sum(axis=1).unsqueeze(1)
 
-        if inputs_embeds.shape[1] > 1:
-            inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
+            if inputs_embeds.shape[1] > 1:
+                inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
 
         return super().forward(
             None,

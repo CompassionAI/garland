@@ -140,13 +140,15 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         exponential_decay_length_penalty=None,
         **model_kwargs,
     ):
-        if self.cur_context_embedding is None and self.force_preparing_model_for_generation:
-            raise ValueError("Specify context embeddings for generation using prepare_model_for_generation")
-        num_beams = num_beams if num_beams is not None else self.config.num_beams
-        self.cur_context_embedding = self.cur_context_embedding.repeat_interleave(num_beams, dim=0)
-        self.cur_context_embedding_attention_mask = self.cur_context_embedding_attention_mask.repeat_interleave(
-            num_beams, dim=0
-        )
+        if self.cur_context_embedding is None:
+            if self.force_preparing_model_for_generation:
+                raise ValueError("Specify context embeddings for generation using prepare_model_for_generation")
+        else:
+            num_beams = num_beams if num_beams is not None else self.config.num_beams
+            self.cur_context_embedding = self.cur_context_embedding.repeat_interleave(num_beams, dim=0)
+            self.cur_context_embedding_attention_mask = self.cur_context_embedding_attention_mask.repeat_interleave(
+                num_beams, dim=0
+            )
         return super().generate(
             inputs,
             max_length,
