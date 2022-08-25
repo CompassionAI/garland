@@ -29,7 +29,8 @@ def batch(translator, mode_cfg, generation_cfg):
     os.makedirs(mode_cfg.output_dir, exist_ok=True)
     in_fns = glob.glob(mode_cfg.input_glob)
     original_cfg = copy.deepcopy(generation_cfg)
-    for in_fn in tqdm(in_fns, desc="Files"):
+    for in_fn in (files_pbar := tqdm(in_fns)):
+        files_pbar.set_description(os.path.basename(in_fn))
         with open(in_fn, encoding=mode_cfg.input_encoding) as in_f:
             bo_text = in_f.read()
 
@@ -49,12 +50,9 @@ def batch(translator, mode_cfg, generation_cfg):
         translation_kwargs["retrospection_window"] = generation_cfg.generation.get("retrospection_window", None)
         translation_kwargs["contextual_decoding"] = hasattr(generation_cfg.generation, "pooled_context")
         if translation_kwargs["contextual_decoding"]:
-            translation_kwargs["context_window_words"] = 50
-            translation_kwargs["context_window_characters"] = 1000
-            translator.prepare_context_encoder(
-                generation_cfg.generation.pooled_context.context_encoder.hf_model_name,
-                is_encoder_decoder=generation_cfg.generation.pooled_context.context_encoder.model_is_encoder_decoder
-            )
+            translation_kwargs["context_window_words"] = generation_cfg.generation.pooled_context.context_window.words
+            translation_kwargs["context_window_characters"] = \
+                generation_cfg.generation.pooled_context.context_window.characters
 
         with open(out_fn, mode='w') as out_f:
             translator.hard_segmenter = instantiate(generation_cfg.segmentation.hard_segmentation)
@@ -99,6 +97,12 @@ def main(cfg):
 
     translator = Translator(os.path.join(cfg.model.model_ckpt, cfg.model.model_size))
     translator.num_beams = cfg.generation.generation.num_beams
+    if hasattr(cfg.generation.generation, "pooled_context"):
+        translator.prepare_context_encoder(
+            cfg.generation.generation.pooled_context.context_encoder.hf_model_name,
+            is_encoder_decoder=cfg.generation.generation.pooled_context.context_encoder.model_is_encoder_decoder
+        )
+
     if cfg.cuda:
         translator.cuda()
 
