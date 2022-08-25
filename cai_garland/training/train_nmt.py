@@ -186,6 +186,8 @@ def main(cfg):
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
     siamese = model.config.encoder.model_type == "siamese-encoder"
     context_injection = cfg.data.get("context_injection", False)
+    if context_injection:
+        model.force_preparing_model_for_generation = True
 
     logger.info("Preprocessing training dataset")
     with training_cfg.main_process_first(desc="train dataset map pre-processing"):
