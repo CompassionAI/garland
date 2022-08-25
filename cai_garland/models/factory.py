@@ -7,8 +7,6 @@ from transformers import (
     AutoModel,
     AutoModelForCausalLM,
     AutoTokenizer,
-    EncoderDecoderConfig,
-    EncoderDecoderModel
 )
 
 from .bilingual_tokenizer import BilingualTokenizer
