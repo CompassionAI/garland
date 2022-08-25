@@ -52,6 +52,9 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         if context_embedding is None:
             context_embedding = self.cur_context_embedding
             context_embedding_attention_mask = self.cur_context_embedding_attention_mask
+        else:
+            kwargs["decoder_context_embedding"] = context_embedding
+            kwargs["decoder_context_embedding_attention_mask"] = context_embedding_attention_mask
         return super().forward(
             input_ids,
             attention_mask,
@@ -66,15 +69,15 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             output_attentions,
             output_hidden_states,
             return_dict,
-            decoder_context_embedding=context_embedding,
-            decoder_context_embedding_attention_mask=context_embedding_attention_mask,
             **kwargs
         )
 
     @contextmanager
     def prepare_model_for_generation(self, context_embedding, context_embedding_attention_mask):
-        self.cur_context_embedding = context_embedding.to(self.device)
-        self.cur_context_embedding_attention_mask = context_embedding_attention_mask.to(self.device)
+        if context_embedding is not None:
+            self.cur_context_embedding = context_embedding.to(self.device)
+        if context_embedding_attention_mask is not None:
+            self.cur_context_embedding_attention_mask = context_embedding_attention_mask.to(self.device)
         yield
         self.cur_context_embedding = None
         self.cur_context_embedding_attention_mask = None
