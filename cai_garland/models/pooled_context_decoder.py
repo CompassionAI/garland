@@ -49,7 +49,7 @@ class BartDecoderWithPooledContext(BartDecoder):
         cross_attn_head_mask=None,
         past_key_values=None,
         context_embedding=None,
-        context_embedding_attention_mask=None,
+        context_embedding_mask=None,
         inputs_embeds=None,
         use_cache=None,
         output_attentions=None,
@@ -65,12 +65,12 @@ class BartDecoderWithPooledContext(BartDecoder):
         inputs_embeds = self.embed_tokens(input) * self.embed_scale
 
         if context_embedding is not None:
-            if context_embedding_attention_mask is None:
+            if context_embedding_mask is None:
                 raise ValueError("If passing in a context embedding, must also pass in a context attention mask")
-            context_embedding_attention_mask = (
-                context_embedding_attention_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
+            context_embedding_mask = (
+                context_embedding_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
             )
-            features = self.context_fc(context_embedding_attention_mask * context_embedding)
+            features = self.context_fc(context_embedding_mask * context_embedding)
             features = self.context_activation_fn(features)
             features = features.sum(axis=1).unsqueeze(1)
 
@@ -134,7 +134,7 @@ class BartWithPooledContextForCausalLM(BartForCausalLM):
         cross_attn_head_mask=None,
         past_key_values=None,
         context_embedding=None,
-        context_embedding_attention_mask=None,
+        context_embedding_mask=None,
         inputs_embeds=None,
         labels=None,
         use_cache=None,
@@ -159,7 +159,7 @@ class BartWithPooledContextForCausalLM(BartForCausalLM):
             cross_attn_head_mask=cross_attn_head_mask,
             past_key_values=past_key_values,
             context_embedding=context_embedding,
-            context_embedding_attention_mask=context_embedding_attention_mask,
+            context_embedding_mask=context_embedding_mask,
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_attentions=output_attentions,

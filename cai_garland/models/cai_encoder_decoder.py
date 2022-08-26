@@ -28,7 +28,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
     ):
         super().__init__(config, encoder, decoder)
         self.cur_context_embedding = None
-        self.cur_context_embedding_attention_mask = None
+        self.cur_context_embedding_mask = None
 
     def forward(
         self,
@@ -37,7 +37,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         decoder_input_ids=None,
         decoder_attention_mask=None,
         context_embedding=None,
-        context_embedding_attention_mask=None,
+        context_embedding_mask=None,
         encoder_outputs=None,
         past_key_values=None,
         inputs_embeds=None,
@@ -51,10 +51,10 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
     ):
         if context_embedding is None:
             context_embedding = self.cur_context_embedding
-            context_embedding_attention_mask = self.cur_context_embedding_attention_mask
+            context_embedding_mask = self.cur_context_embedding_mask
         else:
             kwargs["decoder_context_embedding"] = context_embedding
-            kwargs["decoder_context_embedding_attention_mask"] = context_embedding_attention_mask
+            kwargs["decoder_context_embedding_mask"] = context_embedding_mask
         return super().forward(
             input_ids,
             attention_mask,
@@ -73,14 +73,14 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         )
 
     @contextmanager
-    def prepare_model_for_generation(self, context_embedding, context_embedding_attention_mask):
+    def prepare_model_for_generation(self, context_embedding, context_embedding_mask):
         if context_embedding is not None:
             self.cur_context_embedding = context_embedding.to(self.device)
-        if context_embedding_attention_mask is not None:
-            self.cur_context_embedding_attention_mask = context_embedding_attention_mask.to(self.device)
+        if context_embedding_mask is not None:
+            self.cur_context_embedding_mask = context_embedding_mask.to(self.device)
         yield
         self.cur_context_embedding = None
-        self.cur_context_embedding_attention_mask = None
+        self.cur_context_embedding_mask = None
 
     def _prepare_decoder_input_ids_for_generation(
         self,
@@ -149,7 +149,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         else:
             num_beams = num_beams if num_beams is not None else self.config.num_beams
             self.cur_context_embedding = self.cur_context_embedding.repeat_interleave(num_beams, dim=0)
-            self.cur_context_embedding_attention_mask = self.cur_context_embedding_attention_mask.repeat_interleave(
+            self.cur_context_embedding_mask = self.cur_context_embedding_mask.repeat_interleave(
                 num_beams, dim=0
             )
         return super().generate(
