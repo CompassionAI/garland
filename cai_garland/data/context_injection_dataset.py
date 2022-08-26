@@ -1,14 +1,18 @@
 import os
 import zarr
+import pickle
+import shutil
 import hashlib
 import logging
 
 import numpy as np
+from transformers import AutoTokenizer, AutoModelForMaskedLM
 from torch.utils.data.dataset import Dataset as TorchDataset
 from tqdm.auto import tqdm
 
 
 DATA_BASE_PATH = os.environ['CAI_DATA_BASE_PATH']
+DATA_TEMP_PATH = os.environ['CAI_TEMP_PATH']
 
 logger = logging.getLogger(__name__)
 
@@ -28,18 +32,18 @@ class ContextInjectionDataset(TorchDataset):
     def hash_key(key):
         return hashlib.sha224(key.encode("utf-8")).hexdigest()
 
-    def __init__(self, base_dataset, context_file, context_lookup_key, context_name_key="context_embedding"):
+    def __init__(self, base_dataset, context_lookup_key, context_name_key="context_embedding"):
         super().__init__()
-        if not context_file.endswith(".zarr"):
-            raise ValueError("The context filename should end with .zarr, instead got " + context_file)
-        self.context_store = os.path.join(DATA_BASE_PATH, f"{context_file}")
-        self.context_lookup_key, self.context_name_key = context_lookup_key, context_name_key
         self.base_dataset = base_dataset
-
         if len(base_dataset) == 0:
             return
 
-        logger.info("Loading prebuilt contexts")
+        self.context_lookup_key, self.context_name_key = context_lookup_key, context_name_key
+        self.context_store = os.path.join(DATA_TEMP_PATH, "context_encodings.zarr")
+        if not os.path.exists(self.context_store):
+            raise ValueError("Context encodings Zarr store not found. Call prepare_context_embeddings first.")
+
+        logger.info("Loading built contexts")
         with zarr.DirectoryStore(self.context_store) as zarr_store:
             contexts = zarr.group(store=zarr_store)
             self.all_context_keys = set(contexts.array_keys())
@@ -48,17 +52,62 @@ class ContextInjectionDataset(TorchDataset):
 
         logger.info("Testing alignment with base dataset")
         not_found = []
-        for ex in tqdm(base_dataset):
+        for ex in tqdm(self.base_dataset):
             if not self.hash_key(ex['english']) in self.all_context_keys:
                 not_found.append(ex['english'])
         logger.info(
-            f"Not found {len(not_found)} examples, this is {len(not_found) / len(base_dataset):.2%} of the data")
+            f"Not found {len(not_found)} examples, this is {len(not_found) / len(self.base_dataset):.2%} of the data")
         if len(not_found) > 0:
             logger.info("First 10 bad examples:")
             for key in not_found[:10]:
                 logger.info(f"   {key}")
 
+    @staticmethod
+    def prepare_context_embeddings(context_file, context_encoder, cuda=False, batch_size=16):
+        logger.info("Resetting temporary Zarr store directory")
+        context_store = os.path.join(DATA_TEMP_PATH, "context_encodings.zarr")
+        if os.path.isdir(context_store):
+            shutil.rmtree(context_store)
+
+        logger.info("Loading target language contexts")
+        if not context_file.endswith(".pkl"):
+            raise ValueError("The context filename should end with .pkl, instead got " + context_file)
+        with open(os.path.join(DATA_BASE_PATH, context_file), 'rb') as f:
+            contexts = pickle.load(f)
+
+        logger.info("Loading context encoding model")
+        tokenizer = AutoTokenizer.from_pretrained(context_encoder)
+        model = AutoModelForMaskedLM.from_pretrained(context_encoder)
+        if getattr(model.config, "is_encoder_decoder", False):
+            model = model.model.encoder
+        model.eval()
+        if cuda:
+            model.cuda()
+
+        logger.info("Encoding contexts")
+        fragments, contexts = zip(*list(contexts.items()))
+        fragments, contexts = list(fragments), list(contexts)
+        with zarr.DirectoryStore(context_store) as zarr_store:
+            seen_hashes = set()
+            outputs = zarr.group(store=zarr_store, overwrite=True)
+            for batch_idx in tqdm(range(len(contexts) // batch_size), desc="Encoding"):
+                batch_fragments = fragments[batch_size * batch_idx : batch_size * (batch_idx + 1)]
+                batch = contexts[batch_size * batch_idx : batch_size * (batch_idx + 1)]
+                batch = tokenizer(batch, return_tensors="pt", padding=True)
+                encoded = model(**batch.to(model.device)).last_hidden_state.cpu().detach().numpy()
+                batch = batch.input_ids.cpu().numpy()
+                for frag_name, tokens, encoding in zip(batch_fragments, batch, encoded):
+                    end_idx = np.where(tokens == tokenizer.eos_token_id)[0][0]
+                    frag_name = ContextInjectionDataset.hash_key(frag_name)
+                    if frag_name in seen_hashes:
+                        raise ValueError("Hash collision!")
+                    seen_hashes.add(frag_name)
+                    outputs.array(frag_name, encoding[:end_idx + 1])
+
     def __getitem__(self, index):
+        if self.context_store is None:
+            raise ValueError("No prepared contexts found, first call prepare_context_embeddings.")
+
         base_item = self.base_dataset[index]
         context_key = self.hash_key(base_item[self.context_lookup_key])
         if context_key in self.all_context_keys:

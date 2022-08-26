@@ -185,7 +185,7 @@ def main(cfg):
     max_target_length = model.config.decoder.max_position_embeddings
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
     siamese = model.config.encoder.model_type == "siamese-encoder"
-    context_injection = cfg.data.get("context_injection", False)
+    context_injection = hasattr(cfg.data, "context_injection")
     if context_injection:
         model.force_preparing_model_for_generation = True
 
@@ -285,9 +285,12 @@ def main(cfg):
         logger.info(f"Subsampled validation set to size {len(eval_dataset)}")
 
     if context_injection:
-        train_dataset = ContextInjectionDataset(train_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
-        eval_dataset = ContextInjectionDataset(eval_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
-        test_dataset = ContextInjectionDataset(test_dataset, cfg.data.context_file, cfg.data.context_lookup_key)
+        pci_cfg = cfg.data.context_injection
+        ContextInjectionDataset.prepare_context_embeddings(
+            pci_cfg.context_file, pci_cfg.context_encoder, pci_cfg.cuda, pci_cfg.batch_size)
+        train_dataset = ContextInjectionDataset(train_dataset, pci_cfg.context_lookup_key)
+        eval_dataset = ContextInjectionDataset(eval_dataset, pci_cfg.context_lookup_key)
+        test_dataset = ContextInjectionDataset(test_dataset, pci_cfg.context_lookup_key)
 
     # Data collator
     quantize_padding = (training_cfg.fp16 or training_cfg.bf16) and not cfg.training_preprocess.no_padding_quantization

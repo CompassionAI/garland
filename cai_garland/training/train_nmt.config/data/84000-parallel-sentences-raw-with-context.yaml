@@ -11,9 +11,14 @@ source_lang: bo
 target_lang: en
 
 # Use context injection
-context_injection: true
-context_file: experiments/84000-parallel-sentences-raw-with-context/context_encodings.zarr
-context_lookup_key: english
+context_injection:
+  context_file: processed_datasets/84000-parallel-sentences-raw-with-context/contexts.pkl
+  context_lookup_key: english
+
+  context_encoder: facebook/bart-base
+
+  batch_size: 16
+  cuda: true
 
 # The token to force as the first generated token after the 'decoder_start_token_id'. Useful for multilingual models
 #   like mBART where the first generated token needs to be the target language token. Usually it is the target

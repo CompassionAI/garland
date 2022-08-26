@@ -2,8 +2,8 @@ import logging
 import re
 import os
 import sys
-import zarr
 import math
+import pickle
 import shutil
 import random
 from itertools import zip_longest
@@ -542,32 +542,8 @@ def _prep_context_dataset(flat_data, cfg, stage_cfg, _tokenizer):
         logger.warning(f"Failed finding parallel text in folio dataset {num_fails} times! This is "
                        f"{num_fails / len(fragments):.2%} of the data.")
 
-    logger.info("Loading context encoding model")
-    from transformers import AutoTokenizer, AutoModelForMaskedLM
-    tokenizer = AutoTokenizer.from_pretrained(stage_cfg.context_encoder)
-    model = AutoModelForMaskedLM.from_pretrained(stage_cfg.context_encoder)
-    if stage_cfg.model_is_encoder_decoder:
-        model = model.model.encoder
-    model.eval()
-    if cfg.compute.cuda:
-        model.cuda()
-
-    with zarr.DirectoryStore(os.path.join(cfg.output.output_dir, "context_encodings.zarr")) as zarr_store:
-        seen_hashes = set()
-        outputs = zarr.group(store=zarr_store, overwrite=True)
-        for batch_idx in tqdm(range(len(contexts) // cfg.compute.batch_size), desc="Encoding"):
-            batch_fragments = fragments[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
-            batch = contexts[cfg.compute.batch_size * batch_idx : cfg.compute.batch_size * (batch_idx + 1)]
-            batch = tokenizer(batch, return_tensors="pt", padding=True)
-            encoded = model(**batch.to(model.device)).last_hidden_state.cpu().detach().numpy()
-            batch = batch.input_ids.cpu().numpy()
-            for frag_name, tokens, encoding in zip(batch_fragments, batch, encoded):
-                end_idx = np.where(tokens == tokenizer.eos_token_id)[0][0]
-                frag_name = ContextInjectionDataset.hash_key(frag_name)
-                if frag_name in seen_hashes:
-                    raise ValueError("Hash collision!")
-                seen_hashes.add(frag_name)
-                outputs.array(frag_name, encoding[:end_idx + 1])
+    with open(os.path.join(cfg.output.output_dir, "contexts.pkl"), "wb") as f:
+        pickle.dump(dict(zip(fragments, contexts)), f)
 
 
 def _filter_skips(bo_lines, en_lines):
