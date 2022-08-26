@@ -19,8 +19,8 @@ class ContextDataCollatorForSeq2Seq:
         if return_tensors is None:
             return_tensors = self.return_tensors
 
-        context_key, attention_key = self.context_key, self.context_key + "_attention_mask"
-        context_features = {context_key, attention_key}
+        context_key, mask_key = self.context_key, self.context_key + "_mask"
+        context_features = {context_key, mask_key}
         base_features = [
             {
                 key: val
@@ -33,7 +33,7 @@ class ContextDataCollatorForSeq2Seq:
         
         pad_to = max([f[self.context_key].shape[0] for f in features])
 
-        key = attention_key
+        key = mask_key
         stack = []
         for feature in features:
             stack.append(np.pad(feature[key], (0, pad_to - feature[key].shape[0])))
@@ -47,7 +47,7 @@ class ContextDataCollatorForSeq2Seq:
 
         if not return_tensors == "pt":
             raise ValueError("Only PyTorch tensors currently supported")
-        res[attention_key] = torch.LongTensor(res[attention_key])
+        res[mask_key] = torch.LongTensor(res[mask_key])
         res[context_key] = torch.FloatTensor(res[context_key])
 
         return res
