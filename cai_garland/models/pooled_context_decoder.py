@@ -45,7 +45,7 @@ class BartDecoderWithPooledContext(BartDecoder):
     context into the token embedding slot for the starting token.
     """
 
-    context_architecture = ContextArchitecture.DenseFeatureTransformer
+    context_architecture = ContextArchitecture.BartEncoderLayerOnTop
 
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config, embed_tokens=embed_tokens)
@@ -90,6 +90,7 @@ class BartDecoderWithPooledContext(BartDecoder):
                 )
                 features = self.context_fc(context_embedding_mask * context_embedding)
                 features = self.context_activation_fn(features)
+                features = features.sum(axis=1)
             elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
                 context_embedding_mask = _expand_mask(context_embedding_mask, inputs_embeds.dtype)
                 features = self.context_layer(
@@ -98,7 +99,8 @@ class BartDecoderWithPooledContext(BartDecoder):
                     layer_head_mask=None,
                     output_attentions=False,
                 )[0]
-            features = features.sum(axis=1).unsqueeze(1)
+                features = features[:,0,:]
+            features = features.unsqueeze(1)
 
             if inputs_embeds.shape[1] > 1:
                 inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
