@@ -81,6 +81,7 @@ def batch(translator, mode_cfg, generation_cfg):
             ):
                 if mode_cfg.output_parallel_translation:
                     out_f.write(src_segment + '\n')
+                out_f.write('\n')
                 out_f.write(tgt_segment + '\n')
                 out_f.write('\n')
                 out_f.flush()
