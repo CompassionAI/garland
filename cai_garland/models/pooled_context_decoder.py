@@ -35,7 +35,7 @@ class BartDecoderWithPooledContext(BartDecoder):
     """
 
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
-        super().__init__(config)
+        super().__init__(config, embed_tokens=embed_tokens)
         self.context_fc = nn.Linear(in_features=config.d_model, out_features=config.d_model)
         self.context_activation_fn = GELUActivation()
 
