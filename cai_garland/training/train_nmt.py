@@ -291,7 +291,12 @@ def main(cfg):
     if context_injection:
         pci_cfg = cfg.data.context_injection
         ContextInjectionDataset.prepare_context_embeddings(
-            pci_cfg.context_file, pci_cfg.context_encoder, pci_cfg.cuda, pci_cfg.batch_size)
+            pci_cfg.context_file,
+            pci_cfg.context_encoder,
+            pci_cfg.cuda,
+            pci_cfg.batch_size,
+            overwrite=getattr(pci_cfg, "overwrite_existing_embeddings", False)
+        )
         train_dataset = ContextInjectionDataset(train_dataset, pci_cfg.context_lookup_key)
         eval_dataset = ContextInjectionDataset(eval_dataset, pci_cfg.context_lookup_key)
         test_dataset = ContextInjectionDataset(test_dataset, pci_cfg.context_lookup_key)

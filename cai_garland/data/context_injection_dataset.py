@@ -63,11 +63,14 @@ class ContextInjectionDataset(TorchDataset):
                 logger.info(f"   {key}")
 
     @staticmethod
-    def prepare_context_embeddings(context_file, context_encoder, cuda=False, batch_size=16):
-        logger.info("Resetting temporary Zarr store directory")
+    def prepare_context_embeddings(context_file, context_encoder, cuda=False, batch_size=16, overwrite=False):
         context_store = os.path.join(DATA_TEMP_PATH, "context_encodings.zarr")
         if os.path.isdir(context_store):
-            shutil.rmtree(context_store)
+            if overwrite:
+                logger.warning("Resetting temporary Zarr store directory")
+                shutil.rmtree(context_store)
+            else:
+                return
 
         logger.info("Loading target language contexts")
         if not context_file.endswith(".pkl"):
