@@ -1,6 +1,7 @@
 # pylint: disable=no-member
 import copy
 from typing import Optional
+from enum import Enum
 
 import torch
 from torch import nn
@@ -8,7 +9,12 @@ from torch.nn import CrossEntropyLoss
 
 from transformers import AutoConfig, AutoModelForCausalLM, BartConfig, BartPretrainedModel, BartForCausalLM
 from transformers.activations import GELUActivation
-from transformers.models.bart.modeling_bart import BartDecoder, CausalLMOutputWithCrossAttentions
+from transformers.models.bart.modeling_bart import (
+    BartDecoder,
+    CausalLMOutputWithCrossAttentions,
+    BartEncoderLayer,
+    _expand_mask
+)
 from transformers.utils import logging
 
 
@@ -29,15 +35,26 @@ class BartWithPooledContextConfig(BartConfig):
 AutoConfig.register(BartWithPooledContextConfig.model_type, BartWithPooledContextConfig)
 
 
+class ContextArchitecture(Enum):
+    DenseFeatureTransformer = 1
+    BartEncoderLayerOnTop = 2
+
+
 class BartDecoderWithPooledContext(BartDecoder):
     """A BART decoder with a tweaked token embedding layer that injects a learned layer to pool encoded target language
     context into the token embedding slot for the starting token.
     """
 
+    context_architecture = ContextArchitecture.DenseFeatureTransformer
+
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config, embed_tokens=embed_tokens)
-        self.context_fc = nn.Linear(in_features=config.d_model, out_features=config.d_model)
-        self.context_activation_fn = GELUActivation()
+
+        if BartDecoderWithPooledContext.context_architecture == ContextArchitecture.DenseFeatureTransformer:
+            self.context_fc = nn.Linear(in_features=config.d_model, out_features=config.d_model)
+            self.context_activation_fn = GELUActivation()
+        elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
+            self.context_layer = BartEncoderLayer(config)
 
     def forward(
         self,
@@ -67,11 +84,20 @@ class BartDecoderWithPooledContext(BartDecoder):
         if context_embedding is not None:
             if context_embedding_mask is None:
                 raise ValueError("If passing in a context embedding, must also pass in a context attention mask")
-            context_embedding_mask = (
-                context_embedding_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
-            )
-            features = self.context_fc(context_embedding_mask * context_embedding)
-            features = self.context_activation_fn(features)
+            if BartDecoderWithPooledContext.context_architecture == ContextArchitecture.DenseFeatureTransformer:
+                context_embedding_mask = (
+                    context_embedding_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
+                )
+                features = self.context_fc(context_embedding_mask * context_embedding)
+                features = self.context_activation_fn(features)
+            elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
+                context_embedding_mask = _expand_mask(context_embedding_mask, inputs_embeds.dtype)
+                features = self.context_layer(
+                    context_embedding,
+                    context_embedding_mask,
+                    layer_head_mask=None,
+                    output_attentions=False,
+                )[0]
             features = features.sum(axis=1).unsqueeze(1)
 
             if inputs_embeds.shape[1] > 1:
@@ -90,6 +116,7 @@ class BartDecoderWithPooledContext(BartDecoder):
             output_attentions,
             output_hidden_states,
             return_dict,
+            **kwargs
         )
 
 
