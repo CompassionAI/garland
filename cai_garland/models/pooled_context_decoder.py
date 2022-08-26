@@ -45,7 +45,7 @@ class BartDecoderWithPooledContext(BartDecoder):
     context into the token embedding slot for the starting token.
     """
 
-    context_architecture = ContextArchitecture.BartEncoderLayerOnTop
+    context_architecture = ContextArchitecture.DenseFeatureTransformer
 
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config, embed_tokens=embed_tokens)
