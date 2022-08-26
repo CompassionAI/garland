@@ -146,6 +146,10 @@ def main(cfg):
     if "pretrained_checkpoint" in cfg:
         logger.info(f"Loading pretrained weights from checkpoint {cfg.pretrained_checkpoint}")
         model = type(model).from_pretrained(cfg.pretrained_checkpoint)
+    
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    num_params = sum([np.prod(p.size()) for p in model_parameters])
+    logger.info(f"Model has {num_params:,} trainable parameters.")
 
     logger.info("Loading training dataset")
     train_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.TRAIN)
