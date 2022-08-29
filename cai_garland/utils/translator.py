@@ -94,19 +94,17 @@ class Translator:
         if self.context_encoder is not None:
             self.context_encoder.cpu()
 
-    def prepare_context_encoder(self, hf_model_name, is_encoder_decoder=False):
+    def prepare_context_encoder(self, hf_model_name):
         """Prepare a context encoder for translation with context.
         
         Args:
             hf_model_name: A model name in the Hugging Face model registry for context encoding.
-            is_encoder_decoder: Is the model an encoder-decoder architecture? Is yes, take the encoder for the context
-                model. For example, this argument is True for BART and False for RoBERTa.
         """
         logger.info("Loading context tokenizer")
         self.context_tokenizer = AutoTokenizer.from_pretrained(hf_model_name)
         logger.info("Loading context encoder")
         self.context_encoder = AutoModelForMaskedLM.from_pretrained(hf_model_name)
-        if is_encoder_decoder:
+        if getattr(self.context_encoder.config, "is_encoder_decoder", False):
             self.context_encoder = self.context_encoder.model.encoder
         self.context_encoder.eval()
         if self._cuda:
