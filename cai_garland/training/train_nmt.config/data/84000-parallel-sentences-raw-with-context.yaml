@@ -15,10 +15,10 @@ context_injection:
   context_file: processed_datasets/84000-parallel-sentences-raw-with-context/contexts.pkl
   context_lookup_key: english
 
-  raw_contexts: false
+  raw_contexts: true
   context_encoder: facebook/bart-base
   batch_size: 16
-  cuda: true
+  # cuda: true
   overwrite_existing_embeddings: false
 
 # The token to force as the first generated token after the 'decoder_start_token_id'. Useful for multilingual models

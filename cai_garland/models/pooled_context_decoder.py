@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
-from transformers import AutoConfig, AutoModelForCausalLM, BartConfig, BartPretrainedModel, BartForCausalLM
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, BartConfig, BartPretrainedModel, BartForCausalLM
 from transformers.activations import GELUActivation
 from transformers.models.bart.modeling_bart import (
     BartDecoder,
@@ -38,6 +38,7 @@ AutoConfig.register(BartWithPooledContextConfig.model_type, BartWithPooledContex
 class ContextArchitecture(Enum):
     DenseFeatureTransformer = 1
     BartEncoderLayerOnTop = 2
+    FullBartEncoder = 3
 
 
 class BartDecoderWithPooledContext(BartDecoder):
@@ -45,7 +46,7 @@ class BartDecoderWithPooledContext(BartDecoder):
     context into the token embedding slot for the starting token.
     """
 
-    context_architecture = ContextArchitecture.DenseFeatureTransformer
+    context_architecture = ContextArchitecture.FullBartEncoder
 
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config, embed_tokens=embed_tokens)
@@ -55,6 +56,9 @@ class BartDecoderWithPooledContext(BartDecoder):
             self.context_activation_fn = GELUActivation()
         elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
             self.context_layer = BartEncoderLayer(config)
+        elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.FullBartEncoder:
+            model = AutoModel.from_pretrained("facebook/bart-base")
+            self.context_encoder = model.encoder
         else:
             raise ValueError("Unknown context architecture")
 
@@ -109,7 +113,9 @@ class BartDecoderWithPooledContext(BartDecoder):
                 )[0]
                 features = features[:,0,:]
             else:
-                raise ValueError("Unknown context architecture")
+                features = self.context_encoder(
+                    input_ids=context_embedding, attention_mask=context_embedding_mask).last_hidden_state[:,0,:]
+
             features = features.unsqueeze(1)
 
             if inputs_embeds.shape[1] > 1:
