@@ -32,7 +32,7 @@ class ContextInjectionDataset(TorchDataset):
     def hash_key(key):
         return hashlib.sha224(key.encode("utf-8")).hexdigest()
 
-    def __init__(self, base_dataset, context_lookup_key, context_name_key="context_embedding"):
+    def __init__(self, base_dataset, context_lookup_key, context_name_key="context_embedding", raw_contexts=False):
         super().__init__()
         self.base_dataset = base_dataset
         if len(base_dataset) == 0:
@@ -42,12 +42,15 @@ class ContextInjectionDataset(TorchDataset):
         self.context_store = os.path.join(DATA_TEMP_PATH, "context_encodings.zarr")
         if not os.path.exists(self.context_store):
             raise ValueError("Context encodings Zarr store not found. Call prepare_context_embeddings first.")
-
+        self.raw_contexts = raw_contexts
         logger.info("Loading built contexts")
         with zarr.DirectoryStore(self.context_store) as zarr_store:
             contexts = zarr.group(store=zarr_store)
             self.all_context_keys = set(contexts.array_keys())
-            self.embed_dim = contexts[next(iter(self.all_context_keys))].shape[-1]
+            if not self.raw_contexts:
+                self.embed_dim = contexts[next(iter(self.all_context_keys))].shape[-1]
+            else:
+                self.embed_dim = 1
         self.empty_embedding = np.empty((0, self.embed_dim))
 
         logger.info("Testing alignment with base dataset")
@@ -56,14 +59,22 @@ class ContextInjectionDataset(TorchDataset):
             if not self.hash_key(ex['english']) in self.all_context_keys:
                 not_found.append(ex['english'])
         logger.info(
-            f"Not found {len(not_found)} examples, this is {len(not_found) / len(self.base_dataset):.2%} of the data")
+            f"Not found {len(not_found)} examples, this is {len(not_found) / len(self.base_dataset):.2%} of the "
+                "data")
         if len(not_found) > 0:
             logger.info("First 10 bad examples:")
             for key in not_found[:10]:
                 logger.info(f"   {key}")
 
     @staticmethod
-    def prepare_context_embeddings(context_file, context_encoder, cuda=False, batch_size=16, overwrite=False):
+    def prepare_context_embeddings(
+        context_file,
+        context_encoder,
+        raw_contexts=False,
+        cuda=False,
+        batch_size=16,
+        overwrite=False
+    ):
         context_store = os.path.join(DATA_TEMP_PATH, "context_encodings.zarr")
         if os.path.isdir(context_store):
             if overwrite:
@@ -80,12 +91,13 @@ class ContextInjectionDataset(TorchDataset):
 
         logger.info("Loading context encoding model")
         tokenizer = AutoTokenizer.from_pretrained(context_encoder)
-        model = AutoModelForMaskedLM.from_pretrained(context_encoder)
-        if getattr(model.config, "is_encoder_decoder", False):
-            model = model.model.encoder
-        model.eval()
-        if cuda:
-            model.cuda()
+        if not raw_contexts:
+            model = AutoModelForMaskedLM.from_pretrained(context_encoder)
+            if getattr(model.config, "is_encoder_decoder", False):
+                model = model.model.encoder
+            model.eval()
+            if cuda:
+                model.cuda()
 
         logger.info("Encoding contexts")
         fragments, contexts = zip(*list(contexts.items()))
@@ -97,7 +109,10 @@ class ContextInjectionDataset(TorchDataset):
                 batch_fragments = fragments[batch_size * batch_idx : batch_size * (batch_idx + 1)]
                 batch = contexts[batch_size * batch_idx : batch_size * (batch_idx + 1)]
                 batch = tokenizer(batch, return_tensors="pt", padding=True)
-                encoded = model(**batch.to(model.device)).last_hidden_state.cpu().detach().numpy()
+                if raw_contexts:
+                    encoded = batch['input_ids'].cpu().detach().numpy()
+                else:
+                    encoded = model(**batch.to(model.device)).last_hidden_state.cpu().detach().numpy()
                 batch = batch.input_ids.cpu().numpy()
                 for frag_name, tokens, encoding in zip(batch_fragments, batch, encoded):
                     end_idx = np.where(tokens == tokenizer.eos_token_id)[0][0]
@@ -108,7 +123,7 @@ class ContextInjectionDataset(TorchDataset):
                     outputs.array(frag_name, encoding[:end_idx + 1])
 
     def __getitem__(self, index):
-        if self.context_store is None:
+        if self.context_store is None and not self.raw_contexts:
             raise ValueError("No prepared contexts found, first call prepare_context_embeddings.")
 
         base_item = self.base_dataset[index]
@@ -123,7 +138,14 @@ class ContextInjectionDataset(TorchDataset):
         else:
             context_embed = self.empty_embedding
         base_item[self.context_name_key] = context_embed
-        base_item[self.context_name_key + "_mask"] = np.ones((context_embed.shape[:-1]))
+        if self.raw_contexts:
+            context_mask_shape = context_embed.shape
+        else:
+            context_mask_shape = context_embed.shape[:-1]
+        base_item[self.context_name_key + "_mask"] = np.ones(context_mask_shape, dtype=np.int32)
+        if self.raw_contexts:
+            for key in [self.context_name_key, self.context_name_key + "_mask"]:
+                base_item[key] = base_item[key].tolist()
         return base_item
 
     def __len__(self):

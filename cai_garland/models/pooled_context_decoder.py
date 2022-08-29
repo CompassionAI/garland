@@ -55,6 +55,8 @@ class BartDecoderWithPooledContext(BartDecoder):
             self.context_activation_fn = GELUActivation()
         elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
             self.context_layer = BartEncoderLayer(config)
+        else:
+            raise ValueError("Unknown context architecture")
 
     def forward(
         self,
@@ -85,6 +87,9 @@ class BartDecoderWithPooledContext(BartDecoder):
             if context_embedding_mask is None:
                 raise ValueError("If passing in a context embedding, must also pass in a context attention mask")
             if BartDecoderWithPooledContext.context_architecture == ContextArchitecture.DenseFeatureTransformer:
+                if not len(context_embedding.shape) == 3:
+                    raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feding a raw "
+                                     "context dataset?")
                 context_embedding_mask = (
                     context_embedding_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
                 )
@@ -92,6 +97,9 @@ class BartDecoderWithPooledContext(BartDecoder):
                 features = self.context_activation_fn(features)
                 features = features.sum(axis=1)
             elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
+                if not len(context_embedding.shape) == 3:
+                    raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feding a raw "
+                                     "context dataset?")
                 context_embedding_mask = _expand_mask(context_embedding_mask, inputs_embeds.dtype)
                 features = self.context_layer(
                     context_embedding,
@@ -100,6 +108,8 @@ class BartDecoderWithPooledContext(BartDecoder):
                     output_attentions=False,
                 )[0]
                 features = features[:,0,:]
+            else:
+                raise ValueError("Unknown context architecture")
             features = features.unsqueeze(1)
 
             if inputs_embeds.shape[1] > 1:

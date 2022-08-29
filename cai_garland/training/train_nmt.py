@@ -293,13 +293,17 @@ def main(cfg):
         ContextInjectionDataset.prepare_context_embeddings(
             pci_cfg.context_file,
             pci_cfg.context_encoder,
-            pci_cfg.cuda,
-            pci_cfg.batch_size,
+            raw_contexts=pci_cfg.raw_contexts,
+            cuda=getattr(pci_cfg, "cuda", False),
+            batch_size=getattr(pci_cfg, "batch_size", 1),
             overwrite=getattr(pci_cfg, "overwrite_existing_embeddings", False)
         )
-        train_dataset = ContextInjectionDataset(train_dataset, pci_cfg.context_lookup_key)
-        eval_dataset = ContextInjectionDataset(eval_dataset, pci_cfg.context_lookup_key)
-        test_dataset = ContextInjectionDataset(test_dataset, pci_cfg.context_lookup_key)
+        train_dataset = ContextInjectionDataset(
+            train_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
+        eval_dataset = ContextInjectionDataset(
+            eval_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
+        test_dataset = ContextInjectionDataset(
+            test_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
 
     # Data collator
     quantize_padding = (training_cfg.fp16 or training_cfg.bf16) and not cfg.training_preprocess.no_padding_quantization
@@ -326,9 +330,13 @@ def main(cfg):
             )
         if context_injection:
             logger.debug("Wrapping in ContextDataCollatorForSeq2Seq")
+            with tokenizer.as_target_tokenizer():
+                tgt_pad_token_id = tokenizer.pad_token_id
             data_collator = ContextDataCollatorForSeq2Seq(
                 data_collator,
-                train_dataset.context_name_key
+                train_dataset.context_name_key,
+                raw_context=pci_cfg.raw_contexts,
+                raw_pad_token_id=tgt_pad_token_id
             )
 
     # Metric

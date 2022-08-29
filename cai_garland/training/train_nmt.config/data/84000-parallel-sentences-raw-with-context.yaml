@@ -15,6 +15,7 @@ context_injection:
   context_file: processed_datasets/84000-parallel-sentences-raw-with-context/contexts.pkl
   context_lookup_key: english
 
+  raw_contexts: false
   context_encoder: facebook/bart-base
   batch_size: 16
   cuda: true
