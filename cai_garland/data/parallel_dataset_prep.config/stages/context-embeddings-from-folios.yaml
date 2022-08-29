@@ -25,4 +25,3 @@ context-embeddings-from-folios:
 
   # Hugging Face model name to use for context encoding
   context_encoder: facebook/bart-base
-  model_is_encoder_decoder: true

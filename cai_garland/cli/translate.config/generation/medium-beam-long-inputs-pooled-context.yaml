@@ -9,7 +9,6 @@ generation:
 
     context_encoder:
       hf_model_name: facebook/bart-base
-      model_is_encoder_decoder: true
 
   generator_kwargs:
     repetition_penalty: 2.2
