@@ -39,6 +39,8 @@ class ContextArchitecture(Enum):
     DenseFeatureTransformer = 1
     BartEncoderLayerOnTop = 2
     FullBartEncoder = 3
+    BartEncoderFirstLayerOnly = 4
+    FrozenEmbeddingsWithTwoLayers = 5
 
 
 class BartDecoderWithPooledContext(BartDecoder):
@@ -46,7 +48,7 @@ class BartDecoderWithPooledContext(BartDecoder):
     context into the token embedding slot for the starting token.
     """
 
-    context_architecture = ContextArchitecture.FullBartEncoder
+    context_architecture = ContextArchitecture.FrozenEmbeddingsWithTwoLayers
 
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config, embed_tokens=embed_tokens)
@@ -58,6 +60,18 @@ class BartDecoderWithPooledContext(BartDecoder):
             self.context_layer = BartEncoderLayer(config)
         elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.FullBartEncoder:
             model = AutoModel.from_pretrained("facebook/bart-base")
+            self.context_encoder = model.encoder
+        elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly:
+            model = AutoModel.from_pretrained("facebook/bart-base")
+            model.encoder.layers = model.encoder.layers[:1]
+            self.context_encoder = model.encoder
+        elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
+            model = AutoModel.from_pretrained("facebook/bart-base")
+            model.encoder.layers = model.encoder.layers[:2]
+            for p in model.encoder.embed_tokens.parameters():
+                p.requires_grad = False
+            for p in model.encoder.embed_positions.parameters():
+                p.requires_grad = False
             self.context_encoder = model.encoder
         else:
             raise ValueError("Unknown context architecture")
@@ -112,9 +126,13 @@ class BartDecoderWithPooledContext(BartDecoder):
                     output_attentions=False,
                 )[0]
                 features = features[:,0,:]
-            else:
+            elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop or \
+                 BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly or \
+                 BartDecoderWithPooledContext.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
                 features = self.context_encoder(
                     input_ids=context_embedding, attention_mask=context_embedding_mask).last_hidden_state[:,0,:]
+            else:
+                raise ValueError("Unknown context architecture")
 
             features = features.unsqueeze(1)
 
