@@ -34,7 +34,7 @@ def _make_named_tokenizer(packed_name):
 
         tokenizer_name = cai_config['tokenizer_name']
         logger.debug(f"Loading tokenizer {tokenizer_name}")
-        tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(tokenizer_name), keep_accents=True)
+        tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(tokenizer_name))
     elif packed_name.startswith('hf:'):
         logging.debug(f"Loading tokenizer {packed_name} from Hugging Face")
 
