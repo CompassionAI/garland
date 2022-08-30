@@ -1,0 +1,2 @@
+model_ckpt: experiments/olive-cormorant-bart-pooled-context-cased
+model_size: base-base
