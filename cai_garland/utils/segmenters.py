@@ -20,11 +20,32 @@ class SegmenterOpeningShad:
         return ['།' + sent if not sent[0] == '།' else sent for sent in bo_text.strip().split(' །') if len(sent) > 0]
 
 
-
 class SegmenterClosingShad:
+    def __init__(self, prepend_shad: bool = True) -> None:
+        self.prepend_shad = prepend_shad
+
     def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
-        bo_text = _prepend_shad_if_needed(bo_text)
+        if self.prepend_shad:
+            bo_text = _prepend_shad_if_needed(bo_text)
         return [x.strip() + '།' for x in bo_text.strip().split('། ') if len(x.strip()) > 0]
+
+
+class SegmenterOpeningOrClosingShad:
+    def __call__(self, bo_text: str, translator=None, **kwargs: Any) -> List[str]:
+        if translator is None:
+            raise ValueError("SegmenterOpeningOrClosingShad needs to have the translator helper class passed in")
+        bo_segments = SegmenterOpeningShad()(bo_text)
+        secondary_segmenter = SegmenterTargetTokenCount()
+        max_length = kwargs.get("max_length", translator.model.encoder.max_length)
+        available_space = max_length - translator.tokenizer.num_special_tokens_to_add(pair=False)
+
+        res = []
+        for bo_segment in bo_segments:
+            if len(translator.tokenizer.encode(bo_segment, add_special_tokens=False)) > available_space:
+                res.extend(secondary_segmenter(bo_segment, max_length=max_length, translator=translator))
+            else:
+                res.append(bo_segment)
+        return res
 
 
 class SegmenterDoubleShad:
@@ -53,7 +74,7 @@ class SegmenterTargetTokenCount:
         #   segmentation in the second step there may still be segments of length longer than the encoder length, in
         #   which case their encoding will fail during translation (or they need to be further segmented downstream).
         if translator is None:
-            raise ValueError("target_token_count_segmenter needs to have the translator helper class passed in")
+            raise ValueError("SegmenterTargetTokenCount needs to have the translator helper class passed in")
         bo_segments = SegmenterOpeningShad()(bo_text)
         available_space = kwargs.get("max_length", translator.model.encoder.max_length) - \
             translator.tokenizer.num_special_tokens_to_add(pair=False)
@@ -67,7 +88,7 @@ class SegmenterTargetTokenCount:
             new_segments = []
             for bo_segment, tkn_length in zip(bo_segments, bo_token_lengths):
                 if tkn_length > available_space:
-                    new_segments.extend(SegmenterClosingShad()(bo_segment))
+                    new_segments.extend(SegmenterClosingShad(prepend_shad=False)(bo_segment))
                 else:
                     new_segments.append(bo_segment)
             bo_segments = new_segments

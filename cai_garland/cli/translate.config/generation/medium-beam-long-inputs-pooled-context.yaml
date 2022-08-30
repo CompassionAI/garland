@@ -29,10 +29,10 @@ segmentation:
   #
   #   This is a single function class in cai_garland.utils.segmenters
   #
-  #   The recommended segmenters are: SegmenterNone, SegmenterOpeningShad, SegmenterTargetTokenCount
+  #   The recommended segmenters are: SegmenterNone, SegmenterOpeningOrClosingShad, SegmenterTargetTokenCount
   soft_segmentation:
-    _target_: cai_garland.utils.segmenters.SegmenterOpeningShad
-  soft_segmenter_kwargs: {}
+    _target_: cai_garland.utils.segmenters.SegmenterOpeningOrClosingShad
+  soft_segmenter_kwargs: {max_length: 64}
 
 processing:
   # Preprocessing is applied after hard segmentation (if any) but before soft segmentation (if any).
