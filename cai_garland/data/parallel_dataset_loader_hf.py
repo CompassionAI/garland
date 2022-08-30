@@ -38,7 +38,8 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "registers_3_only": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_3_only_no_splits": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_2_only": "processed_datasets/84000-parallel-sentences-2-registers-only",
-        "raw_with_context": "experiments/84000-parallel-sentences-raw-with-context",
+        "raw_with_context": "processed_datasets/84000-parallel-sentences-raw-with-context",
+        "raw_with_context_cased": "experiments/84000-parallel-sentences-raw-with-context-cased",
     }
 
     BUILDER_CONFIGS = [
@@ -71,6 +72,11 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             name="raw_with_context",
             version=datasets.Version("0.2.0", ""),
             description="Dataset for a Tibetan encoder with no registers, no augmentation, and context embeddings",
+        ),
+        ParallelSentences84000Config(
+            name="raw_with_context_cased",
+            version=datasets.Version("0.2.0", ""),
+            description="Cased dataset with no registers, no augmentation, and context embeddings",
         ),
     ]
 

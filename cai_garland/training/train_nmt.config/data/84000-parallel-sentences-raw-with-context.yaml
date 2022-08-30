@@ -2,7 +2,7 @@
 dataset_loader: cai_garland/data/parallel_dataset_loader_hf.py
 
 # The name of the dataset to load from the loader file
-dataset_config: raw_with_context
+dataset_config: raw_with_context_cased
 
 # Source language id for translation
 source_lang: bo
@@ -12,7 +12,7 @@ target_lang: en
 
 # Use context injection
 context_injection:
-  context_file: processed_datasets/84000-parallel-sentences-raw-with-context/contexts.pkl
+  context_file: experiments/84000-parallel-sentences-raw-with-context-cased/contexts.pkl
   context_lookup_key: english
 
   raw_contexts: false

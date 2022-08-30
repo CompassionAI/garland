@@ -25,7 +25,7 @@ dataset:
       - _target_: cai_garland.utils.str_processors.ProcessorStrip
       - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
       - _target_: cai_garland.utils.str_processors.ProcessorRemoveAccents
-      - _target_: cai_garland.utils.str_processors.ProcessorLowerCase
+      # - _target_: cai_garland.utils.str_processors.ProcessorLowerCase
       - _target_: cai_garland.utils.str_processors.ProcessorRemoveBracketed
         _args_: ["{([", "])}"]
       - _target_: cai_garland.utils.str_processors.ProcessorRemoveCharacters
