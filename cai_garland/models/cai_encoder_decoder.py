@@ -52,7 +52,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         if context_embedding is None:
             context_embedding = self.cur_context_embedding
             context_embedding_mask = self.cur_context_embedding_mask
-        else:
+        if context_embedding is not None:
             kwargs["decoder_context_embedding"] = context_embedding
             kwargs["decoder_context_embedding_mask"] = context_embedding_mask
         return super().forward(
