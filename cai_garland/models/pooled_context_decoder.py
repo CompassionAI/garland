@@ -127,6 +127,7 @@ class BartDecoderWithPooledContext(BartDecoder):
                 )[0]
                 features = features[:,0,:]
             elif BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop or \
+                 BartDecoderWithPooledContext.context_architecture == ContextArchitecture.FullBartEncoder or \
                  BartDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly or \
                  BartDecoderWithPooledContext.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
                 features = self.context_encoder(
