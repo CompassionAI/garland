@@ -15,19 +15,18 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._target_mode = False
-        self.target_tokenizer_remapping_forward = None
-        self.target_tokenizer_remapping_backward = None
+        self.tokenizer_remapping_forward = None
+        self.tokenizer_remapping_backward = None
         self.used_tokens = range(self.vocab_size)
 
     def remap_tokens(self, remapping_file):
         with open(os.path.join(os.environ['CAI_DATA_BASE_PATH'], remapping_file), 'r') as f:
             self.used_tokens = list(map(int, f.readlines()))
-        self.target_tokenizer_remapping_forward = {
+        self.tokenizer_remapping_forward = {
             token_id: line_num
             for line_num, token_id in enumerate(self.used_tokens)
         }
-        self.target_tokenizer_remapping_backward = {
+        self.tokenizer_remapping_backward = {
             line_num: token_id
             for line_num, token_id in enumerate(self.used_tokens)
         }
@@ -42,33 +41,21 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         with open(os.path.join(os.environ['CAI_DATA_BASE_PATH'], remapping_file), 'w') as f:
             f.writelines(map(lambda x: str(x) + '\n', res_vocab))
 
-    def _switch_to_input_mode(self):
-        self._target_mode = False
-        return super()._switch_to_input_mode()
-
-    def _switch_to_target_mode(self):
-        self._target_mode = True
-        return super()._switch_to_target_mode()
-
     def _fix_target_tokens(self, input):
         if self.fix_nllb_tokenizer_target_language_tokens:
             input["input_ids"] = [x[-2:] + x[0:-2] + [x[-2]] for x in input.input_ids]
             input["attention_mask"] = [x + [1] for x in input.attention_mask]
-        if self.target_tokenizer_remapping_forward is not None:
-            input["input_ids"] = [[self.target_tokenizer_remapping_forward[x] for x in ex] for ex in input.input_ids]
+        if self.tokenizer_remapping_forward is not None:
+            input["input_ids"] = [[self.tokenizer_remapping_forward[x] for x in ex] for ex in input.input_ids]
         return input
 
     def _encode_plus(self, *args, **kwargs):
-        if self._target_mode:
-            return self._fix_target_tokens(super()._encode_plus(*args, **kwargs))
-        return super()._encode_plus(*args, **kwargs)
+        return self._fix_target_tokens(super()._encode_plus(*args, **kwargs))
 
     def _batch_encode_plus(self, *args, **kwargs):
-        if self._target_mode:
-            return self._fix_target_tokens(super()._batch_encode_plus(*args, **kwargs))
-        return super()._batch_encode_plus(*args, **kwargs)
+        return self._fix_target_tokens(super()._batch_encode_plus(*args, **kwargs))
 
     def _decode(self, *args, **kwargs):
-        if self.target_tokenizer_remapping_backward is not None:
-            kwargs['token_ids'] = [self.target_tokenizer_remapping_backward[x] for x in kwargs['token_ids']]
+        if self.tokenizer_remapping_backward is not None:
+            kwargs['token_ids'] = [self.tokenizer_remapping_backward[x] for x in kwargs['token_ids']]
         return self._tokenizer._decode(*args, **kwargs)
