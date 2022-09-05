@@ -98,6 +98,8 @@ def main(cfg):
 
     translator = Translator(os.path.join(cfg.model.model_ckpt, cfg.model.model_size))
     translator.num_beams = cfg.generation.generation.num_beams
+    if hasattr(cfg.model, "decoding_length"):
+        translator.decoding_length = cfg.model.decoding_length
     if hasattr(cfg.generation.generation, "pooled_context"):
         translator.prepare_context_encoder(cfg.generation.generation.pooled_context.context_encoder.hf_model_name)
 
