@@ -9,6 +9,7 @@ from transformers.generation_stopping_criteria import StoppingCriteriaList
 
 class CAIEncoderDecoderConfig(EncoderDecoderConfig):
     start_token_repetitions = 1
+    forced_bos_language_code = "eng_Latn"
 
 
 class CAIEncoderDecoderModel(EncoderDecoderModel):
@@ -75,6 +76,11 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             return_dict,
             **kwargs
         )
+
+    def forced_bos_token_id(self, tokenizer):
+        if self.config.forced_bos_language_code is not None:
+            return tokenizer.target_tokenizer.language_id(self.config.forced_bos_language_code)
+        return None
 
     @contextmanager
     def prepare_model_for_generation(self, context_embedding, context_embedding_mask):

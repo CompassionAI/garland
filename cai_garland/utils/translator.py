@@ -81,6 +81,7 @@ class Translator:
         self.num_beams = 20
         self._cuda = False
         self.context_encoder = None
+        self.decoding_length = self.model.decoder.max_length
 
     def cuda(self) -> None:
         self._cuda = True
@@ -252,7 +253,8 @@ class Translator:
         with self.model.prepare_model_for_generation(ctx_embedding, ctx_mask):
             preds = self.model.generate(
                 bo_tokens,
-                max_length=self.model.decoder.max_length,
+                max_length=self.decoding_length,
+                forced_bos_token_id=self.model.forced_bos_token_id(self.tokenizer),
                 num_beams=self.num_beams,
                 prefix_allowed_tokens_fn=prefix_fn,
                 **generator_kwargs

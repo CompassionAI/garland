@@ -41,6 +41,9 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         with open(os.path.join(os.environ['CAI_DATA_BASE_PATH'], remapping_file), 'w') as f:
             f.writelines(map(lambda x: str(x) + '\n', res_vocab))
 
+    def language_id(self, language_code):
+        return self.tokenizer_remapping_forward[self.lang_code_to_id[language_code]]
+
     def _fix_target_tokens(self, input):
         if self.fix_nllb_tokenizer_target_language_tokens:
             input["input_ids"] = [x[-2:] + x[0:-2] + [x[-2]] for x in input.input_ids]
