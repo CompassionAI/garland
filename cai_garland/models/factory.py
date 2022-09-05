@@ -1,7 +1,9 @@
+import os
 import logging
 
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_manas.tokenizer import CAITokenizer
+from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
 from transformers import (
     AutoConfig,
     AutoModel,
@@ -11,14 +13,29 @@ from transformers import (
 
 from .bilingual_tokenizer import BilingualTokenizer
 from .siamese_encoder import SiameseEncoderConfig, SiameseEncoderModel
-from .pooled_context_decoder import BartWithPooledContextForCausalLM
+from .pooled_context_decoder_bart import BartWithPooledContextForCausalLM
+from .pooled_context_decoder_m2m import M2MWithPooledContextForCausalLM
 from .cai_encoder_decoder import CAIEncoderDecoderModel, CAIEncoderDecoderConfig
 
 
 logger = logging.getLogger(__name__)
 
 
-def _make_named_tokenizer(packed_name):
+_tokenizer_classes = {
+    "monolingual": CAITokenizer,
+    "nllb": CAINllbTokenizerFast,
+    "default": CAITokenizer
+}
+
+
+_causal_LM_classes = {
+    "bart": BartWithPooledContextForCausalLM,
+    "m2m": M2MWithPooledContextForCausalLM,
+    "default": BartWithPooledContextForCausalLM
+}
+
+
+def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer):
     # Apply the names rules in make_encoder_decoder. Returns a tokenizer
     if packed_name.startswith('cai:'):
         logging.debug(f"Loading tokenizer {packed_name} from CompassionAI data registry")
@@ -27,6 +44,17 @@ def _make_named_tokenizer(packed_name):
         cai_config = get_cai_config(cai_name)
 
         if cai_config.get('is_derived', False):
+            if 'tokenizer_override' in cai_config:
+                tokenizer_cfg = cai_config['tokenizer_override']
+                tokenizer = _make_named_tokenizer(
+                    cai_config['base_model_name'],
+                    hf_tokenizer_factory=_tokenizer_classes[tokenizer_cfg.get("tokenizer_class", "default")]
+                )
+                if 'remapping_file' in tokenizer_cfg:
+                    tokenizer.remap_tokens(
+                        os.path.join(os.environ['CAI_DATA_BASE_PATH'], tokenizer_cfg['remapping_file']))
+                return tokenizer
+
             base_tokenizer = _make_named_tokenizer(cai_config['base_model_name'])
             if cai_config.get('siamese', False):
                 base_tokenizer.enable_siamese()
@@ -41,7 +69,7 @@ def _make_named_tokenizer(packed_name):
         hf_name = packed_name[3:].strip()
 
         logger.debug(f"Loading tokenizer {hf_name}")
-        tokenizer = AutoTokenizer.from_pretrained(hf_name)
+        tokenizer = hf_tokenizer_factory.from_pretrained(hf_name, tgt_lang="eng_Latn")
     else:
         raise ValueError("Model name needs to start with either cai: or hf:")
     return tokenizer
@@ -73,8 +101,8 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
         elif cai_config.get('pooled-context-injection', False):
             logger.debug("Constructing a decoder with pooled context injection")
             logger.debug("    Constructing PCI wrapper model")
-            model = _make_named_model(
-                cai_config['base_model_name'], BartWithPooledContextForCausalLM, tokenizer=tokenizer)
+            model_class = _causal_LM_classes[cai_config.get("model_class", "default")]
+            model = _make_named_model(cai_config['base_model_name'], model_class, tokenizer=tokenizer)
         else:
             local_ckpt = get_local_ckpt(cai_name)
 
@@ -87,6 +115,8 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
             model = hf_model_factory.from_pretrained(local_ckpt, config=model_cfg)
             if tokenizer is not None:
                 model.resize_token_embeddings(len(tokenizer))
+        if isinstance(tokenizer, CAINllbTokenizerFast) and tokenizer.is_remapped:
+            model.remap_tokens(tokenizer)
     elif packed_name.startswith('hf:'):
         logging.debug(f"Loading {packed_name} from Hugging Face")
 
