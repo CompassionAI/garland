@@ -28,6 +28,7 @@ class M2MWithPooledContextConfig(M2M100Config):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.remapped_tokens = False
         self.with_pooled_context = True
         self.context_architecture = "no-context-injection"
 
@@ -196,6 +197,9 @@ class M2MWithPooledContextForCausalLM(BartForCausalLM):
         # Initialize weights and apply final processing
         self.post_init()
 
+        if self.config.remapped_tokens:
+            self.resize_token_embeddings(self.config.vocab_size)
+
     def remap_tokens(self, tokenizer):
         new_weights = self.model.decoder.embed_tokens.weight[tokenizer.used_tokens, :]
         new_embed_tokens = torch.nn.Embedding(
@@ -208,6 +212,7 @@ class M2MWithPooledContextForCausalLM(BartForCausalLM):
         new_lm_head.weight = torch.nn.Parameter(new_weights)
         self.lm_head = new_lm_head
 
+        self.config.remapped_tokens = True
         self.config.vocab_size = len(tokenizer.used_tokens)
 
     def forward(
