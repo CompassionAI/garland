@@ -1,0 +1,2 @@
+model_ckpt: experiments/olive-cormorant-nllb
+model_size: base-600M
