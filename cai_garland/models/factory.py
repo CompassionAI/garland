@@ -75,7 +75,7 @@ def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer):
     return tokenizer
 
 
-def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
+def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args={}):
     # Apply the names rules in make_encoder_decoder. Returns a model.
     #   *NB:* The optional tokenizer should be the source/target tokenizer, NOT a bilingual tokenizer.
     if packed_name.startswith('cai:'):
@@ -102,7 +102,9 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
             logger.debug("Constructing a decoder with pooled context injection")
             logger.debug("    Constructing PCI wrapper model")
             model_class = _causal_LM_classes[cai_config.get("model_class", "default")]
-            model = _make_named_model(cai_config['base_model_name'], model_class, tokenizer=tokenizer)
+            config_args = cai_config.get("config-args", {})
+            model = _make_named_model(
+                cai_config['base_model_name'], model_class, tokenizer=tokenizer, config_args=config_args)
         else:
             local_ckpt = get_local_ckpt(cai_name)
 
@@ -123,7 +125,10 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None):
         hf_name = packed_name[3:].strip()
 
         logger.debug(f"Loading model {hf_name}")
-        model = hf_model_factory.from_pretrained(hf_name)
+        config = hf_model_factory.config_class.from_pretrained(hf_name)
+        for key, val in config_args.items():
+            setattr(config, key, val)
+        model = hf_model_factory.from_pretrained(hf_name, config=config)
     else:
         raise ValueError("Model name needs to start with either cai: or hf:")
     return model

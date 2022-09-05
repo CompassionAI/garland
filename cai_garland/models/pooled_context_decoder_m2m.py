@@ -7,14 +7,9 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
-from transformers import (
-    AutoConfig, AutoModel, AutoModelForCausalLM, M2M100Config, M2M100PreTrainedModel, M2M100ForConditionalGeneration)
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, M2M100Config, M2M100PreTrainedModel
 from transformers.activations import GELUActivation
-from transformers.models.m2m_100.modeling_m2m_100 import (
-    M2M100Decoder,
-    M2M100EncoderLayer,
-    _expand_mask
-)
+from transformers.models.m2m_100.modeling_m2m_100 import M2M100Decoder, _expand_mask
 from transformers.models.bart.modeling_bart import (
     BartEncoderLayer,
     BartForCausalLM,
@@ -34,6 +29,7 @@ class M2MWithPooledContextConfig(M2M100Config):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.with_pooled_context = True
+        self.context_architecture = "no-context-injection"
 
 
 # This injects our new model config type into the Hugging Face factory for configs without having to modify their
@@ -42,11 +38,12 @@ AutoConfig.register(M2MWithPooledContextConfig.model_type, M2MWithPooledContextC
 
 
 class ContextArchitecture(Enum):
-    DenseFeatureTransformer = 1
-    BartEncoderLayerOnTop = 2
-    FullBartEncoder = 3
-    BartEncoderFirstLayerOnly = 4
-    FrozenEmbeddingsWithTwoLayers = 5
+    NoContextInjection = "no-context-injection"
+    DenseFeatureTransformer = "dense-feature-transformer"
+    BartEncoderLayerOnTop = "bart-encoder-layer-on-top"
+    FullBartEncoder = "full-bart-encoder"
+    BartEncoderFirstLayerOnly = "bart-encoder-first-layer-only"
+    FrozenEmbeddingsWithTwoLayers = "frozen-embeddings-with-two-layers"
 
 
 class M2MDecoderWithPooledContext(M2M100Decoder):
@@ -59,19 +56,23 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
     def __init__(self, config: M2M100Config, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config, embed_tokens=embed_tokens)
 
-        if M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.DenseFeatureTransformer:
+        self.context_architecture = ContextArchitecture(config.context_architecture)
+
+        if self.context_architecture == ContextArchitecture.NoContextInjection:
+            return
+        elif self.context_architecture == ContextArchitecture.DenseFeatureTransformer:
             self.context_fc = nn.Linear(in_features=config.d_model, out_features=config.d_model)
             self.context_activation_fn = GELUActivation()
-        elif M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
+        elif self.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
             self.context_layer = BartEncoderLayer(config)
-        elif M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.FullBartEncoder:
+        elif self.context_architecture == ContextArchitecture.FullBartEncoder:
             model = AutoModel.from_pretrained("facebook/bart-base")
             self.context_encoder = model.encoder
-        elif M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly:
+        elif self.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly:
             model = AutoModel.from_pretrained("facebook/bart-base")
             model.encoder.layers = model.encoder.layers[:1]
             self.context_encoder = model.encoder
-        elif M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
+        elif self.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
             model = AutoModel.from_pretrained("facebook/bart-base")
             model.encoder.layers = model.encoder.layers[:2]
             for p in model.encoder.embed_tokens.parameters():
@@ -108,44 +109,44 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
         input_ids = input_ids.view(-1, input_shape[-1])
         inputs_embeds = self.embed_tokens(input) * self.embed_scale
 
-        # if context_embedding is not None:
-        #     if context_embedding_mask is None:
-        #         raise ValueError("If passing in a context embedding, must also pass in a context attention mask")
-        #     if M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.DenseFeatureTransformer:
-        #         if not len(context_embedding.shape) == 3:
-        #             raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feding a raw "
-        #                              "context dataset?")
-        #         context_embedding_mask = (
-        #             context_embedding_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
-        #         )
-        #         features = self.context_fc(context_embedding_mask * context_embedding)
-        #         features = self.context_activation_fn(features)
-        #         features = features.sum(axis=1)
-        #     elif M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
-        #         if not len(context_embedding.shape) == 3:
-        #             raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feding a raw "
-        #                              "context dataset?")
-        #         context_embedding_mask = _expand_mask(context_embedding_mask, inputs_embeds.dtype)
-        #         features = self.context_layer(
-        #             context_embedding,
-        #             context_embedding_mask,
-        #             layer_head_mask=None,
-        #             output_attentions=False,
-        #         )[0]
-        #         features = features[:,0,:]
-        #     elif M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.FullBartEncoder or \
-        #          M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly or \
-        #          M2MDecoderWithPooledContext.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
-        #         features = self.context_encoder(
-        #             input_ids=context_embedding, attention_mask=context_embedding_mask).last_hidden_state[:,0,:]
-        #     else:
-        #         raise ValueError("Unknown context architecture")
-        #     features = self.adapter_layer(features)
+        if not self.context_architecture == ContextArchitecture.NoContextInjection and context_embedding is not None:
+            if context_embedding_mask is None:
+                raise ValueError("If passing in a context embedding, must also pass in a context attention mask")
+            if self.context_architecture == ContextArchitecture.DenseFeatureTransformer:
+                if not len(context_embedding.shape) == 3:
+                    raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feding a raw "
+                                     "context dataset?")
+                context_embedding_mask = (
+                    context_embedding_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
+                )
+                features = self.context_fc(context_embedding_mask * context_embedding)
+                features = self.context_activation_fn(features)
+                features = features.sum(axis=1)
+            elif self.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
+                if not len(context_embedding.shape) == 3:
+                    raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feding a raw "
+                                     "context dataset?")
+                context_embedding_mask = _expand_mask(context_embedding_mask, inputs_embeds.dtype)
+                features = self.context_layer(
+                    context_embedding,
+                    context_embedding_mask,
+                    layer_head_mask=None,
+                    output_attentions=False,
+                )[0]
+                features = features[:,0,:]
+            elif self.context_architecture == ContextArchitecture.FullBartEncoder or \
+                 self.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly or \
+                 self.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
+                features = self.context_encoder(
+                    input_ids=context_embedding, attention_mask=context_embedding_mask).last_hidden_state[:,0,:]
+            else:
+                raise ValueError("Unknown context architecture")
+            features = self.adapter_layer(features)
 
-        #     features = features.unsqueeze(1)
+            features = features.unsqueeze(1)
 
-        #     if inputs_embeds.shape[1] > 1:
-        #         inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
+            if inputs_embeds.shape[1] > 1:
+                inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
 
         return super().forward(
             None,
