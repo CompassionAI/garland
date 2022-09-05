@@ -58,7 +58,7 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
     def _decode(self, *args, **kwargs):
         if self.tokenizer_remapping_backward is not None:
             kwargs['token_ids'] = [self.tokenizer_remapping_backward[x] for x in kwargs['token_ids']]
-        return self._tokenizer._decode(*args, **kwargs)
+        return super()._decode(*args, **kwargs)
 
     @property
     def is_remapped(self):
