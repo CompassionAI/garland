@@ -8,7 +8,7 @@ from transformers.generation_stopping_criteria import StoppingCriteriaList
 
 
 class CAIEncoderDecoderConfig(EncoderDecoderConfig):
-    pass
+    start_token_repetitions = 1
 
 
 class CAIEncoderDecoderModel(EncoderDecoderModel):
@@ -29,6 +29,10 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         super().__init__(config, encoder, decoder)
         self.cur_context_embedding = None
         self.cur_context_embedding_mask = None
+        if hasattr(config.decoder, "bos_token_id"):
+            self.config.bos_token_id = config.decoder.bos_token_id
+        if hasattr(config.decoder, "decoder_start_token_id"):
+            self.config.decoder_start_token_id = config.decoder.decoder_start_token_id
 
     def forward(
         self,
@@ -96,7 +100,11 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             decoder_start_token_id = self._get_decoder_start_token_id(decoder_start_token_id, bos_token_id)
             if device is None:
                 device = self.device
-            return torch.ones((batch_size, 2), dtype=torch.long, device=device) * decoder_start_token_id
+            return torch.ones(
+                (batch_size, self.config.start_token_repetitions),
+                dtype=torch.long,
+                device=device
+            ) * decoder_start_token_id
 
     @torch.no_grad()
     def generate(

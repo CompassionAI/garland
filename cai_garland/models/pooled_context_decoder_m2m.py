@@ -31,6 +31,8 @@ class M2MWithPooledContextConfig(M2M100Config):
         self.remapped_tokens = False
         self.with_pooled_context = True
         self.context_architecture = "no-context-injection"
+        self.bos_token_id = self.eos_token_id
+        self.decoder_start_token_id = self.eos_token_id
 
 
 # This injects our new model config type into the Hugging Face factory for configs without having to modify their
