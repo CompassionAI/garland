@@ -9,12 +9,13 @@ from torch.nn import CrossEntropyLoss
 
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, M2M100Config, M2M100PreTrainedModel
 from transformers.activations import GELUActivation
-from transformers.models.m2m_100.modeling_m2m_100 import M2M100Decoder, _expand_mask
+from transformers.models.m2m_100.modeling_m2m_100 import M2M100Decoder
 from transformers.models.bart.modeling_bart import (
     BartEncoderLayer,
     BartForCausalLM,
     BartPretrainedModel,
-    CausalLMOutputWithCrossAttentions
+    CausalLMOutputWithCrossAttentions,
+    _expand_mask
 )
 from transformers.utils import logging
 
@@ -67,7 +68,7 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             self.context_fc = nn.Linear(in_features=config.d_model, out_features=config.d_model)
             self.context_activation_fn = GELUActivation()
         elif self.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
-            self.context_layer = BartEncoderLayer(config)
+            self.context_layer = BartEncoderLayer(AutoConfig.from_pretrained("facebook/bart-base"))
         elif self.context_architecture == ContextArchitecture.FullBartEncoder:
             model = AutoModel.from_pretrained("facebook/bart-base")
             self.context_encoder = model.encoder
