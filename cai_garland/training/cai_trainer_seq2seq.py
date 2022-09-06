@@ -40,7 +40,7 @@ class CAISeq2SeqTrainer(Seq2SeqTrainer):
         prediction_loss_only,
         ignore_keys=None
     ):
-        if hasattr(self.model, "prepare_model_for_generation"):
+        if hasattr(self.model, "prepare_model_for_generation") and "context_embedding" in inputs.data:
             with self.model.prepare_model_for_generation(
                 inputs.data['context_embedding'],
                 inputs.data['context_embedding_mask']
