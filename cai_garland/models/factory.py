@@ -200,7 +200,7 @@ def make_encoder_decoder(encoder_name: str, decoder_name: str):
     config = CAIEncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config)
     model = CAIEncoderDecoderModel(encoder=encoder, decoder=decoder, config=config)
 
-    model.config.decoder_start_token_id = tokenizer.target_tokenizer.cls_token_id
+    # model.config.decoder_start_token_id = tokenizer.target_tokenizer.cls_token_id
     model.config.pad_token_id = tokenizer.target_tokenizer.pad_token_id
     model.config.vocab_size = model.config.decoder.vocab_size
 
