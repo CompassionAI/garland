@@ -380,8 +380,7 @@ def main(cfg):
 
     # Initialize our Trainer
     logger.info("Initializing trainer")
-    trainer = CAISeq2SeqTrainer if context_injection else Seq2SeqTrainer
-    trainer = trainer(
+    trainer = CAISeq2SeqTrainer(
         model=model,
         args=training_cfg,
         train_dataset=train_dataset,
