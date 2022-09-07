@@ -1,6 +1,6 @@
 defaults:
-  - model: olive-cormorant-nllb
-  - generation: medium-beam-short-inputs
+  - model: olive-cormorant-nllb-pooled-context
+  - generation: medium-beam-long-inputs-pooled-context
   - mode: interactive
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
