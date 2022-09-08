@@ -61,6 +61,8 @@ def batch(translator, mode_cfg, generation_cfg):
                 for preproc_func in generation_cfg.processing.preprocessing
             ]
             translator.soft_segmenter = instantiate(generation_cfg.segmentation.soft_segmentation)
+            translator.soft_segment_combiner_config = getattr(
+                generation_cfg.segmentation, "soft_segment_combiner", None)
             translator.soft_segment_preprocessors = [
                 instantiate(preproc_func)
                 for preproc_func in generation_cfg.processing.get("soft_segment_preprocessing", [])

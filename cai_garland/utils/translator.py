@@ -297,6 +297,17 @@ class Translator:
             for preproc_func in self.soft_segment_preprocessors:
                 soft_segments = list(map(preproc_func, soft_segments))
 
+            if getattr(self, "soft_segment_combiner_config", None) is not None:
+                new_soft_segments = soft_segments[:self.soft_segment_combiner_config.skip_first_N]
+                for seg_idx in range(
+                    self.soft_segment_combiner_config.skip_first_N,
+                    len(soft_segments),
+                    self.soft_segment_combiner_config.combine_window
+                ):
+                    new_soft_segments.append(
+                        ' '.join(soft_segments[seg_idx:seg_idx + self.soft_segment_combiner_config.combine_window]))
+                soft_segments = new_soft_segments
+
             if retrospective_decoding:
                 src_registers, tgt_registers = [], []
                 if retrospection_window is None:
