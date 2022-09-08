@@ -32,7 +32,7 @@ segmentation:
   #   The recommended segmenters are: SegmenterNone, SegmenterOpeningOrClosingShad, SegmenterTargetTokenCount
   soft_segmentation:
     _target_: cai_garland.utils.segmenters.SegmenterOpeningOrClosingShad
-  soft_segmenter_kwargs: {max_length: 64}
+  soft_segmenter_kwargs: {}
 
 processing:
   # Preprocessing is applied after hard segmentation (if any) but before soft segmentation (if any).
