@@ -356,9 +356,17 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
         cur_datum = {
             "tibetan": "",
             "english": ""}
+        num_non_context = stage_cfg.concat_window - stage_cfg.context_windows
         for num_concats, cur_sent in enumerate(sequencer.generate(start_sent)):
-            new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
-            new_en = (cur_datum['english'] + ' ' + cur_sent['english']).strip()
+            if num_concats < num_non_context:
+                new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
+                new_en = (cur_datum['english'] + ' ' + cur_sent['english']).strip()
+            if num_concats == num_non_context:
+                new_bo = (cur_datum['tibetan'] + '[SEP]' + cur_sent['tibetan']).strip()
+                new_en = cur_datum['english']
+            if num_concats > num_non_context:
+                new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
+                new_en = cur_datum['english']
             if len(tokenizer.encode(new_bo)) > cfg.input.max_source_length:
                 break
             cur_datum['tibetan'] = new_bo

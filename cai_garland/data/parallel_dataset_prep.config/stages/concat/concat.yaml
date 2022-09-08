@@ -1,6 +1,13 @@
 # Concatenate up to this many consecutive sentences to form longer training examples
 concat_window: 2
 
+# How many of the windows, from the end, are treated as context windows. For example, if concat_window=3 and
+#   context_windows=2, the data will look like this:
+#
+#     source language: window_1 [SEPARATOR] window_2 window_3
+#     target language: window_1 [CLS]
+context_windows: 0
+
 # Augment the dataset by generating partial segmentations. Every candidate pulled from the sequencer will have this
 #   probability of being the last candidate in the segmentation.
 segmentation_early_stopping_probability: 0.05
