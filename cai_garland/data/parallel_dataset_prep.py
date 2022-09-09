@@ -362,7 +362,7 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
                 new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
                 new_en = (cur_datum['english'] + ' ' + cur_sent['english']).strip()
             if num_concats == num_non_context:
-                new_bo = (cur_datum['tibetan'] + '[SEP]' + cur_sent['tibetan']).strip()
+                new_bo = (cur_datum['tibetan'] + '[MASK]' + cur_sent['tibetan']).strip()
                 new_en = cur_datum['english']
             if num_concats > num_non_context:
                 new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
