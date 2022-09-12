@@ -52,8 +52,8 @@ def _make_split_part(starting_sents, generate_lambda):
         if ' ' in concatted:
             space_idx = random.choice([i for i, c in enumerate(concatted) if c == ' '])
             res.append({
-                "first_segment": concatted[:space_idx].replace('|', '').strip(),
-                "second_segment": concatted[space_idx:].replace('|', '').strip(),
+                "first_segment": concatted[:space_idx].replace('|', ' ').replace('  ', ' ').strip(),
+                "second_segment": concatted[space_idx:].replace('|', ' ').replace('  ', ' ').strip(),
                 "label": 0
             })
     return res
