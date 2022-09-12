@@ -45,7 +45,8 @@ def _make_pos_ang_neg_datum(args):
     start_sent, in_sequence = args
     pos_datum = {
         "label": 1
-    }
+    }               
+
     for num_concats, cur_sent in enumerate(_sequencing_generator(sequencer, start_sent, in_sequence)):
         if num_concats == 0:
             pos_datum["first_segment"] = cur_sent['tibetan'].strip()
@@ -125,6 +126,8 @@ def main(cfg):
     logger.info("Shuffling validation split")
     random.shuffle(valid_split)
 
+    logger.info(f"Number of training examples is {len(training_split):,}")
+    logger.info(f"Number of validation examples is {len(valid_split):,}")
     logger.info(f"Training data balance is {sum([ex['label'] for ex in training_split]) / len(training_split):.2%}")
     logger.info(f"Validation data balance is {sum([ex['label'] for ex in valid_split]) / len(valid_split):.2%}")
 
