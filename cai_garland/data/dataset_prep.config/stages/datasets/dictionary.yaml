@@ -18,7 +18,7 @@ dataset:
     source_lang:
       # Symbol cleanup mapping for the source language, relative to parallel_dataset_prep.py
       - _target_: cai_garland.utils.str_processors.ProcessorSymbolCleaningJSON
-        _args_: [parallel_dataset_prep.config/symbol_cleaning_bo.json]
+        _args_: [dataset_prep.config/symbol_cleaning_bo.json]
       - _target_: cai_garland.utils.str_processors.ProcessorStrip
       - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
       - _target_: cai_garland.utils.str_processors.ProcessorRemoveDanglingShads
@@ -27,7 +27,7 @@ dataset:
     target_lang:
       # Symbol cleanup mapping for the target language, relative to parallel_dataset_prep.py
       - _target_: cai_garland.utils.str_processors.ProcessorSymbolCleaningJSON
-        _args_: [parallel_dataset_prep.config/symbol_cleaning_en.json]
+        _args_: [dataset_prep.config/symbol_cleaning_en.json]
       - _target_: cai_garland.utils.str_processors.ProcessorStrip
       - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
       - _target_: cai_garland.utils.str_processors.ProcessorRemoveAccents

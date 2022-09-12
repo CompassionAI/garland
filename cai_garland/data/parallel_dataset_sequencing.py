@@ -368,6 +368,15 @@ class FollowsAnywhereSequencer:
         self.sequencing_cfg = sequencing_cfg
         self.num_fails = 0
 
+    def are_in_sequence(self, first, second):
+        first, second = self._preprocess(first), self._preprocess(second)
+        for translation in self.all_translations.values():
+            all_cur_sent_idxs = [m.start() for m in re.finditer(re.escape(first), translation)]
+            all_next_sent_idxs = [m.start() for m in re.finditer(re.escape(second), translation)]
+            if any([(j - i - len(first)) <= 1 for i in all_cur_sent_idxs for j in all_next_sent_idxs]):
+                return True
+        return False
+        
     def generate(self, start_example=None):
         """Generate a sequence of adequate sentence fragments using the follows-anywhere rule described in the docstring
             for this class.
@@ -389,16 +398,9 @@ class FollowsAnywhereSequencer:
             if cur_idx == len(self.flat_data):
                 return
 
-            cur_sent = self._preprocess(cur_sent['english'])
-            next_sent = self._preprocess(self.flat_data[cur_idx]['english'])
-            for translation in self.all_translations.values():
-                all_cur_sent_idxs = [m.start() for m in re.finditer(re.escape(cur_sent), translation)]
-                all_next_sent_idxs = [m.start() for m in re.finditer(re.escape(next_sent), translation)]
-                found = any([(j - i - len(cur_sent)) <= 1 for i in all_cur_sent_idxs for j in all_next_sent_idxs])
-                if found:
-                    break
-
-            if not found:
+            cur_sent = cur_sent['english']
+            next_sent = self.flat_data[cur_idx]['english']
+            if not self.are_in_sequence(cur_sent, next_sent):
                 self.num_fails += 1
                 return
 

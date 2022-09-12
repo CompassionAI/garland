@@ -1,0 +1,54 @@
+defaults:
+  - stages:
+    - naive-concats-sequenced
+  - processing: local-dask
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+  - _self_
+
+input:
+  # Tohoku numbers of texts to use as test data
+  test_tohoku_numbers:
+    - 298
+    - 312
+    - 86
+    - 171
+    - 245
+
+  # Skip the check if dataset pull functions find duplicate folios. NOT RECOMMENDED, will cause a warning
+  skip_duplicate_folio_check: false
+
+  # Raise an exception if dataset pull functions find duplicate folios
+  error_on_duplicate_folios: true
+
+  # Maximum length of the source model, including special tokens
+  max_source_length: 128
+
+  # Name of the input data tokenizer to use for calculating the length of output sequences. Note that the output is _not_
+  #   tokenized, this is used for sanity checks
+  tokenizer_name: olive-large
+
+output:
+  output_dir: ${oc.env:CAI_TEMP_PATH}/enbo_data
+
+  # Use the test split as validation data, with no test data
+  use_test_for_validation: true
+
+  # Filter out Tibetan examples that tokenize longer than max_source_length
+  filter_longer_than_max_source_length: false
+
+hydra:
+  # verbose: cai_garland.data
+  run:
+    dir: .
+  output_subdir: ~
+
+compute:
+  seed: 12345
+
+  # These are used by Hugging Face models when shuffling
+  cuda: true
+  batch_size: 16
+
+  # These are used by things that use the multiprocess pool
+  pool_size: 20

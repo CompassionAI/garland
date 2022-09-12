@@ -660,7 +660,7 @@ def _dedupe_parallel(bo_lines, en_lines, shuffle=False):
     return bo_res, en_res
 
 
-@hydra.main(version_base="1.2", config_path="./parallel_dataset_prep.config", config_name="config")
+@hydra.main(version_base="1.2", config_path="./dataset_prep.config", config_name="parallel_dataset_prep")
 def main(cfg):
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
