@@ -8,6 +8,7 @@ import logging
 
 from tqdm.auto import tqdm
 from dask.distributed import Client, LocalCluster
+from multiprocessing import Pool
 from cai_garland.utils.str_processors import ProcessorSymbolCleaningJSON
 
 from .parallel_dataset_sequencing import make_sequencer
@@ -16,6 +17,9 @@ from .parallel_dataset_prep import _pull_parallel_dataset
 
 DATA_BASE_PATH = os.environ['CAI_DATA_BASE_PATH']
 logger = logging.getLogger(__name__)
+
+
+sequencer = None
 
 
 def _sequencing_generator(sequencer, start_sent, in_sequence=True):
@@ -32,31 +36,48 @@ def _sequencing_generator(sequencer, start_sent, in_sequence=True):
                     break
 
 
-def _make_split_part(starting_sents, generate_lambda):
-    res = []
-    for start_sent in tqdm(starting_sents):
-        cur_datum = {
-            "label": 1
-        }
-        for num_concats, cur_sent in enumerate(generate_lambda(start_sent)):
-            if num_concats == 0:
-                cur_datum["first_segment"] = cur_sent['tibetan'].strip()
-            else:
-                cur_datum["second_segment"] = cur_sent['tibetan'].strip()
-                break
-        if not num_concats == 1:
-            continue
-        res.append(cur_datum)
+def _copy_sequencer(sequencer_copy):
+    global sequencer
+    sequencer = sequencer_copy
 
-        concatted = cur_datum["first_segment"] + '|' + cur_datum["second_segment"]
-        if ' ' in concatted:
-            space_idx = random.choice([i for i, c in enumerate(concatted) if c == ' '])
-            res.append({
-                "first_segment": concatted[:space_idx].replace('|', ' ').replace('  ', ' ').strip(),
-                "second_segment": concatted[space_idx:].replace('|', ' ').replace('  ', ' ').strip(),
-                "label": 0
-            })
-    return res
+
+def _make_pos_ang_neg_datum(args):
+    start_sent, in_sequence = args
+    pos_datum = {
+        "label": 1
+    }
+    for num_concats, cur_sent in enumerate(_sequencing_generator(sequencer, start_sent, in_sequence)):
+        if num_concats == 0:
+            pos_datum["first_segment"] = cur_sent['tibetan'].strip()
+        else:
+            pos_datum["second_segment"] = cur_sent['tibetan'].strip()
+            break
+    if not num_concats == 1:
+        return None
+    concatted = pos_datum["first_segment"] + '|' + pos_datum["second_segment"]
+    neg_datum = None
+    if ' ' in concatted:
+        space_idx = random.choice([i for i, c in enumerate(concatted) if c == ' '])
+        neg_datum = {
+            "first_segment": concatted[:space_idx].replace('|', ' ').replace('  ', ' ').strip(),
+            "second_segment": concatted[space_idx:].replace('|', ' ').replace('  ', ' ').strip(),
+            "label": 0
+        }
+    return pos_datum, neg_datum
+
+
+def _make_split_part(starting_sents, sequencer, in_sequence):
+    with Pool(20, initializer=_copy_sequencer, initargs=(sequencer,)) as p:
+        res = list(tqdm(
+            p.imap(
+                _make_pos_ang_neg_datum,
+                [(sent, in_sequence) for sent in starting_sents],
+            ),
+            total=len(starting_sents)
+        ))
+    res = list(zip(*filter(lambda x: x is not None, res)))
+    res = res[0] + res[1]
+    return list(filter(lambda x: x is not None, res))
 
 
 def _prep_split(flat_data, cfg, stage_cfg):
@@ -65,11 +86,9 @@ def _prep_split(flat_data, cfg, stage_cfg):
     starting_sents = copy.deepcopy(flat_data)
 
     logger.info("Sequencing related sentences")
-    res = _make_split_part(
-        starting_sents, lambda start_sent: _sequencing_generator(sequencer, start_sent, in_sequence=True))
+    res = _make_split_part(starting_sents, sequencer, in_sequence=True)
     logger.info("Sequencing unrelated sentences")
-    res.extend(_make_split_part(
-        starting_sents, lambda start_sent: _sequencing_generator(sequencer, start_sent, in_sequence=False)))
+    res.extend(_make_split_part(starting_sents, sequencer, in_sequence=False))
     return res
 
 
