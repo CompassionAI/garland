@@ -1,6 +1,15 @@
-from typing import List, Any
+import logging
 
+from typing import List, Any
 from tqdm.auto import tqdm
+from transformers import AutoConfig, AlbertForSequenceClassification
+from cai_common.models.utils import get_local_ckpt, get_cai_config
+from cai_manas.tokenizer.tokenizer import CAITokenizer
+
+import numpy as np
+
+
+logger = logging.getLogger(__name__)
 
 
 def _prepend_shad_if_needed(bo_text):
@@ -9,19 +18,25 @@ def _prepend_shad_if_needed(bo_text):
     return bo_text
 
 
-class SegmenterNone:
+class SegmenterBase:
+    def __init__(self, translator=None) -> None:
+        self.translator = translator
+
+
+class SegmenterNone(SegmenterBase):
     def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
         return [bo_text]
 
 
-class SegmenterOpeningShad:
+class SegmenterOpeningShad(SegmenterBase):
     def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
         bo_text = _prepend_shad_if_needed(bo_text)
         return ['།' + sent if not sent[0] == '།' else sent for sent in bo_text.strip().split(' །') if len(sent) > 0]
 
 
-class SegmenterClosingShad:
+class SegmenterClosingShad(SegmenterBase):
     def __init__(self, prepend_shad: bool = True) -> None:
+        super().__init__(translator=None)
         self.prepend_shad = prepend_shad
 
     def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
@@ -30,7 +45,7 @@ class SegmenterClosingShad:
         return [x.strip() + '།' for x in bo_text.strip().split('། ') if len(x.strip()) > 0]
 
 
-class SegmenterOpeningOrClosingShad:
+class SegmenterOpeningOrClosingShad(SegmenterBase):
     def __call__(self, bo_text: str, translator=None, **kwargs: Any) -> List[str]:
         if translator is None:
             raise ValueError("SegmenterOpeningOrClosingShad needs to have the translator helper class passed in")
@@ -48,19 +63,19 @@ class SegmenterOpeningOrClosingShad:
         return res
 
 
-class SegmenterDoubleShad:
+class SegmenterDoubleShad(SegmenterBase):
     def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
         bo_text = _prepend_shad_if_needed(bo_text)
         return [x.strip() for x in bo_text.strip().split('།།') if len(x.strip()) > 0]
 
 
-class SegmenterLineBreak:
+class SegmenterLineBreak(SegmenterBase):
     def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
         bo_text = _prepend_shad_if_needed(bo_text)
         return [x.strip() for x in bo_text.split('\n') if len(x.strip()) > 0]
 
 
-class SegmenterTargetTokenCount:
+class SegmenterTargetTokenCount(SegmenterBase):
     def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
         # This segmenter packs bo_text into registers. Each register is of the longest possible length that fits into
         #   the encoder.
@@ -110,3 +125,49 @@ class SegmenterTargetTokenCount:
             cur_register_length += bo_token_lengths.pop(0)
 
         return registers
+
+
+class SegmenterModel(SegmenterBase):
+    def __init__(self, model_name, translator=None):
+        if translator is None:
+            raise ValueError("SegmenterModel init needs to have the translator helper class passed in")
+        super().__init__(translator=translator)
+        logger.info(f"Loading segmentation model {model_name}")
+
+        local_ckpt = get_local_ckpt(model_name)
+        logger.debug(f"Local model checkpoint {model_name} resolved to {local_ckpt}")
+
+        logger.debug("Loading CAI PoS model config")
+        cai_pos_config = get_cai_config(model_name)
+        base_model = cai_pos_config['base_model']
+        logger.debug(f"Base model resolved to {base_model}")
+
+        logger.debug("Loading CAI base model config")
+        cai_base_config = get_cai_config(base_model)
+        tokenizer_name = cai_base_config['tokenizer_name']
+        config_name = cai_base_config['hf_base_model_name']
+
+        logger.debug("Loading Huggingface model config")
+        self.model_cfg = AutoConfig.from_pretrained(
+            config_name, vocab_size=translator.tokenizer.vocab_size, num_labels=2)
+
+        logger.debug("Loading model")
+        self.model = AlbertForSequenceClassification.from_pretrained(local_ckpt, config=self.model_cfg)
+        logger.debug("Configuring model")
+        self.model.resize_token_embeddings(len(translator.tokenizer))
+        self.model.eval()
+
+    def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
+        bo_segments = SegmenterClosingShad()(bo_text)
+
+        res, candidate = [], ""
+        for segment in tqdm(bo_segments, desc="Segmenting"):
+            candidate = (candidate + ' ' + segment).strip()
+            scores = self.model(**self.translator.tokenizer(candidate, return_tensors="pt")).logits.detach().numpy()
+            model_res = np.argmax(scores, axis=1)[0]
+            if model_res == 1:
+                res.append(candidate)
+                candidate = ""
+        if not candidate == "":
+            res.append(candidate)
+        return res
