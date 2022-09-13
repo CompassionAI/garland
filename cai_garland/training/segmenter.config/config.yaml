@@ -1,0 +1,21 @@
+defaults:
+  - training: frequent_logs
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+  - _self_
+
+hydra:
+  run:
+    dir: ${oc.env:CAI_TEMP_PATH}/segmenter/albert-olive-cormorant/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+seed: 12345
+
+data:
+  preprocessing_num_workers: 20
+  overwrite_cache: False
+
+model:
+  tokenizer_name: olive-large
+  model_hf_name: albert-base-v2
+  cai_checkpoint_name: albert-olive-cormorant/base
+  model_length: 128
