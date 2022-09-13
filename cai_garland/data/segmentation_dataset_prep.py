@@ -15,7 +15,6 @@ from .parallel_dataset_sequencing import make_sequencer
 from .parallel_dataset_prep import _pull_parallel_dataset
 
 
-DATA_BASE_PATH = os.environ['CAI_DATA_BASE_PATH']
 logger = logging.getLogger(__name__)
 
 
