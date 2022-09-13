@@ -2,11 +2,11 @@ import os
 import sys
 import copy
 import hydra
-import pickle
 import random
 import logging
 
 from tqdm.auto import tqdm
+import pandas as pd
 from dask.distributed import Client, LocalCluster
 from multiprocessing import Pool
 from cai_garland.utils.str_processors import ProcessorSymbolCleaningJSON
@@ -166,10 +166,8 @@ def main(cfg):
     logger.info("Saving to disk")
     output_dir = os.path.join(os.environ["CAI_TEMP_PATH"], "segmentation_data")
     os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, "train.pkl"), "wb") as f:
-        pickle.dump(training_split, f)
-    with open(os.path.join(output_dir, "valid.pkl"), "wb") as f:
-        pickle.dump(valid_split, f)
+    pd.DataFrame(training_split).to_csv(os.path.join(output_dir, "train.csv"), index=False)
+    pd.DataFrame(valid_split).to_csv(os.path.join(output_dir, "validation.csv"), index=False)
 
 
 if __name__ == "__main__":
