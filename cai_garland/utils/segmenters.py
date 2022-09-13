@@ -4,7 +4,6 @@ from typing import List, Any
 from tqdm.auto import tqdm
 from transformers import AutoConfig, AlbertForSequenceClassification
 from cai_common.models.utils import get_local_ckpt, get_cai_config
-from cai_manas.tokenizer.tokenizer import CAITokenizer
 
 import numpy as np
 
@@ -19,7 +18,7 @@ def _prepend_shad_if_needed(bo_text):
 
 
 class SegmenterBase:
-    def __init__(self, translator=None) -> None:
+    def __init__(self, *_args, translator=None) -> None:
         self.translator = translator
 
 
@@ -35,7 +34,7 @@ class SegmenterOpeningShad(SegmenterBase):
 
 
 class SegmenterClosingShad(SegmenterBase):
-    def __init__(self, prepend_shad: bool = True) -> None:
+    def __init__(self, *_args, prepend_shad: bool = True) -> None:
         super().__init__(translator=None)
         self.prepend_shad = prepend_shad
 
@@ -132,7 +131,7 @@ class SegmenterModel(SegmenterBase):
         if translator is None:
             raise ValueError("SegmenterModel init needs to have the translator helper class passed in")
         super().__init__(translator=translator)
-        logger.info(f"Loading segmentation model {model_name}")
+        logger.debug(f"Loading segmentation model {model_name}")
 
         local_ckpt = get_local_ckpt(model_name)
         logger.debug(f"Local model checkpoint {model_name} resolved to {local_ckpt}")
@@ -144,7 +143,6 @@ class SegmenterModel(SegmenterBase):
 
         logger.debug("Loading CAI base model config")
         cai_base_config = get_cai_config(base_model)
-        tokenizer_name = cai_base_config['tokenizer_name']
         config_name = cai_base_config['hf_base_model_name']
 
         logger.debug("Loading Huggingface model config")
@@ -161,7 +159,7 @@ class SegmenterModel(SegmenterBase):
         bo_segments = SegmenterClosingShad()(bo_text)
 
         res, candidate = [], ""
-        for segment in tqdm(bo_segments, desc="Segmenting"):
+        for segment in tqdm(bo_segments, desc="Segmenting", leave=False):
             candidate = (candidate + ' ' + segment).strip()
             scores = self.model(**self.translator.tokenizer(candidate, return_tensors="pt")).logits.detach().numpy()
             model_res = np.argmax(scores, axis=1)[0]
