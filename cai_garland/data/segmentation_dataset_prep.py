@@ -41,12 +41,11 @@ def _copy_sequencer(sequencer_copy):
     sequencer = sequencer_copy
 
 
-def _make_pos_ang_neg_datum(args):
+def _make_datum(args):
     start_sent, in_sequence = args
     pos_datum = {
         "label": 1
-    }               
-
+    }
     for num_concats, cur_sent in enumerate(_sequencing_generator(sequencer, start_sent, in_sequence)):
         if num_concats == 0:
             pos_datum["first_segment"] = cur_sent['tibetan'].strip()
@@ -55,8 +54,8 @@ def _make_pos_ang_neg_datum(args):
             break
     if not num_concats == 1:
         return None
-    concatted = pos_datum["first_segment"] + '|' + pos_datum["second_segment"]
     neg_datum = None
+    concatted = pos_datum["first_segment"] + '|' + pos_datum["second_segment"]
     if ' ' in concatted:
         space_idx = random.choice([i for i, c in enumerate(concatted) if c == ' '])
         neg_datum = {
@@ -71,7 +70,7 @@ def _make_split_part(starting_sents, sequencer, in_sequence):
     with Pool(20, initializer=_copy_sequencer, initargs=(sequencer,)) as p:
         res = list(tqdm(
             p.imap(
-                _make_pos_ang_neg_datum,
+                _make_datum,
                 [(sent, in_sequence) for sent in starting_sents],
             ),
             total=len(starting_sents)
@@ -81,7 +80,7 @@ def _make_split_part(starting_sents, sequencer, in_sequence):
     return list(filter(lambda x: x is not None, res))
 
 
-def _prep_split(flat_data, cfg, stage_cfg):
+def _prep_split_twosided(flat_data, cfg, stage_cfg):
     logger.info("Creating sequencer object")
     sequencer = make_sequencer(cfg.compute, stage_cfg.sequencing, flat_data)
     starting_sents = copy.deepcopy(flat_data)
@@ -91,6 +90,39 @@ def _prep_split(flat_data, cfg, stage_cfg):
     logger.info("Sequencing unrelated sentences")
     res.extend(_make_split_part(starting_sents, sequencer, in_sequence=False))
     return res
+
+
+def _prep_split_onesided(flat_data, cfg, stage_cfg):
+    logger.info("Creating sequencer object")
+    sequencer = make_sequencer(cfg.compute, stage_cfg.sequencing, flat_data)
+    starting_sents = copy.deepcopy(flat_data)
+
+    logger.info("Sequencing related sentences")
+    sequences = _make_split_part(starting_sents, sequencer, in_sequence=True)
+    logger.info("Sequencing unrelated sentences")
+    sequences.extend(_make_split_part(starting_sents, sequencer, in_sequence=False))
+
+    logger.info("Making examples")
+    res = []
+    for sequence in tqdm(sequences):
+        if sequence["label"] == 1:
+            cur_res = sequence["first_segment"]
+            if random.random() > 0.5:
+                cur_res += (' ' + sequence["second_segment"]).replace('  ', ' ').strip()
+            res.append({
+                "segment": cur_res,
+                "label": 1
+            })
+        else:
+            res.append({
+                "segment": sequence["first_segment"],
+                "label": 0
+            })
+
+    return res
+
+
+_prep_split = _prep_split_onesided
 
 
 @hydra.main(version_base="1.2", config_path="./dataset_prep.config", config_name="segmentation_dataset_prep")
