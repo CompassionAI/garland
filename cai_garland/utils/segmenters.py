@@ -157,10 +157,17 @@ class SegmenterModel(SegmenterBase):
 
     def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
         bo_segments = SegmenterClosingShad()(bo_text)
+        max_length = kwargs.get("max_length", self.translator.model.encoder.max_length)
+        available_space = max_length - self.translator.tokenizer.num_special_tokens_to_add(pair=False)
 
         res, candidate = [], ""
         for segment in tqdm(bo_segments, desc="Segmenting", leave=False):
+            old_candidate = candidate
             candidate = (candidate + ' ' + segment).strip()
+            if len(translator.tokenizer.encode(candidate, add_special_tokens=False)) > available_space:
+                if not old_candidate == "":
+                    res.append(old_candidate)
+                candidate = segment
             scores = self.model(**self.translator.tokenizer(candidate, return_tensors="pt")).logits.detach().numpy()
             model_res = np.argmax(scores, axis=1)[0]
             if model_res == 1:
