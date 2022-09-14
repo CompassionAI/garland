@@ -128,6 +128,8 @@ class SegmenterTargetTokenCount(SegmenterBase):
 
 
 class SegmenterModel(SegmenterBase):
+    discourage_long_segments = False
+
     def __init__(self, model_name, translator=None):
         if translator is None:
             raise ValueError("SegmenterModel init needs to have the translator helper class passed in")
@@ -174,7 +176,8 @@ class SegmenterModel(SegmenterBase):
             scores = self.model(**self.translator.tokenizer(candidate, return_tensors="pt")).logits.detach()
             scores = softmax(scores, dim=1)
             model_score = float(scores[0][1])
-            if model_score > max(min(1 - 0.5 * candidate_len / available_space, 0.8), 0):
+            needed_score = min(1 - 0.5 * candidate_len / available_space, 0.8) if self.discourage_long_segments else 0.5
+            if model_score > needed_score:
                 res.append(candidate)
                 candidate = ""
         if not candidate == "":
