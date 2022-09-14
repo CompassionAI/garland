@@ -32,7 +32,7 @@ segmentation:
   #   The recommended segmenters are: SegmenterNone, SegmenterOpeningOrClosingShad, SegmenterTargetTokenCount
   soft_segmentation:
     _target_: cai_garland.utils.segmenters.SegmenterModel
-    _args_: ["experiments/segmenter-olive-cormorant"]
+    _args_: ["segmenter-olive-cormorant"]
   soft_segmenter_kwargs: {}
 
 processing:

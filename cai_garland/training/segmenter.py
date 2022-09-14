@@ -79,7 +79,7 @@ def main(cfg):
     tibert_mdl.resize_token_embeddings(len(tokenizer))
 
     logger.info("Loading datasets")
-    data_dir = os.path.join(os.environ["CAI_TEMP_PATH"], "segmentation_data")
+    data_dir = os.path.join(os.environ["CAI_DATA_BASE_PATH"], "processed_datasets/segmenter-dataset")
     train_dataset = datasets.load_dataset("csv", data_files=os.path.join(data_dir, "train.csv"))['train']
     eval_dataset = datasets.load_dataset("csv", data_files=os.path.join(data_dir, "validation.csv"))['train']
     logger.info(f"Training dataset size = {len(train_dataset)}")
