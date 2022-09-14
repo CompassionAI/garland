@@ -2,6 +2,7 @@ import logging
 
 from typing import List, Any
 from tqdm.auto import tqdm
+from torch.nn.functional import softmax
 from transformers import AutoConfig, AlbertForSequenceClassification
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 
@@ -164,13 +165,16 @@ class SegmenterModel(SegmenterBase):
         for segment in tqdm(bo_segments, desc="Segmenting", leave=False):
             old_candidate = candidate
             candidate = (candidate + ' ' + segment).strip()
-            if len(translator.tokenizer.encode(candidate, add_special_tokens=False)) > available_space:
+            candidate_len = len(translator.tokenizer.encode(candidate, add_special_tokens=False))
+            if candidate_len > available_space:
                 if not old_candidate == "":
                     res.append(old_candidate)
                 candidate = segment
-            scores = self.model(**self.translator.tokenizer(candidate, return_tensors="pt")).logits.detach().numpy()
-            model_res = np.argmax(scores, axis=1)[0]
-            if model_res == 1:
+                candidate_len = len(translator.tokenizer.encode(candidate, add_special_tokens=False))
+            scores = self.model(**self.translator.tokenizer(candidate, return_tensors="pt")).logits.detach()
+            scores = softmax(scores, dim=1)
+            model_score = float(scores[0][1])
+            if model_score > max(min(1 - 0.5 * candidate_len / available_space, 0.8), 0):
                 res.append(candidate)
                 candidate = ""
         if not candidate == "":
