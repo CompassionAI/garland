@@ -40,6 +40,13 @@ def _copy_sequencer(sequencer_copy):
     sequencer = sequencer_copy
 
 
+def _clean_tibetan(bo_text):
+    bo_text = bo_text.strip()
+    if not bo_text.endswith("།"):
+        bo_text += "།"
+    return bo_text.replace('  ', ' ')
+
+
 def _make_datum(args):
     start_sent, in_sequence, positives_only = args
     pos_datum = {
@@ -47,9 +54,9 @@ def _make_datum(args):
     }
     for num_concats, cur_sent in enumerate(_sequencing_generator(sequencer, start_sent, in_sequence)):
         if num_concats == 0:
-            pos_datum["first_segment"] = cur_sent['tibetan'].strip()
+            pos_datum["first_segment"] = _clean_tibetan(cur_sent['tibetan'])
         else:
-            pos_datum["second_segment"] = cur_sent['tibetan'].strip()
+            pos_datum["second_segment"] = _clean_tibetan(cur_sent['tibetan'])
             break
     if not num_concats == 1:
         return None
@@ -59,8 +66,8 @@ def _make_datum(args):
         if ' ' in concatted:
             space_idx = random.choice([i for i, c in enumerate(concatted) if c == ' '])
             neg_datum = {
-                "first_segment": concatted[:space_idx].replace('|', ' ').replace('  ', ' ').strip(),
-                "second_segment": concatted[space_idx:].replace('|', ' ').replace('  ', ' ').strip(),
+                "first_segment": _clean_tibetan(concatted[:space_idx].replace('|', ' ')),
+                "second_segment": _clean_tibetan(concatted[space_idx:].replace('|', ' ')),
                 "label": 0
             }
     return pos_datum, neg_datum
@@ -92,7 +99,7 @@ def _prep_split_twosided(flat_data, cfg, stage_cfg):
     return res
 
 
-def _prep_split_onesided(flat_data, cfg, stage_cfg):
+def _prep_split_onesided(flat_data, cfg, stage_cfg, positives_end_on_segment_end=False):
     logger.info("Creating sequencer object")
     sequencer = make_sequencer(cfg.compute, stage_cfg.sequencing, flat_data)
     starting_sents = copy.deepcopy(flat_data)
@@ -106,22 +113,42 @@ def _prep_split_onesided(flat_data, cfg, stage_cfg):
     res = []
     for sequence in tqdm(sequences):
         assert sequence["label"] == 1
-        is_positive = random.random() > 0.5
-        if is_positive:
-            cur_res = sequence["first_segment"]
+        if positives_end_on_segment_end:
             if random.random() > 0.5:
-                cur_res = (cur_res.strip() + ' ' + sequence["second_segment"].strip()).strip()
+                cur_res = sequence["first_segment"]
+                if random.random() > 0.5:
+                    cur_res = (cur_res.strip() + ' ' + sequence["second_segment"].strip()).strip()
+                res.append({
+                    "segment": cur_res,
+                    "label": 1
+                })
+            else:
+                segment = sequence["first_segment"].strip()
+                space_idx = random.choice([i for i, c in enumerate(segment) if c == ' '])
+                res.append({
+                    "segment": segment[:space_idx].strip(),
+                    "label": 0
+                })
+        else:
+            # One random positive example
+            combined = sequence["first_segment"].strip() + "| " + sequence["second_segment"].strip() + " "
+            space_idx = random.choice([i for i, c in enumerate(combined) if c == ' ' and i > combined.index("|")])
+            segment = combined[:space_idx].replace("|", "").replace("  ", " ").strip()
             res.append({
-                "segment": cur_res,
+                "segment": segment,
                 "label": 1
             })
-        else:
-            segment = sequence["first_segment"].strip()
-            space_idx = random.choice([i for i, c in enumerate(segment) if c == ' '])
-            res.append({
-                "segment": segment[:space_idx].strip(),
-                "label": 0
-            })
+
+            # All possible negative examples, usually zero
+            combined = sequence["first_segment"].strip() + "|" + sequence["second_segment"].strip()
+            eligible_spaces = [i for i, c in enumerate(combined) if c == ' ' and i < combined.index("|")]
+            for space_idx in eligible_spaces:
+                space_idx = random.choice(eligible_spaces)
+                segment = combined[:space_idx].replace("  ", " ").strip()
+                res.append({
+                    "segment": segment,
+                    "label": 0
+                })
     return res
 
 
