@@ -41,7 +41,7 @@ def _copy_sequencer(sequencer_copy):
 
 
 def _make_datum(args):
-    start_sent, in_sequence = args
+    start_sent, in_sequence, positives_only = args
     pos_datum = {
         "label": 1
     }
@@ -54,23 +54,24 @@ def _make_datum(args):
     if not num_concats == 1:
         return None
     neg_datum = None
-    concatted = pos_datum["first_segment"] + '|' + pos_datum["second_segment"]
-    if ' ' in concatted:
-        space_idx = random.choice([i for i, c in enumerate(concatted) if c == ' '])
-        neg_datum = {
-            "first_segment": concatted[:space_idx].replace('|', ' ').replace('  ', ' ').strip(),
-            "second_segment": concatted[space_idx:].replace('|', ' ').replace('  ', ' ').strip(),
-            "label": 0
-        }
+    if not positives_only:
+        concatted = pos_datum["first_segment"] + '|' + pos_datum["second_segment"]
+        if ' ' in concatted:
+            space_idx = random.choice([i for i, c in enumerate(concatted) if c == ' '])
+            neg_datum = {
+                "first_segment": concatted[:space_idx].replace('|', ' ').replace('  ', ' ').strip(),
+                "second_segment": concatted[space_idx:].replace('|', ' ').replace('  ', ' ').strip(),
+                "label": 0
+            }
     return pos_datum, neg_datum
 
 
-def _make_split_part(starting_sents, sequencer, in_sequence):
+def _make_split_part(starting_sents, sequencer, in_sequence, positives_only=False):
     with Pool(20, initializer=_copy_sequencer, initargs=(sequencer,)) as p:
         res = list(tqdm(
             p.imap(
                 _make_datum,
-                [(sent, in_sequence) for sent in starting_sents],
+                [(sent, in_sequence, positives_only) for sent in starting_sents],
             ),
             total=len(starting_sents)
         ))
@@ -97,27 +98,30 @@ def _prep_split_onesided(flat_data, cfg, stage_cfg):
     starting_sents = copy.deepcopy(flat_data)
 
     logger.info("Sequencing related sentences")
-    sequences = _make_split_part(starting_sents, sequencer, in_sequence=True)
+    sequences = _make_split_part(starting_sents, sequencer, in_sequence=True, positives_only=True)
     logger.info("Sequencing unrelated sentences")
-    sequences.extend(_make_split_part(starting_sents, sequencer, in_sequence=False))
+    sequences.extend(_make_split_part(starting_sents, sequencer, in_sequence=False, positives_only=True))
 
     logger.info("Making examples")
     res = []
     for sequence in tqdm(sequences):
-        if sequence["label"] == 1:
+        assert sequence["label"] == 1
+        is_positive = random.random() > 0.5
+        if is_positive:
             cur_res = sequence["first_segment"]
             if random.random() > 0.5:
-                cur_res += (' ' + sequence["second_segment"]).replace('  ', ' ').strip()
+                cur_res = (cur_res.strip() + ' ' + sequence["second_segment"].strip()).strip()
             res.append({
                 "segment": cur_res,
                 "label": 1
             })
         else:
+            segment = sequence["first_segment"].strip()
+            space_idx = random.choice([i for i, c in enumerate(segment) if c == ' '])
             res.append({
-                "segment": sequence["first_segment"],
+                "segment": segment[:space_idx].strip(),
                 "label": 0
             })
-
     return res
 
 
