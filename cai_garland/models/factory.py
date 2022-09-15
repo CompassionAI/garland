@@ -65,7 +65,7 @@ def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer):
         hf_name = packed_name[3:].strip()
 
         logger.debug(f"Loading tokenizer {hf_name}")
-        tokenizer = hf_tokenizer_factory.from_pretrained(hf_name, tgt_lang="eng_Latn")
+        tokenizer = hf_tokenizer_factory.from_pretrained(hf_name, src_lang="bod_Tibt", tgt_lang="eng_Latn")
     else:
         raise ValueError("Model name needs to start with either cai: or hf:")
     return tokenizer
