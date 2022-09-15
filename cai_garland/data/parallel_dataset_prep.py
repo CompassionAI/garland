@@ -22,7 +22,6 @@ from sklearn.model_selection import train_test_split
 from cai_common.data import ParallelTMXLoader, TeiLoader, KangyurLoader
 from cai_manas.tokenizer import CAITokenizer
 from cai_garland.utils.str_processors import ProcessorSymbolCleaningJSON
-from .context_injection_dataset import ContextInjectionDataset
 from .parallel_dataset_sequencing import make_sequencer
 
 
