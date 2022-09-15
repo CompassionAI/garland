@@ -43,6 +43,8 @@ from cai_garland.training.cai_trainer_seq2seq import CAISeq2SeqTrainer
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
 from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint
 
+from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
+
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +135,8 @@ def main(cfg):
 
     logger.info("Making encoder-decoder model")
     model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model)
+    if type(tokenizer.source_tokenizer) is CAINllbTokenizerFast:
+        tokenizer.source_tokenizer.fix_nllb_tokenizer_target_language_tokens = False
 
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")

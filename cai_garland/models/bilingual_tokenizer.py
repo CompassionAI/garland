@@ -80,5 +80,6 @@ class BilingualTokenizer(PreTrainedTokenizer):
     def as_target_tokenizer(self):
         """Switches to the target tokenizer within the context returned by the manager."""
         self._tokenizer = self.target_tokenizer
-        yield
+        with self._tokenizer.as_target_tokenizer():
+            yield
         self._tokenizer = self.source_tokenizer
