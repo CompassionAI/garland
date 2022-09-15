@@ -1,6 +1,6 @@
 defaults:
   - data: 84000-parallel-sentences-raw-with-bidirectional-context
-  - model: olive-cormorant-nllb-bidirectional-context
+  - model: nllb-bidirectional-context
   - training: basic_with_bleu
   - training_preprocess: basic
   - override hydra/job_logging: colorlog
@@ -10,7 +10,7 @@ defaults:
 hydra:
   verbose: cai_garland.training
   run:
-    dir: ${oc.env:CAI_TEMP_PATH}/nmt/olive-cormorant-bart/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${oc.env:CAI_TEMP_PATH}/nmt/nllb-bidirectional-context/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 # Uncomment this to skip evaluation
 # training:

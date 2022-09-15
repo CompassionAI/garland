@@ -4,17 +4,12 @@ import logging
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_manas.tokenizer import CAITokenizer
 from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
-from transformers import (
-    AutoConfig,
-    AutoModel,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-)
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoTokenizer
 
 from .bilingual_tokenizer import BilingualTokenizer
 from .siamese_encoder import SiameseEncoderConfig, SiameseEncoderModel
 from .pooled_context_decoder_bart import BartWithPooledContextForCausalLM
-from .pooled_context_decoder_m2m import M2MWithPooledContextForCausalLM
+from .pooled_context_decoder_m2m import M2MWithPooledContextForCausalLM, M2MForCGWithRemappedEncoder
 from .cai_encoder_decoder import CAIEncoderDecoderModel, CAIEncoderDecoderConfig
 
 
@@ -31,6 +26,7 @@ _tokenizer_classes = {
 _causal_LM_classes = {
     "bart": BartWithPooledContextForCausalLM,
     "m2m": M2MWithPooledContextForCausalLM,
+    "m2m_with_remapped_encoder": M2MForCGWithRemappedEncoder,
     "default": BartWithPooledContextForCausalLM
 }
 
@@ -101,10 +97,21 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args
         elif cai_config.get('pooled-context-injection', False):
             logger.debug("Constructing a decoder with pooled context injection")
             logger.debug("    Constructing PCI wrapper model")
-            model_class = _causal_LM_classes[cai_config.get("model_class", "default")]
-            config_args = cai_config.get("config-args", {})
             model = _make_named_model(
-                cai_config['base_model_name'], model_class, tokenizer=tokenizer, config_args=config_args)
+                cai_config['base_model_name'],
+                _causal_LM_classes[cai_config.get("model_class", "default")],
+                tokenizer=tokenizer,
+                config_args=cai_config.get("config-args", {})
+            )
+        elif cai_config.get('extract_encoder', False):
+            logger.debug("Extracting the encoder from an encoder-decoder stack")
+            model = _make_named_model(
+                cai_config['base_model_name'],
+                _causal_LM_classes[cai_config.get("model_class", "default")],
+                tokenizer=tokenizer,
+                config_args=cai_config.get("config-args", {})
+            )
+            model = model.model.encoder
         else:
             local_ckpt = get_local_ckpt(cai_name)
 

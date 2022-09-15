@@ -1,0 +1,16 @@
+# Encoder model name, following make_encoder_decoder naming convention
+encoder_model: cai:nllb-variants/600M-encoder
+
+# Decoder model name, following make_encoder_decoder naming convention
+decoder_model: cai:nllb-variants/600M-pooled-context-injection
+
+# The maximum total input sequence length after tokenization. Sequences longer than this will be truncated, sequences
+#   shorter will be padded
+max_source_length: 128
+
+# The maximum total sequence length for target text after tokenization. Sequences longer than this will be truncated,
+#   sequences shorter will be padded
+max_target_length: 1024
+
+# Some decoders, such as NLLB/M2M, need a forced token after BOS to indicate the language
+decoder_has_forced_bos_token: true

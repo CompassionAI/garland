@@ -7,9 +7,17 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, M2M100Config, M2M100PreTrainedModel
+from transformers import (
+    AutoConfig,
+    AutoModel,
+    AutoModelForCausalLM,
+    M2M100Config,
+    M2M100PreTrainedModel,
+    M2M100ForConditionalGeneration,
+    M2M100Model
+)
 from transformers.activations import GELUActivation
-from transformers.models.m2m_100.modeling_m2m_100 import M2M100Decoder
+from transformers.models.m2m_100.modeling_m2m_100 import M2M100Encoder, M2M100Decoder
 from transformers.models.bart.modeling_bart import (
     BartEncoderLayer,
     BartForCausalLM,
@@ -50,8 +58,46 @@ class ContextArchitecture(Enum):
     FrozenEmbeddingsWithTwoLayers = "frozen-embeddings-with-two-layers"
 
 
+class M2MRemappedEncoder(M2M100Encoder):
+    """An M2m encoder that allows for remapped token embeddings to specialize to a specific language."""
+    def remap_tokens(self, tokenizer):
+        new_weights = self.embed_tokens.weight[tokenizer.used_tokens, :]
+        new_embed_tokens = torch.nn.Embedding(
+            new_weights.shape[0], new_weights.shape[1], padding_idx=self.embed_tokens.padding_idx)
+        new_embed_tokens.weight = torch.nn.Parameter(new_weights)
+        self.embed_tokens = new_embed_tokens
+
+        self.config.remapped_tokens = True
+        self.config.vocab_size = len(tokenizer.used_tokens)
+
+
+class M2M100ModelWithRemappedEncoder(M2M100Model):
+    """Vanilla M2M pretrained model but with the CAI encoder"""
+    def __init__(self, config: M2M100Config):
+        M2M100PreTrainedModel.__init__(self, config)
+        padding_idx, vocab_size = config.pad_token_id, config.vocab_size
+        self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx)
+
+        self.encoder = M2MRemappedEncoder(config, self.shared)
+        self.decoder = M2M100Decoder(config, self.shared)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+
+class M2MForCGWithRemappedEncoder(M2M100ForConditionalGeneration):
+    """Vanilla M2M encoder-decoder stack but with the CAI encoder"""
+    def __init__(self, config: M2M100Config):
+        M2M100PreTrainedModel.__init__(self, config)
+        self.model = M2M100ModelWithRemappedEncoder(config)
+        self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+
 class M2MDecoderWithPooledContext(M2M100Decoder):
-    """An M2m decoder with a tweaked token embedding layer that injects a learned layer to pool encoded target language
+    """An M2M decoder with a tweaked token embedding layer that injects a learned layer to pool encoded target language
     context into the token embedding slot for the starting token.
     """
 
