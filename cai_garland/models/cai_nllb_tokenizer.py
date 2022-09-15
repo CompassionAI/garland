@@ -35,7 +35,8 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         """The lines are intended to be all lines from all splits of a dataset that we want to tokenize."""
         all_chars = set([c for l in lines for c in l] + ["▁"])
         res_vocab = list(filter(lambda v: all([c in all_chars for c in v]), self.vocab.keys()))
-        special_tokens = [self.bos_token_id, self.eos_token_id, self.pad_token_id, self.unk_token_id]
+        special_tokens = [
+            self.bos_token_id, self.eos_token_id, self.pad_token_id, self.unk_token_id, self.mask_token_id]
         special_tokens.extend([self.lang_code_to_id[lang] for lang in lang_names])
         res_vocab = sorted(self.convert_tokens_to_ids(res_vocab) + special_tokens)
         with open(os.path.join(os.environ['CAI_DATA_BASE_PATH'], remapping_file), 'w') as f:
@@ -44,13 +45,13 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
     def language_id(self, language_code):
         return self.tokenizer_remapping_forward[self.lang_code_to_id[language_code]]
 
-    def _fix_target_tokens(self, input):
+    def _fix_target_tokens(self, input_):
         if self.fix_nllb_tokenizer_target_language_tokens:
-            input["input_ids"] = [x[-2:] + x[0:-2] + [x[-2]] for x in input.input_ids]
-            input["attention_mask"] = [x + [1] for x in input.attention_mask]
+            input_["input_ids"] = [x[-2:] + x[0:-2] + [x[-2]] for x in input_.input_ids]
+            input_["attention_mask"] = [x + [1] for x in input_.attention_mask]
         if self.tokenizer_remapping_forward is not None:
-            input["input_ids"] = [[self.tokenizer_remapping_forward[x] for x in ex] for ex in input.input_ids]
-        return input
+            input_["input_ids"] = [[self.tokenizer_remapping_forward[x] for x in ex] for ex in input_.input_ids]
+        return input_
 
     def _encode_plus(self, *args, **kwargs):
         return self._fix_target_tokens(super()._encode_plus(*args, **kwargs))
