@@ -176,7 +176,7 @@ class SegmenterModel(SegmenterBase):
                     res.append(old_candidate)
                 candidate = segment
                 candidate_len = len(translator.tokenizer.encode(candidate, add_special_tokens=False))
-            scores = self.model(**self.translator.tokenizer(candidate, return_tensors="pt")).logits.detach()
+            scores = self.model(**self.tokenizer(candidate, return_tensors="pt")).logits.detach()
             scores = softmax(scores, dim=1)
             model_score = float(scores[0][1])
             needed_score = min(1 - 0.5 * candidate_len / available_space, 0.8) if self.discourage_long_segments else 0.5
