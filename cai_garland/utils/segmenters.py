@@ -5,8 +5,7 @@ from tqdm.auto import tqdm
 from torch.nn.functional import softmax
 from transformers import AutoConfig, AlbertForSequenceClassification
 from cai_common.models.utils import get_local_ckpt, get_cai_config
-
-import numpy as np
+from cai_manas.tokenizer.tokenizer import CAITokenizer
 
 
 logger = logging.getLogger(__name__)
@@ -147,15 +146,19 @@ class SegmenterModel(SegmenterBase):
         logger.debug("Loading CAI base model config")
         cai_base_config = get_cai_config(base_model)
         config_name = cai_base_config['hf_base_model_name']
+        tokenizer_name = cai_base_config['tokenizer_name']
+
+        logger.debug(f"Loading tokenizer {tokenizer_name}")
+        self.tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(tokenizer_name))
 
         logger.debug("Loading Huggingface model config")
         self.model_cfg = AutoConfig.from_pretrained(
-            config_name, vocab_size=translator.tokenizer.vocab_size, num_labels=2)
+            config_name, vocab_size=self.tokenizer.vocab_size, num_labels=2)
 
         logger.debug("Loading model")
         self.model = AlbertForSequenceClassification.from_pretrained(local_ckpt, config=self.model_cfg)
         logger.debug("Configuring model")
-        self.model.resize_token_embeddings(len(translator.tokenizer))
+        self.model.resize_token_embeddings(len(self.tokenizer))
         self.model.eval()
 
     def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
