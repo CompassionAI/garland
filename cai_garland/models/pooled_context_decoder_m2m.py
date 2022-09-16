@@ -1,6 +1,6 @@
 # pylint: disable=no-member
 import copy
-from typing import Optional
+from typing import Optional, Union
 from enum import Enum
 
 import torch
@@ -58,8 +58,27 @@ class ContextArchitecture(Enum):
     FrozenEmbeddingsWithTwoLayers = "frozen-embeddings-with-two-layers"
 
 
+class M2MRemappedEncoderConfig(M2M100Config):
+    model_type = "m2m-remapped-encoder"
+
+
+AutoConfig.register(M2MRemappedEncoderConfig.model_type, M2MRemappedEncoderConfig)
+
+
 class M2MRemappedEncoder(M2M100Encoder):
-    """An M2m encoder that allows for remapped token embeddings to specialize to a specific language."""
+    """An M2M encoder that allows for remapped token embeddings to specialize to a specific language."""
+
+    config_class = M2MRemappedEncoderConfig
+
+    def __init__(
+        self,
+        config: Union[M2M100Config, M2MRemappedEncoderConfig],
+        embed_tokens: Optional[nn.Embedding] = None
+    ):
+        if type(config) is M2M100Config:
+            config = M2MRemappedEncoderConfig.from_dict(config.to_dict())
+        super().__init__(config, embed_tokens)
+
     def remap_tokens(self, tokenizer):
         new_weights = self.embed_tokens.weight[tokenizer.used_tokens, :]
         new_embed_tokens = torch.nn.Embedding(
@@ -69,6 +88,9 @@ class M2MRemappedEncoder(M2M100Encoder):
 
         self.config.remapped_tokens = True
         self.config.vocab_size = len(tokenizer.used_tokens)
+
+
+AutoModel.register(M2MRemappedEncoderConfig, M2MRemappedEncoder)
 
 
 class M2M100ModelWithRemappedEncoder(M2M100Model):
