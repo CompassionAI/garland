@@ -12,7 +12,7 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
             only using a subset of the 200 languages it supports.
     """
 
-    fix_nllb_tokenizer_target_language_tokens = True
+    fix_nllb_tokenizer_target_language_tokens = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
