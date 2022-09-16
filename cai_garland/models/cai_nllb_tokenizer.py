@@ -1,4 +1,5 @@
 import os
+import torch
 
 from transformers import NllbTokenizerFast
 
@@ -49,16 +50,28 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         if getattr(input_, "tokens_fixed", False):
             return input_
         input_ids, attention_mask = input_.input_ids, input_.attention_mask
-        repack = not isinstance(input_ids, list)
+
+        if isinstance(input_ids, list):
+            repack = not isinstance(input_ids[0], list)
+        else:
+            repack = len(input_ids.shape) == 1
         if repack:
             input_ids, attention_mask = [input_ids], [attention_mask]
+
         if self.fix_nllb_tokenizer_target_language_tokens:
-            input_["input_ids"] = [x[-2:] + x[0:-2] + [x[-2]] for x in input_.input_ids]
-            input_["attention_mask"] = [x + [1] for x in input_.attention_mask]
+            input_ids = [x[-2:] + x[0:-2] + [x[-2]] for x in input_.input_ids]
+            attention_mask = [x + [1] for x in input_.attention_mask]
         if self.tokenizer_remapping_forward is not None:
-            input_["input_ids"] = [[self.tokenizer_remapping_forward[x] for x in ex] for ex in input_.input_ids]
+            input_ids = [[self.tokenizer_remapping_forward[int(x)] for x in ex] for ex in input_.input_ids]
+
         if repack:
             input_ids, attention_mask = input_ids[0], attention_mask[0]
+        if isinstance(input_["input_ids"], torch.Tensor):
+            input_ids = torch.tensor(input_ids, dtype=input_["input_ids"].dtype, device=input_["input_ids"].device)
+            attention_mask = torch.tensor(
+                attention_mask, dtype=input_["attention_mask"].dtype, device=input_["attention_mask"].device)
+        input_["input_ids"], input_["attention_mask"] = input_ids, attention_mask
+
         input_["tokens_fixed"] = [1]
         return input_
 
@@ -70,7 +83,7 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
 
     def _decode(self, *args, **kwargs):
         if self.tokenizer_remapping_backward is not None:
-            kwargs['token_ids'] = [self.tokenizer_remapping_backward[x] for x in kwargs['token_ids']]
+            kwargs['token_ids'] = [self.tokenizer_remapping_backward[int(x)] for x in kwargs['token_ids']]
         return super()._decode(*args, **kwargs)
 
     @property
