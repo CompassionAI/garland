@@ -85,6 +85,7 @@ def preprocess_function(
         ]
 
     inputs["labels"] = targets["input_ids"]
+    del inputs["tokens_fixed"]
     return inputs
 
 
