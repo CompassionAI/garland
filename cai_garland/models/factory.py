@@ -175,7 +175,10 @@ def make_bilingual_tokenizer(encoder_name: str, decoder_name: str):
         A bilingual tokenizer.
     """
 
-    return BilingualTokenizer(_make_named_tokenizer(encoder_name), _make_named_tokenizer(decoder_name))
+    tokenizer = BilingualTokenizer(_make_named_tokenizer(encoder_name), _make_named_tokenizer(decoder_name))
+    if type(tokenizer.source_tokenizer) is CAINllbTokenizerFast:
+        tokenizer.source_tokenizer.fix_nllb_tokenizer_target_language_tokens = False
+    return tokenizer
 
 
 def make_encoder_decoder(encoder_name: str, decoder_name: str):
