@@ -46,11 +46,20 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         return self.tokenizer_remapping_forward[self.lang_code_to_id[language_code]]
 
     def _fix_target_tokens(self, input_):
+        if getattr(input_, "tokens_fixed", False):
+            return input_
+        input_ids, attention_mask = input_.input_ids, input_.attention_mask
+        repack = not isinstance(input_ids, list)
+        if repack:
+            input_ids, attention_mask = [input_ids], [attention_mask]
         if self.fix_nllb_tokenizer_target_language_tokens:
             input_["input_ids"] = [x[-2:] + x[0:-2] + [x[-2]] for x in input_.input_ids]
             input_["attention_mask"] = [x + [1] for x in input_.attention_mask]
         if self.tokenizer_remapping_forward is not None:
             input_["input_ids"] = [[self.tokenizer_remapping_forward[x] for x in ex] for ex in input_.input_ids]
+        if repack:
+            input_ids, attention_mask = input_ids[0], attention_mask[0]
+        input_["tokens_fixed"] = [1]
         return input_
 
     def _encode_plus(self, *args, **kwargs):
