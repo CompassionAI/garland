@@ -31,7 +31,7 @@ from transformers.utils import logging
 logger = logging.get_logger(__name__)
 
 
-class M2MWithPooledContextConfig(M2M100Config):
+class M2MWithPooledContextForCausalLMConfig(M2M100Config):
     """Configuration class to store the composed configuration of a BART decoder with pooled context."""
     model_type = "pooled-context-bart"
 
@@ -46,7 +46,7 @@ class M2MWithPooledContextConfig(M2M100Config):
 
 # This injects our new model config type into the Hugging Face factory for configs without having to modify their
 #   code base. If ever this is contributed to the Transformers main branch, this should be moved.
-AutoConfig.register(M2MWithPooledContextConfig.model_type, M2MWithPooledContextConfig)
+AutoConfig.register(M2MWithPooledContextForCausalLMConfig.model_type, M2MWithPooledContextForCausalLMConfig)
 
 
 class ContextArchitecture(Enum):
@@ -232,9 +232,9 @@ class M2MDecoderWithPooledContextWrapper(M2M100PreTrainedModel):
 class M2MWithPooledContextForCausalLM(BartForCausalLM):
     """A wrapper for the pooled context decoder for causal LM."""
 
-    config_class = M2MWithPooledContextConfig
+    config_class = M2MWithPooledContextForCausalLMConfig
 
-    def __init__(self, config: M2MWithPooledContextConfig):
+    def __init__(self, config: M2MWithPooledContextForCausalLMConfig):
         config = copy.deepcopy(config)
         config.is_decoder = True
         config.is_encoder_decoder = False
@@ -330,4 +330,4 @@ class M2MWithPooledContextForCausalLM(BartForCausalLM):
 
 # This injects our new model type into the Hugging Face factory for models without having to modify their code base. If
 #   ever this is contributed to the Transformers main branch, this should be moved.
-AutoModelForCausalLM.register(M2MWithPooledContextConfig, M2MWithPooledContextForCausalLM)
+AutoModelForCausalLM.register(M2MWithPooledContextForCausalLMConfig, M2MWithPooledContextForCausalLM)
