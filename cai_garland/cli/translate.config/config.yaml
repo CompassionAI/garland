@@ -1,5 +1,5 @@
 defaults:
-  - model: olive-cormorant-nllb-pooled-context
+  - model: nllb-bidirectional-context
   - generation: model-segmenter-pooled-context
   - mode: interactive
   - override hydra/job_logging: colorlog
