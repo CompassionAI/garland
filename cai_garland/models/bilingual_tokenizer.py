@@ -21,12 +21,21 @@ class BilingualTokenizer(PreTrainedTokenizer):
             **kwargs)
 
     def _encode_plus(self, *args, **kwargs):
+        if self._target_mode:
+            with self._tokenizer.as_target_tokenizer():
+                return self._tokenizer._encode_plus(*args, **kwargs)
         return self._tokenizer._encode_plus(*args, **kwargs)
 
     def _tokenize(self, text, **kwargs):
+        if self._target_mode:
+            with self._tokenizer.as_target_tokenizer():
+                return self._tokenizer._tokenize(text, **kwargs)
         return self._tokenizer._tokenize(text, **kwargs)
 
     def tokenize(self, text, **kwargs):
+        if self._target_mode:
+            with self._tokenizer.as_target_tokenizer():
+                return self._tokenizer.tokenize(text, **kwargs)
         return self._tokenizer.tokenize(text, **kwargs)
 
     def convert_tokens_to_ids(self, tokens):
@@ -42,9 +51,15 @@ class BilingualTokenizer(PreTrainedTokenizer):
         return self._tokenizer._convert_id_to_token(index)
 
     def _batch_encode_plus(self, *args, **kwargs):
+        if self._target_mode:
+            with self._tokenizer.as_target_tokenizer():
+                return self._tokenizer._batch_encode_plus(*args, **kwargs)
         return self._tokenizer._batch_encode_plus(*args, **kwargs)
 
     def _decode(self, *args, **kwargs):
+        if self._target_mode:
+            with self._tokenizer.as_target_tokenizer():
+                return self._tokenizer._decode(*args, **kwargs)
         return self._tokenizer._decode(*args, **kwargs)
 
     def build_inputs_with_special_tokens(self, token_ids_0, token_ids_1 = None):
@@ -76,10 +91,23 @@ class BilingualTokenizer(PreTrainedTokenizer):
         self.target_tokenizer.save_pretrained(
             save_directory, legacy_format=legacy_format, filename_prefix='-'.join(prefix_array + ["target"]), **kwargs)
 
+    def _switch_to_input_mode(self):
+        self._tokenizer = self.source_tokenizer
+        self._target_mode = False
+        return super()._switch_to_input_mode()
+
+    def _switch_to_target_mode(self):
+        self._tokenizer = self.target_tokenizer
+        self._target_mode = True
+        return super()._switch_to_target_mode()
+
     @contextmanager
     def as_target_tokenizer(self):
         """Switches to the target tokenizer within the context returned by the manager."""
         self._tokenizer = self.target_tokenizer
-        with self._tokenizer.as_target_tokenizer():
-            yield
+        self._target_mode = True
+        self._in_target_context_manager = True
+        yield
+        self._target_mode = False
+        self._in_target_context_manager = False
         self._tokenizer = self.source_tokenizer
