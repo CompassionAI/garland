@@ -6,7 +6,7 @@ decoder_model: cai:nllb-variants/600M-pooled-context-injection
 
 # The maximum total input sequence length after tokenization. Sequences longer than this will be truncated, sequences
 #   shorter will be padded
-max_source_length: 512
+max_source_length: 128
 
 # The maximum total sequence length for target text after tokenization. Sequences longer than this will be truncated,
 #   sequences shorter will be padded
