@@ -33,7 +33,7 @@ segmentation:
   soft_segmentation:
     _target_: cai_garland.utils.segmenters.SegmenterModel
     _args_: ["segmenter-olive-cormorant"]
-  soft_segmenter_kwargs: {}
+  soft_segmenter_kwargs: {"max_length": 128}
 
 processing:
   # Preprocessing is applied after hard segmentation (if any) but before soft segmentation (if any).
