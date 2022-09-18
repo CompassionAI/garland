@@ -79,7 +79,10 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
             input_ids = [x[-2:] + x[0:-2] + [x[-2]] for x in input_.input_ids]
             attention_mask = [x + [1] for x in input_.attention_mask]
         if self.tokenizer_remapping_forward is not None:
-            input_ids = [[self.tokenizer_remapping_forward[int(x)] for x in ex] for ex in input_.input_ids]
+            input_ids = [
+                [self.tokenizer_remapping_forward.get(int(x), self.unk_token_id) for x in ex]
+                for ex in input_.input_ids
+            ]
 
         if repack:
             input_ids, attention_mask = input_ids[0], attention_mask[0]
@@ -100,7 +103,8 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
 
     def _decode(self, *args, **kwargs):
         if self.tokenizer_remapping_backward is not None:
-            kwargs['token_ids'] = [self.tokenizer_remapping_backward[int(x)] for x in kwargs['token_ids']]
+            kwargs['token_ids'] = [
+                self.tokenizer_remapping_backward.get(int(x), self.unk_token_id) for x in kwargs['token_ids']]
         return super()._decode(*args, **kwargs)
 
     @property
