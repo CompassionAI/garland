@@ -205,7 +205,10 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                     layer_head_mask=None,
                     output_attentions=False,
                 )[0]
-                features = features[:,0,:]
+                if features.shape[1] > 0:
+                    features = features[:,0,:]
+                else:
+                    features = None
             elif self.context_architecture == ContextArchitecture.FullBartEncoder or \
                  self.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly or \
                  self.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
@@ -213,12 +216,13 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                     input_ids=context_embedding, attention_mask=context_embedding_mask).last_hidden_state[:,0,:]
             else:
                 raise ValueError("Unknown context architecture")
-            features = self.adapter_layer(features)
+            if features is not None:
+                features = self.adapter_layer(features)
 
-            features = features.unsqueeze(1)
+                features = features.unsqueeze(1)
 
-            if inputs_embeds.shape[1] > 1:
-                inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
+                if inputs_embeds.shape[1] > 1:
+                    inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
 
         return super().forward(
             None,
