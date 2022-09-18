@@ -1,4 +1,0 @@
-model_ckpt: nllb-bidirectional-context
-model_size: 600M
-
-decoding_length: 200
