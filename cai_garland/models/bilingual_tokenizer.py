@@ -9,6 +9,7 @@ class BilingualTokenizer(PreTrainedTokenizer):
         self.source_tokenizer = source_tokenizer
         self.target_tokenizer = target_tokenizer
         self._tokenizer = self.source_tokenizer
+        self._target_mode = False
         super().__init__(
             bos_token=self.source_tokenizer.bos_token,
             eos_token=self.source_tokenizer.eos_token,
