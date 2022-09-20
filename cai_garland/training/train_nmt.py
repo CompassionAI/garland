@@ -151,6 +151,14 @@ def main(cfg):
         logger.info(f"Loading pretrained weights from checkpoint {cfg.pretrained_checkpoint}")
         model = type(model).from_pretrained(cfg.pretrained_checkpoint)
 
+    if hasattr(cfg.model, "freeze"):
+        if getattr(cfg.model.freeze, "lm_head", False):
+            for param in model.decoder.lm_head.parameters():
+                param.requires_grad = False
+        if getattr(cfg.model.freeze, "encoder", False):
+            for param in model.encoder.parameters():
+                param.requires_grad = False
+
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     num_params = sum([np.prod(p.size()) for p in model_parameters])
     logger.info(f"Model has {num_params:,} trainable parameters.")
