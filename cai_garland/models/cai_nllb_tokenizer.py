@@ -19,6 +19,7 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         super().__init__(*args, **kwargs)
         self.tokenizer_remapping_forward = None
         self.tokenizer_remapping_backward = None
+        self.apply_token_remapping = False
         self.used_tokens = range(self.vocab_size)
 
     def remap_tokens(self, remapping_file):
@@ -32,6 +33,7 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
             line_num: token_id
             for line_num, token_id in enumerate(self.used_tokens)
         }
+        self.apply_token_remapping = True
 
     def make_remapping_file(self, lines, remapping_file, lang_names):
         """The lines are intended to be all lines from all splits of a dataset that we want to tokenize."""
@@ -45,6 +47,8 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
             f.writelines(map(lambda x: str(x) + '\n', res_vocab))
 
     def language_id(self, language_code):
+        if not self.apply_token_remapping or self.tokenizer_remapping_forward is None:
+            return self.lang_code_to_id[language_code]
         return self.tokenizer_remapping_forward[self.lang_code_to_id[language_code]]
 
     def set_tgt_lang_special_tokens(self, lang: str) -> None:
@@ -78,7 +82,7 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         if self.fix_nllb_tokenizer_target_language_tokens:
             input_ids = [x[-2:] + x[0:-2] + [x[-2]] for x in input_.input_ids]
             attention_mask = [x + [1] for x in input_.attention_mask]
-        if self.tokenizer_remapping_forward is not None:
+        if self.apply_token_remapping and self.tokenizer_remapping_forward is not None:
             input_ids = [
                 [self.tokenizer_remapping_forward.get(int(x), self.unk_token_id) for x in ex]
                 for ex in input_.input_ids
@@ -102,7 +106,7 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         return self._fix_target_tokens(super()._batch_encode_plus(*args, **kwargs))
 
     def _decode(self, *args, **kwargs):
-        if self.tokenizer_remapping_backward is not None:
+        if self.apply_token_remapping and self.tokenizer_remapping_backward is not None:
             kwargs['token_ids'] = [
                 self.tokenizer_remapping_backward.get(int(x), self.unk_token_id) for x in kwargs['token_ids']]
         return super()._decode(*args, **kwargs)
