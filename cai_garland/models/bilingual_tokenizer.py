@@ -24,19 +24,25 @@ class BilingualTokenizer(PreTrainedTokenizer):
     def _encode_plus(self, *args, **kwargs):
         if self._target_mode:
             with self._tokenizer.as_target_tokenizer():
+                self._tokenizer.apply_token_remapping = False
                 return self._tokenizer._encode_plus(*args, **kwargs)
+        self._tokenizer.apply_token_remapping = True
         return self._tokenizer._encode_plus(*args, **kwargs)
 
     def _tokenize(self, text, **kwargs):
         if self._target_mode:
             with self._tokenizer.as_target_tokenizer():
+                self._tokenizer.apply_token_remapping = False
                 return self._tokenizer._tokenize(text, **kwargs)
+        self._tokenizer.apply_token_remapping = True
         return self._tokenizer._tokenize(text, **kwargs)
 
     def tokenize(self, text, **kwargs):
         if self._target_mode:
             with self._tokenizer.as_target_tokenizer():
+                self._tokenizer.apply_token_remapping = False
                 return self._tokenizer.tokenize(text, **kwargs)
+        self._tokenizer.apply_token_remapping = True
         return self._tokenizer.tokenize(text, **kwargs)
 
     def convert_tokens_to_ids(self, tokens):
@@ -54,13 +60,17 @@ class BilingualTokenizer(PreTrainedTokenizer):
     def _batch_encode_plus(self, *args, **kwargs):
         if self._target_mode:
             with self._tokenizer.as_target_tokenizer():
+                self._tokenizer.apply_token_remapping = False
                 return self._tokenizer._batch_encode_plus(*args, **kwargs)
+        self._tokenizer.apply_token_remapping = True
         return self._tokenizer._batch_encode_plus(*args, **kwargs)
 
     def _decode(self, *args, **kwargs):
         if self._target_mode:
             with self._tokenizer.as_target_tokenizer():
+                self._tokenizer.apply_token_remapping = False
                 return self._tokenizer._decode(*args, **kwargs)
+        self._tokenizer.apply_token_remapping = True
         return self._tokenizer._decode(*args, **kwargs)
 
     def build_inputs_with_special_tokens(self, token_ids_0, token_ids_1 = None):
