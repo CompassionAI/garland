@@ -10,7 +10,7 @@ defaults:
 hydra:
   verbose: cai_garland.training
   run:
-    dir: ${oc.env:CAI_TEMP_PATH}/nmt/nllb-with-context/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${oc.env:CAI_TEMP_PATH}/nmt/nllb-with-context-for-zst/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 # Uncomment this to skip evaluation
 # training:

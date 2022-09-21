@@ -18,4 +18,4 @@ decoder_has_forced_bos_token: true
 # Freezing parts of the model during training
 freeze:
   lm_head: true
-  encoder: true
+  encoder: false
