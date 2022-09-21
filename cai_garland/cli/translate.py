@@ -12,17 +12,17 @@ from tqdm.auto import tqdm
 from ..utils.translator import Translator
 
 
-def interactive(translator, _mode_cfg, _generation_cfg):
+def interactive(translator, _mode_cfg, _generation_cfg, target_language_code):
     print("Interactive Tibetan translation...")
     while True:
         print("===")
         bo_text = input("Tibetan (or type exit): ")
         if bo_text == "exit":
             break
-        print(translator.translate(bo_text))
+        print(translator.translate(bo_text, target_language_code=target_language_code))
 
 
-def batch(translator, mode_cfg, generation_cfg):
+def batch(translator, mode_cfg, generation_cfg, target_language_code):
     if mode_cfg.input_glob is None:
         raise ValueError("Specify an input file (or glob) in the mode.input_glob setting. You can do this from the "
                          "command line.")
@@ -79,6 +79,7 @@ def batch(translator, mode_cfg, generation_cfg):
                 hard_segmenter_kwargs=dict(generation_cfg.segmentation.hard_segmenter_kwargs),
                 soft_segmenter_kwargs=dict(generation_cfg.segmentation.soft_segmenter_kwargs),
                 throw_translation_errors=not mode_cfg.skip_long_inputs,
+                target_language_code=target_language_code,
                 generator_kwargs=dict(generation_cfg.generation.get("generator_kwargs", {})),
                 **translation_kwargs
             ):
@@ -105,11 +106,12 @@ def main(cfg):
         translator.decoding_length = cfg.model.decoding_length
     if hasattr(cfg.generation.generation, "pooled_context"):
         translator.prepare_context_encoder(cfg.generation.generation.pooled_context.context_encoder.hf_model_name)
+    target_language_code = getattr(cfg, "target_language_code", None)
 
     if cfg.cuda:
         translator.cuda()
 
-    instantiate(cfg.mode.process_func, translator, cfg.mode, cfg.generation)
+    instantiate(cfg.mode.process_func, translator, cfg.mode, cfg.generation, target_language_code)
 
 
 if __name__ == "__main__":

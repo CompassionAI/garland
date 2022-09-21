@@ -61,11 +61,6 @@ class Translator:
         logger.debug(f"Encoder: {self.model.encoder}")
         logger.debug(f"Decoder: {self.model.decoder}")
 
-        from transformers import M2M100ForConditionalGeneration
-        nllb_model = M2M100ForConditionalGeneration.from_pretrained("facebook/nllb-200-distilled-600M")
-        self.model.decoder.model.decoder.embed_tokens = nllb_model.model.shared
-        self.model.decoder.lm_head = nllb_model.lm_head
-
         logger.info("Loading CAI translation model config")
         cai_base_config = get_cai_config(model_ckpt)
         encoder_name = cai_base_config['encoder_model_name']
@@ -79,6 +74,14 @@ class Translator:
 
         logger.info("Loading bilingual tokenizer")
         self.tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name)
+
+        if cai_base_config.get("reset_token_vocab", False):
+            logger.info("Resetting token vocabulary")
+            from transformers import M2M100ForConditionalGeneration
+            nllb_model = M2M100ForConditionalGeneration.from_pretrained("facebook/nllb-200-distilled-600M")
+            self.model.decoder.model.decoder.embed_tokens = nllb_model.model.shared
+            self.model.decoder.lm_head = nllb_model.lm_head
+            self.tokenizer.remap_target = False
 
         logger.info("Configuring model")
         self.model.eval()
@@ -158,6 +161,7 @@ class Translator:
         bo_text: str,
         prefix: Optional[str]=None,
         context: Optional[str]=None,
+        language_code: Optional[str]=None,
         encoder_outputs: Any = None,
         generator_kwargs: Dict[Any, Any]={},
     ) -> str:
@@ -256,26 +260,16 @@ class Translator:
             generator_kwargs['encoder_outputs'] = encoder_outputs
             generator_kwargs['attention_mask'] = encoder_outputs.attention_mask
         with self.model.prepare_model_for_generation(ctx_embedding, ctx_mask):
-            vocab = self.tokenizer.target_tokenizer.get_vocab()
-            allowed_exc = set(map(str, range(10))) | {"▁", ",", ".", "!", "?"}
-            import unicodedata
-            def _allowed(t):
-                return all(["CYRILLIC" in unicodedata.name(c, "ERROR") or c in allowed_exc for c in t])
-
-            allowed_vocab = [t for t in vocab.keys() if _allowed(t)]
-            allowed_idx = [vocab[t] for t in allowed_vocab] + [self.tokenizer.target_tokenizer.eos_token_id]
-            def test_allowed_tokens_fn(_batch_id, input_ids):
-                return allowed_idx
-
+            if language_code is None:
+                language_token = self.model.forced_bos_token_id(self.tokenizer)
+            else:
+                language_token = self.tokenizer.target_tokenizer.lang_code_to_id[language_code]
             preds = self.model.generate(
                 bo_tokens,
                 max_length=self.decoding_length,
-                forced_bos_token_id=self.tokenizer.target_tokenizer.lang_code_to_id["ita_Latn"],
-                # forced_bos_token_id=self.tokenizer.target_tokenizer.lang_code_to_id["rus_Cyrl"],
-                # forced_bos_token_id=self.model.forced_bos_token_id(self.tokenizer),
+                forced_bos_token_id=language_token,
                 num_beams=self.num_beams,
-                # prefix_allowed_tokens_fn=prefix_fn,
-                # prefix_allowed_tokens_fn=test_allowed_tokens_fn,
+                prefix_allowed_tokens_fn=prefix_fn,
                 **generator_kwargs
             )[0]
         if self._cuda:
@@ -300,6 +294,7 @@ class Translator:
         context_window_words=50,
         context_window_characters=1000,
         throw_translation_errors=False,
+        target_language_code=None,
         generator_kwargs={}
     ):
         if retrospective_decoding and contextual_decoding:
@@ -369,6 +364,7 @@ class Translator:
                         input_,
                         prefix=prefix,
                         context=context_window,
+                        language_code=target_language_code,
                         encoder_outputs=encoder_outputs,
                         generator_kwargs=generator_kwargs
                     )

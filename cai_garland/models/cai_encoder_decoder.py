@@ -79,10 +79,8 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
 
     def forced_bos_token_id(self, tokenizer):
         if self.config.forced_bos_language_code is not None:
-            tokenizer.target_tokenizer.apply_token_remapping = False
-            x = tokenizer.target_tokenizer.language_id(self.config.forced_bos_language_code)
-            tokenizer.target_tokenizer.apply_token_remapping = True
-            return x
+            tokenizer.target_tokenizer.apply_token_remapping = tokenizer.remap_target
+            return tokenizer.target_tokenizer.language_id(self.config.forced_bos_language_code)
         return None
 
     @contextmanager
