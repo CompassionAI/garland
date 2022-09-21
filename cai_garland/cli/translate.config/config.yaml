@@ -1,5 +1,5 @@
 defaults:
-  - model: nllb-with-context
+  - model: nllb-with-context-for-zst
   - generation: model-segmenter-pooled-context
   - mode: interactive
   - override hydra/job_logging: colorlog
