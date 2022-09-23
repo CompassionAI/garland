@@ -1,5 +1,7 @@
 defaults:
-  - data: 84000-parallel-sentences-raw-with-context
+  - data:
+    - 84000-parallel-sentences-raw-with-context
+  - dataset_construction: context-injection
   - model: nllb-with-context-for-zst
   - training: basic_with_bleu
   - training_preprocess: basic

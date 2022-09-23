@@ -1,39 +1,40 @@
-# The name of the dataset loader file to use (via the datasets library)
-dataset_loader: cai_garland/data/parallel_dataset_loader_hf.py
+84000-parallel-sentences-2-registers-only:
+  # The name of the dataset loader file to use (via the datasets library)
+  dataset_loader: cai_garland/data/parallel_dataset_loader_hf.py
 
-# The name of the dataset to load from the loader file
-dataset_config: registers_2_only
+  # The name of the dataset to load from the loader file
+  dataset_config: registers_2_only
 
-# Source language id for translation
-source_lang: bo
+  # Source language id for translation
+  source_lang: bo
 
-# Source language id for translation
-target_lang: en
+  # Source language id for translation
+  target_lang: en
 
-# The token to force as the first generated token after the 'decoder_start_token_id'. Useful for multilingual models
-#   like mBART where the first generated token needs to be the target language token. Usually it is the target
-#   language token
-forced_bos_token: ~
+  # The token to force as the first generated token after the 'decoder_start_token_id'. Useful for multilingual models
+  #   like mBART where the first generated token needs to be the target language token. Usually it is the target
+  #   language token
+  forced_bos_token: ~
 
-# Name of the validation split to use in the overall dataset (defaults to "validation" if omitted)
-#   If set to train, will split the training data according to validation_sampling_rate
-validation_split_name: validation
+  # Name of the validation split to use in the overall dataset (defaults to "validation" if omitted)
+  #   If set to train, will split the training data according to validation_sampling_rate
+  validation_split_name: validation
 
-# Fraction at which to rebalance the validation data to contain entries with registers. Only valid if registers are
-#   used. Will subsample the non-register data before subsampling the overall dataset. So if your test data is, say 20%
-#   registers, your validation dataset size _before subsampling_ will be approximately
-#
-#     (1 + validation_register_rebalance_frac) * 20% 
-#
-# Leave out or set to ~ (None) to skip rebalancing or if not using registers.
-validation_register_rebalance_frac: ~
+  # Fraction at which to rebalance the validation data to contain entries with registers. Only valid if registers are
+  #   used. Will subsample the non-register data before subsampling the overall dataset. So if your test data is, say 20%
+  #   registers, your validation dataset size _before subsampling_ will be approximately
+  #
+  #     (1 + validation_register_rebalance_frac) * 20% 
+  #
+  # Leave out or set to ~ (None) to skip rebalancing or if not using registers.
+  validation_register_rebalance_frac: ~
 
-# Rate at which to subsample the validation data. Performed _after_ the register rebalancing, if any. With rebalancing,
-#   the approximate final size of the evaluation set is given by the following:
-#
-#     (1 + validation_register_rebalance_frac) * (fraction of register data) * validation_subsampling_rate
-#
-#   with the register data balance as specified by validation_register_rebalance_frac, if any.
-#
-# Can be none to avoid subsampling.
-validation_subsampling_rate: ~
+  # Rate at which to subsample the validation data. Performed _after_ the register rebalancing, if any. With rebalancing,
+  #   the approximate final size of the evaluation set is given by the following:
+  #
+  #     (1 + validation_register_rebalance_frac) * (fraction of register data) * validation_subsampling_rate
+  #
+  #   with the register data balance as specified by validation_register_rebalance_frac, if any.
+  #
+  # Can be none to avoid subsampling.
+  validation_subsampling_rate: ~

@@ -30,8 +30,10 @@ from cai_common.utils.hydra_training_args import HydraSeq2SeqTrainingArguments
 from cai_common.utils.tensorboard_callback import CAITensorboardCallback
 from colorama import init as init_colorama, Fore as ForeColor
 
+import torch
 import datasets
 import numpy as np
+from torch.utils.data import ConcatDataset, TensorDataset
 from datasets import load_dataset, load_metric
 
 from cai_garland.models.factory import make_encoder_decoder
@@ -58,12 +60,14 @@ def preprocess_function(
     tokenizer=None,
     padding=None,
     ignore_pad_token_for_loss=None,
-    siamese=None
+    siamese=None,
+    tgt_lang_code=None
 ):
     if tokenizer is None or \
         padding is None or \
         ignore_pad_token_for_loss is None or \
-        siamese is None:
+        siamese is None \
+    :
         raise ValueError("One of the argument to preprocess_function is missing")
 
     inputs = [ex for ex in examples["source"]]
@@ -71,8 +75,13 @@ def preprocess_function(
 
     inputs = tokenizer(inputs, padding=padding)
 
+    if tgt_lang_code is not None:
+        old_tgt_lang = tokenizer.target_tokenizer.tgt_lang
+        tokenizer.target_tokenizer.tgt_lang = tgt_lang_code
     with tokenizer.as_target_tokenizer():
         targets = tokenizer(targets, padding=padding)
+    if tgt_lang_code is not None:
+        tokenizer.target_tokenizer.tgt_lang = old_tgt_lang
 
     # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
     # padding in the loss.
@@ -88,6 +97,150 @@ def preprocess_function(
     if "tokens_fixed" in inputs:
         del inputs["tokens_fixed"]
     return inputs
+
+
+def load_hf_dataset(
+    cfg, data_cfg, training_cfg, tokenizer, padding, siamese, skip_eval, eor_token_id, max_target_length
+):
+    logger.info("  Loading training dataset")
+    train_split_name = data_cfg.get('train_split_name', datasets.splits.Split.TRAIN)
+    train_dataset = load_dataset(data_cfg.dataset_loader, data_cfg.dataset_config, split=train_split_name)
+    logger.info("  Loading validation dataset")
+    validation_split_name = data_cfg.get('validation_split_name', datasets.splits.Split.VALIDATION)
+    if validation_split_name is None:
+        eval_dataset = None
+    elif validation_split_name == "train":
+        split_datasets = train_dataset.train_test_split(
+            train_size=1 - data_cfg.validation_sampling_rate, seed=training_cfg.seed)
+        train_dataset, eval_dataset = split_datasets['train'], split_datasets['test']
+        logger.info("  Split into training and validation")
+        del split_datasets
+    else:
+        eval_dataset = load_dataset(
+            data_cfg.dataset_loader,
+            data_cfg.dataset_config,
+            split=data_cfg.get('validation_split_name', datasets.splits.Split.VALIDATION)
+        )
+    logger.info("  Loading test dataset")
+    test_split_name = data_cfg.get('test_split_name', datasets.splits.Split.TEST)
+    if test_split_name is not None:
+        test_dataset = load_dataset(data_cfg.dataset_loader, data_cfg.dataset_config, split=test_split_name)
+    else:
+        test_dataset = None
+
+    logger.info(f"    Training size   = {len(train_dataset)}")
+    if eval_dataset is not None:
+        logger.info(f"    Validation size = {len(eval_dataset)}")
+    else:
+        logger.info("    No validation set")
+    if test_dataset is not None:
+        logger.info(f"    Test size       = {len(test_dataset)}")
+    else:
+        logger.info("    No test set")
+
+    tgt_lang_code = getattr(data_cfg, "tgt_lang_code", None)
+    logger.info("  Preprocessing training dataset")
+    with training_cfg.main_process_first(desc="train dataset map pre-processing"):
+        train_dataset = train_dataset.map(
+            preprocess_function,
+            batched=True,
+            num_proc=cfg.training_preprocess.preprocessing_num_workers,
+            load_from_cache_file=not cfg.overwrite_cache,
+            desc="Running tokenizer on train dataset",
+            fn_kwargs={
+                "tokenizer": tokenizer,
+                "padding": padding,
+                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                "siamese": siamese,
+                "tgt_lang_code": tgt_lang_code
+            }
+        )
+    if not skip_eval:
+        if eval_dataset is not None:
+            logger.info("  Preprocessing validation dataset")
+            with training_cfg.main_process_first(desc="validation dataset map pre-processing"):
+                eval_dataset = eval_dataset.map(
+                    preprocess_function,
+                    batched=True,
+                    num_proc=cfg.training_preprocess.preprocessing_num_workers,
+                    load_from_cache_file=not cfg.overwrite_cache,
+                    desc="Running tokenizer on validation dataset",
+                    fn_kwargs={
+                        "tokenizer": tokenizer,
+                        "padding": padding,
+                        "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                        "siamese": siamese,
+                        "tgt_lang_code": tgt_lang_code
+                    }
+                )
+        if test_dataset is not None:
+            logger.info("  Preprocessing test dataset")
+            with training_cfg.main_process_first(desc="test dataset map pre-processing"):
+                test_dataset = test_dataset.map(
+                    preprocess_function,
+                    batched=True,
+                    num_proc=cfg.training_preprocess.preprocessing_num_workers,
+                    load_from_cache_file=not cfg.overwrite_cache,
+                    desc="Running tokenizer on test dataset",
+                    fn_kwargs={
+                        "tokenizer": tokenizer,
+                        "padding": padding,
+                        "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
+                        "siamese": siamese,
+                        "tgt_lang_code": tgt_lang_code
+                    }
+                )
+
+    logger.info("  Filtering out long examples")
+    is_not_long_example_lambda = lambda x: not is_long_example(
+        x, eor_token_id, cfg.model.max_source_length, max_target_length)
+    pre_filter_len = len(train_dataset)
+    train_dataset = train_dataset.filter(is_not_long_example_lambda, desc="Training filter")
+    logger.info(f"  Training: {1 - len(train_dataset) / pre_filter_len} has been filtered out, {len(train_dataset)} "
+                 "examples left.")
+
+    if eval_dataset is not None:
+        pre_filter_len = len(eval_dataset)
+        eval_dataset = eval_dataset.filter(is_not_long_example_lambda, desc="Validation filter")
+        logger.info(f"  Validation: {1 - len(eval_dataset) / pre_filter_len} has been filtered out.")
+        logger.info(f"  Validation: {1 - len(eval_dataset) / pre_filter_len} has been filtered out, "
+                    f"{len(eval_dataset)} examples left.")
+
+        logger.info(f"  Original validation set, prior to rebalancing and resampling, size is {len(eval_dataset)}")
+        validation_register_rebalance_frac = data_cfg.get('validation_register_rebalance_frac', None)
+        if validation_register_rebalance_frac is not None:
+            register_eval_dataset = eval_dataset.filter(
+                lambda ex: tokenizer.source_tokenizer.eor_token in ex['tibetan'])
+            no_register_eval_dataset = eval_dataset \
+                .filter(lambda ex: not tokenizer.source_tokenizer.eor_token in ex['tibetan'])
+            no_register_eval_dataset = no_register_eval_dataset \
+                .shuffle(seed=training_cfg.seed) \
+                .select(range(
+                    min(
+                        len(register_eval_dataset) * validation_register_rebalance_frac,
+                        len(no_register_eval_dataset)
+                    )
+                ))
+            eval_dataset = datasets.interleave_datasets([register_eval_dataset, no_register_eval_dataset])
+            logger.info(f"  Rebalanced validation set to size {len(eval_dataset)}")
+
+        validation_subsampling_rate = data_cfg.get('validation_subsampling_rate', None)
+        if validation_subsampling_rate is not None:
+            eval_dataset = eval_dataset.train_test_split(
+                train_size=validation_subsampling_rate, seed=training_cfg.seed)['train']
+            logger.info(f"  Subsampled validation set to size {len(eval_dataset)}")
+
+    if test_dataset is not None:
+        pre_filter_len = len(test_dataset)
+        if pre_filter_len > 0:
+            test_dataset = test_dataset.filter(is_not_long_example_lambda, desc="Test filter")
+            logger.info(f"  Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out.")
+            logger.info(f"  Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out, {len(test_dataset)} "
+                        "examples left.")
+        else:
+            logger.info("  No test data to filter.")
+
+    return train_dataset, eval_dataset, test_dataset
 
 
 def is_long_example(example, eor_token_id, max_source_length, max_target_length):
@@ -163,145 +316,53 @@ def main(cfg):
     num_params = sum([np.prod(p.size()) for p in model_parameters])
     logger.info(f"Model has {num_params:,} trainable parameters.")
 
-    logger.info("Loading training dataset")
-    train_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=datasets.splits.Split.TRAIN)
-    logger.info("Loading validation dataset")
-    validation_split_name = cfg.data.get('validation_split_name', datasets.splits.Split.VALIDATION)
-    if validation_split_name == "train":
-        split_datasets = train_dataset.train_test_split(
-            train_size=1 - cfg.data.validation_sampling_rate, seed=training_cfg.seed)
-        train_dataset, eval_dataset = split_datasets['train'], split_datasets['test']
-        logger.info("Split into training and validation")
-        del split_datasets
-    else:
-        eval_dataset = load_dataset(
-            cfg.data.dataset_loader,
-            cfg.data.dataset_config,
-            split=cfg.data.get('validation_split_name', datasets.splits.Split.VALIDATION)
-        )
-    logger.info("Loading test dataset")
-    test_split_name = cfg.data.get('test_split_name', datasets.splits.Split.TEST)
-    if test_split_name is not None:
-        test_dataset = load_dataset(cfg.data.dataset_loader, cfg.data.dataset_config, split=test_split_name)
-    else:
-        test_dataset = None
+    # Temporarily set max_target_length for training.
+    max_target_length = model.config.decoder.max_position_embeddings
+    padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
+    siamese = model.config.encoder.model_type == "siamese-encoder"
+    context_injection = hasattr(cfg.dataset_construction, "context_injection")
+    if context_injection:
+        model.force_preparing_model_for_generation = True
 
-    logger.info(f"    Training size   = {len(train_dataset)}")
-    logger.info(f"    Validation size = {len(eval_dataset)}")
-    if test_dataset is not None:
-        logger.info(f"    Test size       = {len(test_dataset)}")
+    train_datasets, eval_datasets, test_datasets = [], [], []
+    for dataset_idx, dataset_name in enumerate(cfg.data):
+        logger.info(f"{ForeColor.LIGHTCYAN_EX}Loading dataset \"{dataset_name}\" ({dataset_idx + 1}/{len(cfg.data)})")
+        train_dataset, eval_dataset, test_dataset = load_hf_dataset(
+            cfg,
+            cfg.data[dataset_name],
+            training_cfg,
+            tokenizer,
+            padding,
+            siamese,
+            skip_eval,
+            eor_token_id,
+            max_target_length
+        )
+        if train_dataset is not None:
+            train_datasets.append(train_dataset)
+        if eval_dataset is not None:
+            eval_datasets.append(eval_dataset)
+        if test_dataset is not None:
+            test_datasets.append(test_dataset)
+    if len(train_datasets) == 0:
+        train_dataset = TensorDataset(torch.Tensor([]))
     else:
-        logger.info("    No test set")
+        train_dataset = ConcatDataset(train_datasets)
+    if len(eval_datasets) == 0:
+        eval_dataset = TensorDataset(torch.Tensor([]))
+    else:
+        eval_dataset = ConcatDataset(eval_datasets)
+    if len(test_datasets) == 0:
+        test_dataset = TensorDataset(torch.Tensor([]))
+    else:
+        test_dataset = ConcatDataset(test_datasets)
 
     if cfg.training_preprocess.shuffle_training_data:
         logger.info("Shuffling training dataset")
         train_dataset = train_dataset.shuffle(seed=training_cfg.seed)
 
-    # Temporarily set max_target_length for training.
-    max_target_length = model.config.decoder.max_position_embeddings
-    padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
-    siamese = model.config.encoder.model_type == "siamese-encoder"
-    context_injection = hasattr(cfg.data, "context_injection")
     if context_injection:
-        model.force_preparing_model_for_generation = True
-
-    logger.info("Preprocessing training dataset")
-    with training_cfg.main_process_first(desc="train dataset map pre-processing"):
-        train_dataset = train_dataset.map(
-            preprocess_function,
-            batched=True,
-            num_proc=cfg.training_preprocess.preprocessing_num_workers,
-            load_from_cache_file=not cfg.overwrite_cache,
-            desc="Running tokenizer on train dataset",
-            fn_kwargs={
-                "tokenizer": tokenizer,
-                "padding": padding,
-                "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
-                "siamese": siamese
-            }
-        )
-    if not skip_eval:
-        logger.info("Preprocessing validation dataset")
-        with training_cfg.main_process_first(desc="validation dataset map pre-processing"):
-            eval_dataset = eval_dataset.map(
-                preprocess_function,
-                batched=True,
-                num_proc=cfg.training_preprocess.preprocessing_num_workers,
-                load_from_cache_file=not cfg.overwrite_cache,
-                desc="Running tokenizer on validation dataset",
-                fn_kwargs={
-                    "tokenizer": tokenizer,
-                    "padding": padding,
-                    "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
-                    "siamese": siamese
-                }
-            )
-        if test_dataset is not None:
-            logger.info("Preprocessing test dataset")
-            with training_cfg.main_process_first(desc="test dataset map pre-processing"):
-                test_dataset = test_dataset.map(
-                    preprocess_function,
-                    batched=True,
-                    num_proc=cfg.training_preprocess.preprocessing_num_workers,
-                    load_from_cache_file=not cfg.overwrite_cache,
-                    desc="Running tokenizer on test dataset",
-                    fn_kwargs={
-                        "tokenizer": tokenizer,
-                        "padding": padding,
-                        "ignore_pad_token_for_loss": cfg.training_preprocess.ignore_pad_token_for_loss,
-                        "siamese": siamese
-                    }
-                )
-
-    logger.info("Filtering out long examples")
-    is_not_long_example_lambda = lambda x: not is_long_example(
-        x, eor_token_id, cfg.model.max_source_length, max_target_length)
-    pre_filter_len = len(train_dataset)
-    train_dataset = train_dataset.filter(is_not_long_example_lambda, desc="Training filter")
-    logger.info(f"Training: {1 - len(train_dataset) / pre_filter_len} has been filtered out, {len(train_dataset)} "
-                 "examples left.")
-
-    pre_filter_len = len(eval_dataset)
-    eval_dataset = eval_dataset.filter(is_not_long_example_lambda, desc="Validation filter")
-    logger.info(f"Validation: {1 - len(eval_dataset) / pre_filter_len} has been filtered out.")
-    logger.info(f"Validation: {1 - len(eval_dataset) / pre_filter_len} has been filtered out, {len(eval_dataset)} "
-                 "examples left.")
-
-    if test_dataset is not None:
-        pre_filter_len = len(test_dataset)
-        if pre_filter_len > 0:
-            test_dataset = test_dataset.filter(is_not_long_example_lambda, desc="Test filter")
-            logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out.")
-            logger.info(f"Test: {1 - len(test_dataset) / pre_filter_len} has been filtered out, {len(test_dataset)} "
-                        "examples left.")
-        else:
-            logger.info("No test data to filter.")
-
-    logger.info(f"Original validation set, prior to rebalancing and resampling, size is {len(eval_dataset)}")
-    validation_register_rebalance_frac = cfg.data.get('validation_register_rebalance_frac', None)
-    if validation_register_rebalance_frac is not None:
-        register_eval_dataset = eval_dataset.filter(lambda ex: tokenizer.source_tokenizer.eor_token in ex['tibetan'])
-        no_register_eval_dataset = eval_dataset \
-            .filter(lambda ex: not tokenizer.source_tokenizer.eor_token in ex['tibetan'])
-        no_register_eval_dataset = no_register_eval_dataset \
-            .shuffle(seed=training_cfg.seed) \
-            .select(range(
-                min(
-                    len(register_eval_dataset) * validation_register_rebalance_frac,
-                    len(no_register_eval_dataset)
-                )
-            ))
-        eval_dataset = datasets.interleave_datasets([register_eval_dataset, no_register_eval_dataset])
-        logger.info(f"Rebalanced validation set to size {len(eval_dataset)}")
-
-    validation_subsampling_rate = cfg.data.get('validation_subsampling_rate', None)
-    if validation_subsampling_rate is not None:
-        eval_dataset = eval_dataset.train_test_split(
-            train_size=validation_subsampling_rate, seed=training_cfg.seed)['train']
-        logger.info(f"Subsampled validation set to size {len(eval_dataset)}")
-
-    if context_injection:
-        pci_cfg = cfg.data.context_injection
+        pci_cfg = cfg.dataset_construction.context_injection
         ContextInjectionDataset.prepare_context_embeddings(
             pci_cfg.context_file,
             pci_cfg.context_encoder,
