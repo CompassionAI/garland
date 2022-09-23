@@ -1,0 +1,22 @@
+nllb-augmentation-bo-it:
+  # The name of the dataset loader file to use (via the datasets library)
+  dataset_loader: cai_garland/data/parallel_dataset_loader_hf.py
+
+  # The name of the dataset to load from the loader file and any language codes
+  dataset_config: nllb_augmentation
+  tgt_lang_code: ita_Latn
+
+  # Name of the training split to use in the overall dataset (defaults to "train" if omitted)
+  train_split_name: bod_Tibt.ita_Latn
+
+  # The token to force as the first generated token after the 'decoder_start_token_id'. Useful for multilingual models
+  #   like mBART where the first generated token needs to be the target language token. Usually it is the target
+  #   language token
+  forced_bos_token: ~
+
+  # Name of the validation split to use in the overall dataset (defaults to "validation" if omitted)
+  #   If set to train, will split the training data according to validation_sampling_rate
+  validation_split_name: ~
+
+  # Name of the test split to use in the overall dataset (defaults to "test" if omitted)
+  test_split_name: ~
