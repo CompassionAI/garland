@@ -52,7 +52,7 @@ model: facebook/nllb-200-distilled-600M
 
 compute:
   cuda: true
-  batch_size: 4
+  batch_size: 8
 
 generation:
   max_length: 200
