@@ -1,6 +1,6 @@
 context_injection:
   context_file: processed_datasets/84000-parallel-sentences-raw-with-context/contexts.pkl
-  context_lookup_key: english
+  context_lookup_key: target
 
   # Whether to run the contexts through an encoder
   raw_contexts: false
