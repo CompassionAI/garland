@@ -66,8 +66,8 @@ def preprocess_function(
         siamese is None:
         raise ValueError("One of the argument to preprocess_function is missing")
 
-    inputs = [ex for ex in examples["tibetan"]]
-    targets = [ex for ex in examples["english"]]
+    inputs = [ex for ex in examples["source"]]
+    targets = [ex for ex in examples["target"]]
 
     inputs = tokenizer(inputs, padding=padding)
 

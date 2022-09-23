@@ -41,6 +41,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "raw_with_context": "processed_datasets/84000-parallel-sentences-raw-with-context",
         "raw_with_context_cased": "experiments/84000-parallel-sentences-raw-with-context-cased",
         "raw_with_bidirectional_context": "processed_datasets/84000-parallel-sentences-raw-with-bidirectional-context",
+        "nllb_augmentation": "experiments/nllb-augmentation",
     }
 
     BUILDER_CONFIGS = [
@@ -85,6 +86,11 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             description="Dataset for a Tibetan encoder with no registers, no augmentation, and context in both the "
                         "source and target languages",
         ),
+        ParallelSentences84000Config(
+            name="nllb_augmentation",
+            version=datasets.Version("0.2.0", ""),
+            description="Dataset splits extracted from the NLLB model",
+        ),
     ]
 
     def _info(self):
@@ -93,8 +99,8 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             description=_DESCRIPTION,
             features=datasets.Features(
                 {
-                    "tibetan": datasets.Value("string"),
-                    "english": datasets.Value("string")
+                    "source": datasets.Value("string"),
+                    "target": datasets.Value("string")
                 }
             )
         )
@@ -108,16 +114,26 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                 datasets.SplitGenerator(
                     name=datasets.Split.TRAIN,
                     gen_kwargs={
-                        "bo_fn": [
+                        "source_fn": [
                             os.path.join(files_path, "train.bo"),
                             os.path.join(files_path, "valid.bo"),
                             os.path.join(files_path, "test.bo")
                         ],
-                        "en_fn": [
+                        "target_fn": [
                             os.path.join(files_path, "train.en"),
                             os.path.join(files_path, "valid.en"),
                             os.path.join(files_path, "test.en")
                         ],
+                    }
+                )
+            ]
+        elif self.config.name == "nllb_augmentation":
+            return [
+                datasets.SplitGenerator(
+                    name=datasets.NamedSplit("bod_Tibt.ita_Latn"),
+                    gen_kwargs={
+                        "source_fn": os.path.join(files_path, "bod_Tibt-ita_Latn/train.bo"),
+                        "target_fn": os.path.join(files_path, "bod_Tibt-ita_Latn/train.it")
                     }
                 )
             ]
@@ -126,47 +142,56 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                 datasets.SplitGenerator(
                     name=datasets.Split.TRAIN,
                     gen_kwargs={
-                        "bo_fn": os.path.join(files_path, "train.bo"),
-                        "en_fn": os.path.join(files_path, "train.en")}),
+                        "source_fn": os.path.join(files_path, "train.bo"),
+                        "target_fn": os.path.join(files_path, "train.en")
+                    }
+                ),
                 datasets.SplitGenerator(
                     name=datasets.Split.VALIDATION,
                     gen_kwargs={
-                        "bo_fn": os.path.join(files_path, "valid.bo"),
-                        "en_fn": os.path.join(files_path, "valid.en")}),
+                        "source_fn": os.path.join(files_path, "valid.bo"),
+                        "target_fn": os.path.join(files_path, "valid.en")
+                    }
+                ),
                 datasets.SplitGenerator(
                     name=datasets.Split.TEST,
                     gen_kwargs={
-                        "bo_fn": os.path.join(files_path, "test.bo"),
-                        "en_fn": os.path.join(files_path, "test.en")}),
+                        "source_fn": os.path.join(files_path, "test.bo"),
+                        "target_fn": os.path.join(files_path, "test.en")
+                    }
+                ),
             ]
 
-    def _read_from_files(self, bo_fn, en_fn):
-        if isinstance(bo_fn, list):
-            if not isinstance(en_fn, list) or not len(bo_fn) == len(en_fn):
+    def _read_from_files(self, source_fn, target_fn):
+        if isinstance(source_fn, list):
+            if not isinstance(target_fn, list) or not len(source_fn) == len(target_fn):
                 raise ValueError("Both input files must be either strings or lists of strings of the same length")
             # Read lists of parallel files for a split
-            logger.info(f"Loading parallel sentences from bo=[{', '.join(bo_fn)}] and en=[{', '.join(en_fn)}]")
-            for cur_bo_fn, cur_en_fn in zip(bo_fn, en_fn):
-                with open(cur_bo_fn, encoding="utf-8") as bo_f, open(cur_en_fn, encoding="utf-8") as en_f:
-                    for id_, (bo, en) in enumerate(zip(bo_f, en_f)):
-                        id_ = cur_bo_fn + '|' + str(id_)
-                        yield id_, bo, en
+            logger.info(
+                f"Loading parallel sentences from source=[{', '.join(source_fn)}] and target=[{', '.join(target_fn)}]")
+            for cur_source_fn, cur_target_fn in zip(source_fn, target_fn):
+                with open(cur_source_fn, encoding="utf-8") as source_f, \
+                     open(cur_target_fn, encoding="utf-8") as target_f \
+                :
+                    for id_, (source, target) in enumerate(zip(source_f, target_f)):
+                        id_ = cur_source_fn + '|' + str(id_)
+                        yield id_, source, target
             return
 
-        if isinstance(en_fn, list):
+        if isinstance(target_fn, list):
             raise ValueError("Both input files must be either strings or lists of strings of the same length")
 
         # Read two parallel files for a split
-        logger.info(f"Loading parallel sentences from bo={bo_fn} and en={en_fn}")
-        with open(bo_fn, encoding="utf-8") as bo_f, open(en_fn, encoding="utf-8") as en_f:
-            for id_, (bo, en) in enumerate(zip(bo_f, en_f)):
-                id_ = bo_fn + '|' + str(id_)
-                yield id_, bo, en
+        logger.info(f"Loading parallel sentences from source={source_fn} and target={target_fn}")
+        with open(source_fn, encoding="utf-8") as source_f, open(target_fn, encoding="utf-8") as target_f:
+            for id_, (source, target) in enumerate(zip(source_f, target_f)):
+                id_ = source_fn + '|' + str(id_)
+                yield id_, source, target
 
-    def _generate_examples(self, bo_fn, en_fn):     # pylint: disable=arguments-differ
-        for id_, bo, en in self._read_from_files(bo_fn, en_fn):
-            bo, en = bo.strip(), en.strip()
+    def _generate_examples(self, source_fn, target_fn):     # pylint: disable=arguments-differ
+        for id_, source, target in self._read_from_files(source_fn, target_fn):
+            source, target = source.strip(), target.strip()
             yield id_, {
-                "tibetan": bo,
-                "english": en
+                "source": source,
+                "target": target
             }
