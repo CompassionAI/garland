@@ -31,7 +31,7 @@ def main(cfg):
     nllb_data = load_dataset("allenai/nllb", cfg.languages.source + '-' + cfg.languages.target)[cfg.dataset.split]
     logger.info("Extracting original data")
     translation_key = cfg.dataset.translation_key
-    original_data = [ex[translation_key] for ex in tqdm(nllb_data.select(range(10000)))]
+    original_data = [ex[translation_key] for ex in tqdm(nllb_data)]
     logger.info(f"Loaded dataset of length {len(original_data)}")
 
     logger.info("Filtering")
