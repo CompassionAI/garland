@@ -56,8 +56,8 @@ class ContextInjectionDataset(TorchDataset):
         logger.info("Testing alignment with base dataset")
         not_found = []
         for ex in tqdm(self.base_dataset):
-            if not self.hash_key(ex['english']) in self.all_context_keys:
-                not_found.append(ex['english'])
+            if not self.hash_key(ex[context_lookup_key]) in self.all_context_keys:
+                not_found.append(ex[context_lookup_key])
         logger.info(
             f"Not found {len(not_found)} examples, this is {len(not_found) / len(self.base_dataset):.2%} of the "
                 "data")
