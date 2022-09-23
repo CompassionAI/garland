@@ -29,11 +29,10 @@ from hydra.core.hydra_config import HydraConfig
 from cai_common.utils.hydra_training_args import HydraSeq2SeqTrainingArguments
 from cai_common.utils.tensorboard_callback import CAITensorboardCallback
 from colorama import init as init_colorama, Fore as ForeColor
+from tqdm.auto import tqdm
 
-import torch
 import datasets
 import numpy as np
-from torch.utils.data import ConcatDataset, TensorDataset
 from datasets import load_dataset, load_metric
 
 from cai_garland.models.factory import make_encoder_decoder
@@ -357,6 +356,13 @@ def main(cfg):
         train_datasets, probabilities=interleaving_rates, stopping_strategy="first_exhausted")
     eval_dataset = eval_datasets[0]
     test_dataset = test_datasets[0]
+
+    logger.info("Counting training set unks")
+    unk_count = sum(
+        [sum([t == tokenizer.target_tokenizer.unk_token_id for t in ex["labels"]]) for ex in tqdm(train_dataset)])
+    logger.info("Counting training set tokens")
+    num_tokens = sum([1 for ex in tqdm(train_dataset) for t in ex["labels"]])
+    logger.info(f"There are {unk_count} unks out of {num_tokens} tokens in the training data.")
 
     if cfg.training_preprocess.shuffle_training_data:
         logger.info("Shuffling training dataset")
