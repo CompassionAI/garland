@@ -324,7 +324,7 @@ def main(cfg):
     if context_injection:
         model.force_preparing_model_for_generation = True
 
-    train_datasets, eval_datasets, test_datasets = [], [], []
+    train_datasets, eval_datasets, test_datasets, interleaving_rates = [], [], [], []
     for dataset_idx, dataset_name in enumerate(cfg.data):
         logger.info(f"{ForeColor.LIGHTCYAN_EX}Loading dataset \"{dataset_name}\" ({dataset_idx + 1}/{len(cfg.data)})")
         train_dataset, eval_dataset, test_dataset = load_hf_dataset(
@@ -344,18 +344,19 @@ def main(cfg):
             eval_datasets.append(eval_dataset)
         if test_dataset is not None:
             test_datasets.append(test_dataset)
-    if len(train_datasets) == 0:
-        train_dataset = TensorDataset(torch.Tensor([]))
-    else:
-        train_dataset = ConcatDataset(train_datasets)
-    if len(eval_datasets) == 0:
-        eval_dataset = TensorDataset(torch.Tensor([]))
-    else:
-        eval_dataset = ConcatDataset(eval_datasets)
-    if len(test_datasets) == 0:
-        test_dataset = TensorDataset(torch.Tensor([]))
-    else:
-        test_dataset = ConcatDataset(test_datasets)
+        interleaving_rates.append(getattr(cfg.data[dataset_name], "interleaving_rate", None))
+    if any([r is None for r in interleaving_rates[1:]]):
+        raise ValueError("An interleaving rate for an augmenting dataset is not specified in the config.")
+    interleaving_rates[0] = 1 - sum(interleaving_rates[1:])
+    if interleaving_rates[0] < 0:
+        raise ValueError("Interleaving rates for augmenting datasets too large.")
+    if len(eval_datasets) > 1 or len(test_datasets) > 1:
+        raise ValueError("Augmenting datasets should only have training splits.")
+    logger.info("Interleaving training dataset")
+    train_dataset = datasets.interleave_datasets(
+        train_datasets, probabilities=interleaving_rates, stopping_strategy="first_exhausted")
+    eval_dataset = eval_datasets[0]
+    test_dataset = test_datasets[0]
 
     if cfg.training_preprocess.shuffle_training_data:
         logger.info("Shuffling training dataset")
