@@ -111,6 +111,9 @@ def main(cfg):
     if cfg.cuda:
         translator.cuda()
 
+    if target_language_code is not None and hasattr(cfg, "word_exclusion"):
+        translator.bad_words = getattr(cfg.word_exclusion, target_language_code, [])
+
     instantiate(cfg.mode.process_func, translator, cfg.mode, cfg.generation, target_language_code)
 
 

@@ -90,6 +90,7 @@ class Translator:
         self._cuda = False
         self.context_encoder = None
         self.decoding_length = self.model.decoder.max_length
+        self._bad_words, self._bad_word_tokens = [], []
 
     def cuda(self) -> None:
         self._cuda = True
@@ -102,6 +103,16 @@ class Translator:
         self.model.cpu()
         if self.context_encoder is not None:
             self.context_encoder.cpu()
+
+    @property
+    def bad_words(self):
+        return self._bad_words
+
+    @bad_words.setter
+    def bad_words(self, value):
+        self._bad_words = value
+        with self.tokenizer.as_target_tokenizer():
+            self._bad_word_tokens = [self.tokenizer.encode(w, add_special_tokens=False) for w in self._bad_words]
 
     def prepare_context_encoder(self, hf_model_name):
         """Prepare a context encoder for translation with context.
@@ -272,6 +283,7 @@ class Translator:
                 forced_bos_token_id=language_token,
                 num_beams=self.num_beams,
                 prefix_allowed_tokens_fn=prefix_fn,
+                bad_words_ids=None if len(self._bad_word_tokens) == 0 else self._bad_word_tokens,   # Needs to be None instead of empty, otherwise HF throws ValueError
                 **generator_kwargs
             )[0]
         if self._cuda:
