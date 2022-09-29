@@ -357,6 +357,17 @@ def main(cfg):
     eval_dataset = eval_datasets[0]
     test_dataset = test_datasets[0]
 
+    logger.info("Final dataset sizes:")
+    logger.info(f"    Training size   = {len(train_dataset)}")
+    if eval_dataset is not None:
+        logger.info(f"    Validation size = {len(eval_dataset)}")
+    else:
+        logger.info("    No validation set")
+    if test_dataset is not None:
+        logger.info(f"    Test size       = {len(test_dataset)}")
+    else:
+        logger.info("    No test set")
+
     logger.info("Counting training set unks")
     unk_count = sum(
         [sum([t == tokenizer.target_tokenizer.unk_token_id for t in ex["labels"]]) for ex in tqdm(train_dataset)])
