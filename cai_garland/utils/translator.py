@@ -161,7 +161,7 @@ class Translator:
         bo_text: str,
         prefix: Optional[str]=None,
         context: Optional[str]=None,
-        language_code: Optional[str]=None,
+        target_language_code: Optional[str]=None,
         encoder_outputs: Any = None,
         generator_kwargs: Dict[Any, Any]={},
     ) -> str:
@@ -174,6 +174,8 @@ class Translator:
                 requires a model with a decoder that accepts context and is trained with context, otherwise your
                 translation will crash. You need to initialize the context model by calling prepare_context_encoder
                 before running this.
+            target_language_code (optional): The language code for the target language for multilingual decoders. For
+                example: ita_Latn.
             encoder_outputs (optional): Pre-computed encoder outputs. If not specified, the model will run the encoder.
             generator_kwargs (optional): Any additional keyword arguments to pass to the generator function.
 
@@ -260,10 +262,10 @@ class Translator:
             generator_kwargs['encoder_outputs'] = encoder_outputs
             generator_kwargs['attention_mask'] = encoder_outputs.attention_mask
         with self.model.prepare_model_for_generation(ctx_embedding, ctx_mask):
-            if language_code is None:
+            if target_language_code is None:
                 language_token = self.model.forced_bos_token_id(self.tokenizer)
             else:
-                language_token = self.tokenizer.target_tokenizer.lang_code_to_id[language_code]
+                language_token = self.tokenizer.target_tokenizer.lang_code_to_id[target_language_code]
             preds = self.model.generate(
                 bo_tokens,
                 max_length=self.decoding_length,
@@ -364,7 +366,7 @@ class Translator:
                         input_,
                         prefix=prefix,
                         context=context_window,
-                        language_code=target_language_code,
+                        target_language_code=target_language_code,
                         encoder_outputs=encoder_outputs,
                         generator_kwargs=generator_kwargs
                     )
