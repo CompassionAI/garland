@@ -61,6 +61,6 @@ generation:
   no_repeat_ngram_size: 3
 
 output:
-  output_dir: nllb_synthetic
+  output_dir: temp_data/nllb_synthetic
   source_fn: train.bo
   target_fn: train.it

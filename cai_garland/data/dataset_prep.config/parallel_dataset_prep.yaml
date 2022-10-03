@@ -38,7 +38,7 @@ input:
   tokenizer_name: olive-large
 
 output:
-  output_dir: ${oc.env:CAI_TEMP_PATH}/enbo_data
+  output_dir: ${oc.env:CAI_TEMP_PATH}/temp_data/enbo_data
 
   # Use the test split as validation data, with no test data
   use_test_for_validation: true
