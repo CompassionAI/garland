@@ -129,37 +129,43 @@ class SegmenterTargetTokenCount(SegmenterBase):
 class SegmenterModel(SegmenterBase):
     discourage_long_segments = False
 
+    model_name = None
+    tokenizer = None
+    model_cfg = None
+    model = None
+
     def __init__(self, model_name, translator=None):
         if translator is None:
             raise ValueError("SegmenterModel init needs to have the translator helper class passed in")
         super().__init__(translator=translator)
-        logger.debug(f"Loading segmentation model {model_name}")
+        if not SegmenterModel.model_name == model_name:
+            logger.info(f"Loading segmentation model {model_name}")
+            SegmenterModel.model_name = model_name
 
-        local_ckpt = get_local_ckpt(model_name)
-        logger.debug(f"Local model checkpoint {model_name} resolved to {local_ckpt}")
+            local_ckpt = get_local_ckpt(model_name)
+            logger.debug(f"  Local model checkpoint {model_name} resolved to {local_ckpt}")
 
-        logger.debug("Loading CAI PoS model config")
-        cai_pos_config = get_cai_config(model_name)
-        base_model = cai_pos_config['base_model']
-        logger.debug(f"Base model resolved to {base_model}")
+            logger.debug("  Loading CAI segmenter model config")
+            cai_segmenter_config = get_cai_config(model_name)
+            base_model = cai_segmenter_config['base_model']
+            logger.debug(f"  Base model resolved to {base_model}")
 
-        logger.debug("Loading CAI base model config")
-        cai_base_config = get_cai_config(base_model)
-        config_name = cai_base_config['hf_base_model_name']
-        tokenizer_name = cai_base_config['tokenizer_name']
+            logger.debug("  Loading CAI base model config")
+            cai_base_config = get_cai_config(base_model)
+            config_name = cai_base_config['hf_base_model_name']
+            tokenizer_name = cai_base_config['tokenizer_name']
 
-        logger.debug(f"Loading tokenizer {tokenizer_name}")
-        self.tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(tokenizer_name))
+            logger.info(f"  Loading tokenizer {tokenizer_name}")
+            SegmenterModel.tokenizer = CAITokenizer.from_pretrained(CAITokenizer.get_local_model_dir(tokenizer_name))
 
-        logger.debug("Loading Huggingface model config")
-        self.model_cfg = AutoConfig.from_pretrained(
-            config_name, vocab_size=self.tokenizer.vocab_size, num_labels=2)
-
-        logger.debug("Loading model")
-        self.model = AlbertForSequenceClassification.from_pretrained(local_ckpt, config=self.model_cfg)
-        logger.debug("Configuring model")
-        self.model.resize_token_embeddings(len(self.tokenizer))
-        self.model.eval()
+            logger.info("  Loading model")
+            logger.debug("  Loading Huggingface model config")
+            SegmenterModel.model_cfg = AutoConfig.from_pretrained(
+                config_name, vocab_size=SegmenterModel.tokenizer.vocab_size, num_labels=2)
+            SegmenterModel.model = AlbertForSequenceClassification.from_pretrained(local_ckpt, config=SegmenterModel.model_cfg)
+            logger.debug("  Configuring model")
+            SegmenterModel.model.resize_token_embeddings(len(SegmenterModel.tokenizer))
+            SegmenterModel.model.eval()
 
     def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
         bo_segments = SegmenterClosingShad()(bo_text)
@@ -176,7 +182,7 @@ class SegmenterModel(SegmenterBase):
                     res.append(old_candidate)
                 candidate = segment
                 candidate_len = len(translator.tokenizer.encode(candidate, add_special_tokens=False))
-            scores = self.model(**self.tokenizer(candidate, return_tensors="pt")).logits.detach()
+            scores = SegmenterModel.model(**SegmenterModel.tokenizer(candidate, return_tensors="pt")).logits.detach()
             scores = softmax(scores, dim=1)
             model_score = float(scores[0][1])
             needed_score = min(1 - 0.5 * candidate_len / available_space, 0.8) if self.discourage_long_segments else 0.5
