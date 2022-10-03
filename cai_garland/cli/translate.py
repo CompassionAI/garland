@@ -91,7 +91,7 @@ def batch(translator, mode_cfg, generation_cfg, target_language_code):
                 out_f.flush()
 
 
-@hydra.main(version_base="1.2", config_path="./translate.config", config_name="config")
+@hydra.main(version_base="1.2", config_path="./translate.config", config_name="translate")
 def main(cfg):
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
