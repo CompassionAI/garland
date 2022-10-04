@@ -13,7 +13,7 @@ hydra:
 languages:
   source: bod_Tibt
   target: eng_Latn
-  final: ita_Latn
+  # final: ita_Latn
 
 dataset:
   translation_key: translation
