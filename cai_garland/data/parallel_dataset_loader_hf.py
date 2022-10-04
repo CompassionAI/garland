@@ -135,6 +135,13 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                         "source_fn": os.path.join(files_path, "bod_Tibt-ita_Latn/train.bo"),
                         "target_fn": os.path.join(files_path, "bod_Tibt-ita_Latn/train.it")
                     }
+                ),
+                datasets.SplitGenerator(
+                    name=datasets.NamedSplit("bod_Tibt.eng_Latn"),
+                    gen_kwargs={
+                        "source_fn": os.path.join(files_path, "bod_Tibt-eng_Latn/train.bo"),
+                        "target_fn": os.path.join(files_path, "bod_Tibt-eng_Latn/train.it")
+                    }
                 )
             ]
         else:
