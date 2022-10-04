@@ -41,15 +41,21 @@ def main(cfg):
             filtered_data.append(ex)
     logger.info(f"Dataset length={len(filtered_data)} after filtering")
 
-    logger.info("Loading tokenizer")
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model, src_lang=cfg.languages.source, tgt_lang=cfg.languages.final)
-    logger.info("Loading model")
-    model = AutoModelForSeq2SeqLM.from_pretrained(cfg.model)
+    translation_needed = hasattr(cfg.languages, "final") and not cfg.languages.final == cfg.languages.target
+    if translation_needed:
+        logger.info("Loading tokenizer")
+        tokenizer = AutoTokenizer.from_pretrained(
+            cfg.model, src_lang=cfg.languages.source, tgt_lang=cfg.languages.final)
+        logger.info("Loading model")
+        model = AutoModelForSeq2SeqLM.from_pretrained(cfg.model)
 
-    if cfg.compute.cuda:
-        model.cuda()
+        if cfg.compute.cuda:
+            model.cuda()
 
-    logger.info("Translating")
+        logger.info("Translating")
+    else:
+        logger.info("Dumping dataset")
+
     os.makedirs(os.path.join(os.environ['CAI_TEMP_PATH'], cfg.output.output_dir), exist_ok=True)
     with \
         open(os.path.join(os.environ['CAI_TEMP_PATH'], cfg.output.output_dir, cfg.output.source_fn), 'w') as f_source, \
@@ -58,15 +64,18 @@ def main(cfg):
         for i in tqdm(range(0, len(filtered_data), cfg.compute.batch_size)):
             parallel_batch = filtered_data[i:i+cfg.compute.batch_size]
             intermediate_batch = [ex[cfg.languages.target] for ex in parallel_batch]
-            translated_tokens = model.generate(
-                **tokenizer(intermediate_batch, return_tensors="pt", padding=True).to(model.device),
-                forced_bos_token_id=tokenizer.lang_code_to_id[cfg.languages.final],
-                max_length=cfg.generation.max_length,
-                num_beams=cfg.generation.num_beams,
-                repetition_penalty=cfg.generation.repetition_penalty,
-                no_repeat_ngram_size=cfg.generation.no_repeat_ngram_size
-            )
-            targets_batch = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)
+            if translation_needed:
+                translated_tokens = model.generate(
+                    **tokenizer(intermediate_batch, return_tensors="pt", padding=True).to(model.device),
+                    forced_bos_token_id=tokenizer.lang_code_to_id[cfg.languages.final],
+                    max_length=cfg.generation.max_length,
+                    num_beams=cfg.generation.num_beams,
+                    repetition_penalty=cfg.generation.repetition_penalty,
+                    no_repeat_ngram_size=cfg.generation.no_repeat_ngram_size
+                )
+                targets_batch = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)
+            else:
+                targets_batch = intermediate_batch
             sources_batch = [ex[cfg.languages.source] for ex in parallel_batch]
 
             sources_batch = _apply_processors_unpacked(cfg.dataset.preprocessing.source_lang, [sources_batch])[0]
