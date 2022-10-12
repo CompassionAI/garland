@@ -1,8 +1,8 @@
 defaults:
   - data:
-    - 84000-parallel-sentences-raw-with-context
+    - 84000-parallel-sentences-raw-with-bidirectional-context
     # - nllb-augmentation-bo-it
-    - nllb-augmentation-bo-en
+    # - nllb-augmentation-bo-en
   - dataset_construction: context-injection
   - model: olive-cormorant-nllb-pooled-context-injection
   - training: basic_with_bleu
