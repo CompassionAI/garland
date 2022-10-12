@@ -268,8 +268,8 @@ class ConsecutiveNLISequencer(NLISequencer):
 
 
 class ConsecutiveCosineSequencer:
-    """Sequencer for parallel dataset preparation that uses cosine similarity in the pre-trained embedding space to stop
-        in-order walks of the flat data when it looks like the sentence has changed."""
+    """Sequencer for parallel dataset preparation that uses cosine similarity in the pre-trained embedding space to
+        stop in-order walks of the flat data when it looks like the sentence has changed."""
 
     def __init__(self, inference_cfg, sequencing_cfg, flat_data):
         logger.info("Loading shuffling sequencer model")
@@ -329,23 +329,16 @@ class FollowsAnywhereSequencer:
 
     The sentences are first stripped of accents, lower-cased, consecutive spaces are removed, and then everything is
         removed except spaces and lowercase English letters. The search is performed in this.
+    
+    Can also fix the casing while sequencing by comparing against the long-form translations.
     """
 
     fix_casing = False
 
     def _preprocess(self, text):
-        nfkd_form = unicodedata.normalize('NFKD', text)
-        text = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+        text = unicodedata.normalize('NFKD', text)
+        text = ''.join([c for c in text if c in self.final_allowed])
         text = re.sub(r'\s+', ' ', text).strip()
-        if not self.fix_casing:
-            text = text.lower()
-
-        final_allowed = set(string.ascii_lowercase)
-        if self.fix_casing:
-            final_allowed |= set(string.ascii_uppercase)
-        final_allowed.add(" ")
-        text = ''.join([c for c in text if c in final_allowed])
-
         return text
 
     def __init__(self, inference_cfg, sequencing_cfg, flat_data):
@@ -356,7 +349,9 @@ class FollowsAnywhereSequencer:
         folio_df = TeiLoader('kangyur').dataframe.compute()
         self.all_translations = {}
         for _, row in folio_df.iterrows():
-            self.all_translations[row.tohoku_number] = self.all_translations.get(row.tohoku_number, "") + " " + row.text
+            self.all_translations[row.tohoku_number] = self.all_translations.get(row.tohoku_number, "") + " " + \
+                row.text
+        self.final_allowed = set(string.ascii_lowercase) | set(string.ascii_uppercase) | set([' '])
         self.all_translations = {
             key: self._preprocess(val)
             for key, val in self.all_translations.items()
@@ -365,23 +360,43 @@ class FollowsAnywhereSequencer:
         if sequencing_cfg.count_examples_not_in_any_translation:
             concat_translations = ' '.join(self.all_translations.values())
             counts = [(self._preprocess(ex['english']) in concat_translations) for ex in tqdm(flat_data)]
-            logger.info(f"There are {len(flat_data) - sum(counts)} parallel sentences that don't match any full length "
-                        f"translation text. This works out to {1 - sum(counts) / len(flat_data):.2%} of the data.")
+            logger.info(f"There are {len(flat_data) - sum(counts)} parallel sentences that don't match any full "
+                        f"length translation text. This works out to {1 - sum(counts) / len(flat_data):.2%} of the "
+                        f"data.")
 
         self.flat_data = flat_data
         self.inference_cfg = inference_cfg
         self.sequencing_cfg = sequencing_cfg
         self.num_fails = 0
 
-    def should_be_uppercase(self, sent):
-        sent = self._preprocess(sent['english'])
+    def compare_casing(self, sent):
+        normed_sent = unicodedata.normalize('NFKD', sent)
+        sent = self._preprocess(normed_sent)
         for translation in self.all_translations.values():
             lc_translation = translation.lower()
             sent_idxs = [m.start() for m in re.finditer(re.escape(sent), lc_translation)]
             if len(sent_idxs) > 0:
-                if any([translation[i] in string.ascii_uppercase for i in sent_idxs]):
-                    return True
-        return False
+                prev_bitext_c, prev_translation_c, bitext_c_idx, translation_c_idx = None, None, 0, sent_idxs[0]
+                normed_sent = list(normed_sent)
+                while bitext_c_idx < len(normed_sent):
+                    cur_bitext_c, cur_translation_c = normed_sent[bitext_c_idx], translation[translation_c_idx]
+                    if (not cur_bitext_c in self.final_allowed) or (prev_bitext_c == ' ' and cur_bitext_c == ' '):
+                        prev_bitext_c = cur_bitext_c
+                        bitext_c_idx += 1
+                        continue
+                    if (not cur_translation_c in self.final_allowed) or \
+                       (prev_translation_c == ' ' and cur_translation_c == ' ') \
+                    :
+                        prev_translation_c = cur_translation_c
+                        translation_c_idx += 1
+                        continue
+                    if cur_translation_c in string.ascii_uppercase:
+                        normed_sent[bitext_c_idx] = normed_sent[bitext_c_idx].capitalize()
+                    prev_bitext_c, prev_translation_c = cur_bitext_c, cur_translation_c
+                    bitext_c_idx += 1
+                    translation_c_idx += 1
+                return ''.join(normed_sent)
+        return sent
 
     def are_in_sequence(self, first, second):
         first, second = self._preprocess(first), self._preprocess(second)
@@ -394,8 +409,8 @@ class FollowsAnywhereSequencer:
         return False
         
     def generate(self, start_example=None):
-        """Generate a sequence of adequate sentence fragments using the follows-anywhere rule described in the docstring
-            for this class.
+        """Generate a sequence of adequate sentence fragments using the follows-anywhere rule described in the
+            docstring for this class.
 
         Args:
             start_example (str): Example to start generating the adequate sequence from. If None, pick a starting
@@ -409,8 +424,8 @@ class FollowsAnywhereSequencer:
 
         while True:
             cur_sent = self.flat_data[cur_idx]
-            if self.fix_casing and self.should_be_uppercase(cur_sent):
-                cur_sent['english'] = cur_sent['english'].capitalize()
+            if self.fix_casing:
+                cur_sent['english'] = self.compare_casing(cur_sent['english'])
             yield cur_sent
             cur_idx += 1
             if cur_idx == len(self.flat_data):
