@@ -331,13 +331,18 @@ class FollowsAnywhereSequencer:
         removed except spaces and lowercase English letters. The search is performed in this.
     """
 
+    fix_casing = False
+
     def _preprocess(self, text):
         nfkd_form = unicodedata.normalize('NFKD', text)
         text = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
         text = re.sub(r'\s+', ' ', text).strip()
-        text = text.lower()
+        if not self.fix_casing:
+            text = text.lower()
 
         final_allowed = set(string.ascii_lowercase)
+        if self.fix_casing:
+            final_allowed |= set(string.ascii_uppercase)
         final_allowed.add(" ")
         text = ''.join([c for c in text if c in final_allowed])
 
@@ -368,11 +373,22 @@ class FollowsAnywhereSequencer:
         self.sequencing_cfg = sequencing_cfg
         self.num_fails = 0
 
+    def should_be_uppercase(self, sent):
+        sent = self._preprocess(sent['english'])
+        for translation in self.all_translations.values():
+            lc_translation = translation.lower()
+            sent_idxs = [m.start() for m in re.finditer(re.escape(sent), lc_translation)]
+            if len(sent_idxs) > 0:
+                if any([translation[i] in string.ascii_uppercase for i in sent_idxs]):
+                    return True
+        return False
+
     def are_in_sequence(self, first, second):
         first, second = self._preprocess(first), self._preprocess(second)
         for translation in self.all_translations.values():
-            all_cur_sent_idxs = [m.start() for m in re.finditer(re.escape(first), translation)]
-            all_next_sent_idxs = [m.start() for m in re.finditer(re.escape(second), translation)]
+            lc_translation = translation.lower()
+            all_cur_sent_idxs = [m.start() for m in re.finditer(re.escape(first), lc_translation)]
+            all_next_sent_idxs = [m.start() for m in re.finditer(re.escape(second), lc_translation)]
             if any([(j - i - len(first)) <= 1 for i in all_cur_sent_idxs for j in all_next_sent_idxs]):
                 return True
         return False
@@ -393,19 +409,21 @@ class FollowsAnywhereSequencer:
 
         while True:
             cur_sent = self.flat_data[cur_idx]
+            if self.fix_casing and self.should_be_uppercase(cur_sent):
+                cur_sent['english'] = cur_sent['english'].capitalize()
             yield cur_sent
             cur_idx += 1
             if cur_idx == len(self.flat_data):
                 return
 
-            cur_sent = cur_sent['english']
+            cur_sent = cur_sent['english'].lower()
             next_sent = self.flat_data[cur_idx]['english']
             if not self.are_in_sequence(cur_sent, next_sent):
                 self.num_fails += 1
                 return
 
 
-def make_sequencer(inference_cfg, sequencing_cfg, flat_data):
+def make_sequencer(inference_cfg, sequencing_cfg, flat_data, fix_casing=False):
     if sequencing_cfg.type == "nli":
         sequencer = NLISequencer
     elif sequencing_cfg.type == "consecutive-nli":
@@ -418,4 +436,5 @@ def make_sequencer(inference_cfg, sequencing_cfg, flat_data):
         sequencer = InOrderSequencer
     else:
         raise ValueError(f"Unknown sequencer {sequencing_cfg.type}")
+    sequencer.fix_casing = fix_casing
     return sequencer(inference_cfg, sequencing_cfg, flat_data)

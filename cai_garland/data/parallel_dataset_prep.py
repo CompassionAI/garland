@@ -345,7 +345,8 @@ def _prep_linear_dataset(flat_data, _cfg, _stage_cfg, _tokenizer):
 def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples
     logger.info("Creating sequencer object")
-    sequencer = make_sequencer(cfg.compute, stage_cfg.sequencing, flat_data)
+    sequencer = make_sequencer(
+        cfg.compute, stage_cfg.sequencing, flat_data, fix_casing=getattr(stage_cfg, "fix_casing", False))
 
     logger.info("Sampling starting sentences")
     starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
@@ -502,6 +503,7 @@ def _find_context(args):
     res = []
     for fragment in fragments:
         fail = True
+        fragment = fragment.lower()
         for translated in flat_data:
             if fragment in translated:
                 fail = False
