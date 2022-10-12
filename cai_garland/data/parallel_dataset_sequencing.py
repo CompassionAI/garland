@@ -379,6 +379,8 @@ class FollowsAnywhereSequencer:
                 prev_bitext_c, prev_translation_c, bitext_c_idx, translation_c_idx = None, None, 0, sent_idxs[0]
                 normed_sent = list(normed_sent)
                 while bitext_c_idx < len(normed_sent):
+                    if translation_c_idx >= len(translation):
+                        break
                     cur_bitext_c, cur_translation_c = normed_sent[bitext_c_idx], translation[translation_c_idx]
                     if (not cur_bitext_c in self.final_allowed) or (prev_bitext_c == ' ' and cur_bitext_c == ' '):
                         prev_bitext_c = cur_bitext_c
