@@ -1,7 +1,7 @@
 defaults:
   - datasets/84000-parallel-sentences@naive-concats-sequenced
   - sequencing/follows-anywhere@naive-concats-sequenced
-  - concat/concat-future-context@naive-concats-sequenced
+  - concat/concat@naive-concats-sequenced
 
 naive-concats-sequenced:
   # Function to pull the dataset
