@@ -398,7 +398,7 @@ class FollowsAnywhereSequencer:
                     bitext_c_idx += 1
                     translation_c_idx += 1
                 return ''.join(normed_sent)
-        return sent
+        return normed_sent
 
     def are_in_sequence(self, first, second):
         first, second = self._preprocess(first), self._preprocess(second)
