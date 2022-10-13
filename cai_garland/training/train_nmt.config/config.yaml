@@ -4,7 +4,7 @@ defaults:
     # - nllb-augmentation-bo-it
     # - nllb-augmentation-bo-en
   - dataset_construction: context-injection
-  - model: olive-cormorant-nllb-pooled-context-injection
+  - model: olive-cormorant-nllb-pooled-context-injection-cased
   - training: basic_with_bleu
   - training_preprocess: basic
   - override hydra/job_logging: colorlog
