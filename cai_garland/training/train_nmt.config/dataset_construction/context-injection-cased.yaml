@@ -1,0 +1,16 @@
+context_injection:
+  context_file: experiments/84000-parallel-sentences-raw-with-context-cased/contexts.pkl
+  context_lookup_key: target
+
+  # Whether to run the contexts through an encoder
+  raw_contexts: false
+
+  # What context encoder model to use
+  context_encoder: facebook/bart-base
+
+  # Context encoder compute settings
+  batch_size: 16
+  cuda: true
+
+  # Regenerate any embeddings stored on the HDD already
+  overwrite_existing_embeddings: false
