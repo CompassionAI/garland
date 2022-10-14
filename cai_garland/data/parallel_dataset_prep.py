@@ -505,9 +505,9 @@ def _find_context(args):
         fail = True
         fragment = fragment.lower()
         for translated in flat_data:
-            if fragment in translated:
+            if fragment in translated.lower():
                 fail = False
-                ctx_idx = random.choice([m.start() for m in re.finditer(re.escape(fragment), translated)])
+                ctx_idx = random.choice([m.start() for m in re.finditer(re.escape(fragment), translated.lower())])
                 context = translated[ctx_idx - max_context_length:ctx_idx]
                 context = ' '.join(context.split(' ')[-context_window:])
                 res.append(context)
