@@ -1,0 +1,27 @@
+defaults:
+  - datasets/84000-full-translations-cased@context-embeddings-from-folios
+
+context-embeddings-from-folios:
+  # Function to pull the dataset
+  pull_func:
+    _target_: cai_garland.data.parallel_dataset_prep._pull_translated_dataset
+
+  # Function to prepare the dataset
+  prep_func:
+    _target_: cai_garland.data.parallel_dataset_prep._prep_context_dataset
+
+  # Override the rest of the processing for this data.
+  stop_after_prep: true
+
+  # This stage puts all loaded data in the training split
+  exclude_from_test: true
+  exclude_from_validation: true
+
+  # How many target language words (not tokens) to go back for previous context
+  context_window: 50
+
+  # At most how many characters can the context be
+  max_context_length: 1000
+
+  # Hugging Face model name to use for context encoding
+  context_encoder: facebook/bart-base

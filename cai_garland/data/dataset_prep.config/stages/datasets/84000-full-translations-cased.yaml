@@ -1,0 +1,35 @@
+dataset:
+  # Preprocessing settings, before any stages are applied.
+  #
+  # These are (possibly empty) lists of function classes in cai_garland.utils.str_processors, formatted like so:
+  #   - _target_: cai_garland.utils.str_processors.ProcessorSampleFunc1
+  #   - _target_: cai_garland.utils.str_processors.ProcessorSampleFunc2
+  #   - ...
+  preprocessing:
+    source_lang:
+      # Symbol cleanup mapping for the source language, relative to parallel_dataset_prep.py
+      - _target_: cai_garland.utils.str_processors.ProcessorSymbolCleaningJSON
+        _args_: [dataset_prep.config/symbol_cleaning_bo.json]
+      - _target_: cai_garland.utils.str_processors.ProcessorStrip
+      - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
+      - _target_: cai_garland.utils.str_processors.ProcessorRemoveDanglingShads
+      - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
+
+    target_lang:
+      # Symbol cleanup mapping for the target language, relative to parallel_dataset_prep.py
+      - _target_: cai_garland.utils.str_processors.ProcessorSymbolCleaningJSON
+        _args_: [dataset_prep.config/symbol_cleaning_en_no_skip.json]
+      - _target_: cai_garland.utils.str_processors.ProcessorStrip
+      - _target_: cai_garland.utils.str_processors.ProcessorReplaceNewLineWithSpace
+      - _target_: cai_garland.utils.str_processors.ProcessorRemoveAccents
+      - _target_: cai_garland.utils.str_processors.ProcessorRemoveBracketed
+        _args_: ["{([<", ">])}"]
+      - _target_: cai_garland.utils.str_processors.ProcessorRemoveCharacters
+        _args_: ["0-9"]
+      - _target_: cai_garland.utils.str_processors.ProcessorRemoveCharacters
+        _args_: ["]{)\"'_>%"]
+      - _target_: cai_garland.utils.str_processors.ProcessorRemoveConsecutiveSpaces
+      - _target_: cai_garland.utils.str_processors.ProcessorReplaceCharacters
+        _args_: ["!", "."]
+      - _target_: cai_garland.utils.str_processors.ProcessorReplaceCharacters
+        _args_: [";", "."]

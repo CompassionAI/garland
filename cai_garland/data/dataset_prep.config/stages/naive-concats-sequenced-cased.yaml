@@ -14,3 +14,6 @@ naive-concats-sequenced:
 
   # Do not sort the parallel dataset by index of the English sentence in the parallel folio dataset
   sort_by_starting_index: false
+
+  # Fix the casing during sequencing
+  fix_casing: true
