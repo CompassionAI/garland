@@ -1,5 +1,5 @@
 defaults:
-  - model: olive-cormorant-nllb-pooled-context
+  - model: olive-cormorant-nllb-pooled-context-cased
   # - model: nllb-with-context-for-zst
   - generation: model-segmenter-pooled-context
   - mode: interactive
