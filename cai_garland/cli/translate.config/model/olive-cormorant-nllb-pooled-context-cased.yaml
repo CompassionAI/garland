@@ -1,4 +1,0 @@
-model_ckpt: experiments/olive-cormorant-nllb-pooled-context-cased
-model_size: base-600M
-
-decoding_length: 200
