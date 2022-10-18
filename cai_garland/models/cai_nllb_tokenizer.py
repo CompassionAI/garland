@@ -4,6 +4,8 @@ import torch
 from transformers import NllbTokenizerFast
 from tokenizers import processors
 
+from cai_common.models.utils import get_local_file
+
 
 class CAINllbTokenizerFast(NllbTokenizerFast):
     """A wrapper class for the Transformers NLLB tokenizer that does two things:
@@ -23,7 +25,7 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         self.used_tokens = range(self.vocab_size)
 
     def remap_tokens(self, remapping_file):
-        with open(os.path.join(os.environ['CAI_DATA_BASE_PATH'], remapping_file), 'r') as f:
+        with open(get_local_file(remapping_file), 'r') as f:
             self.used_tokens = list(map(int, f.readlines()))
         self.tokenizer_remapping_forward = {
             token_id: line_num

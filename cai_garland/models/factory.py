@@ -1,7 +1,7 @@
 import os
 import logging
 
-from cai_common.models.utils import get_local_ckpt, get_cai_config
+from cai_common.models.utils import get_local_ckpt, get_cai_config, get_local_file
 from cai_manas.tokenizer import CAITokenizer
 from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
 from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoTokenizer
@@ -47,8 +47,7 @@ def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer):
                     hf_tokenizer_factory=_tokenizer_classes[tokenizer_cfg.get("tokenizer_class", "default")]
                 )
                 if 'remapping_file' in tokenizer_cfg:
-                    tokenizer.remap_tokens(
-                        os.path.join(os.environ['CAI_DATA_BASE_PATH'], tokenizer_cfg['remapping_file']))
+                    tokenizer.remap_tokens(get_local_file(tokenizer_cfg['remapping_file']))
                 return tokenizer
 
             base_tokenizer = _make_named_tokenizer(cai_config['base_model_name'])
