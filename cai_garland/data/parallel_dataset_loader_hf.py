@@ -39,7 +39,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "registers_3_only_no_splits": "processed_datasets/84000-parallel-sentences-3-registers-only",
         "registers_2_only": "processed_datasets/84000-parallel-sentences-2-registers-only",
         "raw_with_context": "processed_datasets/84000-parallel-sentences-raw-with-context",
-        "raw_with_context_cased": "experiments/84000-parallel-sentences-raw-with-context-cased",
+        "raw_with_context_cased": "processed_datasets/84000-parallel-sentences-raw-with-context-cased",
         "raw_with_bidirectional_context": "processed_datasets/84000-parallel-sentences-raw-with-bidirectional-context",
         "nllb_augmentation": "experiments/nllb-augmentation",
     }
