@@ -1,0 +1,5 @@
+recursive-include src *.py
+recursive-include src *.yaml
+recursive-include src *.json
+global-exclude *.pyc
+global-exclude __pycache__
