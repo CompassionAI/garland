@@ -1,6 +1,6 @@
 84000-parallel-sentences-2-registers-only:
   # The name of the dataset loader file to use (via the datasets library)
-  dataset_loader: cai_garland/data/parallel_dataset_loader_hf.py
+  dataset_loader: src/cai_garland/data/parallel_dataset_loader_hf.py
 
   # The name of the dataset to load from the loader file
   dataset_config: registers_2_only
