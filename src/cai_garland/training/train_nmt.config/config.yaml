@@ -3,8 +3,8 @@ defaults:
     - 84000-parallel-sentences-raw-with-context
     # - nllb-augmentation-bo-it
     # - nllb-augmentation-bo-en
-  - dataset_construction: no-context
-  - model: olive-cormorant-bart
+  - dataset_construction: context-injection
+  - model: olive-cormorant-nllb-pooled-context-injection
   - training: basic_with_bleu
   - training_preprocess: basic
   - override hydra/job_logging: colorlog
@@ -14,7 +14,7 @@ defaults:
 hydra:
   verbose: cai_garland.training
   run:
-    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-bart/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-with-context/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 # Uncomment this to skip evaluation
 # training:
