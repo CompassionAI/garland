@@ -131,7 +131,7 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args
         hf_name = packed_name[3:].strip()
 
         logger.debug(f"Loading model {hf_name}")
-        config = hf_model_factory.config_class.from_pretrained(hf_name)
+        config = getattr(hf_model_factory, "config_class", AutoConfig).from_pretrained(hf_name)
         for key, val in config_args.items():
             setattr(config, key, val)
         model = hf_model_factory.from_pretrained(hf_name, config=config)
