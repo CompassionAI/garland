@@ -1,6 +1,7 @@
 import os
 import torch
 
+from tqdm.auto import tqdm
 from transformers import NllbTokenizerFast
 from tokenizers import processors
 
@@ -37,14 +38,22 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
         }
         self.apply_token_remapping = True
 
-    def make_remapping_file(self, lines, remapping_file, lang_names):
-        """The lines are intended to be all lines from all splits of a dataset that we want to tokenize."""
-        all_chars = set([c for l in lines for c in l] + ["▁"])
-        res_vocab = list(filter(lambda v: all([c in all_chars for c in v]), self.vocab.keys()))
+    def make_remapping_file(self, lines, remapping_file, lang_names, lines_tokens_only=False):
+        """The lines are intended to be all lines from all splits of a dataset that we want to tokenize. Pass in
+            lines_tokens_only=True if you want only tokens that actually appear in the lines argument. Otherwise it will
+            remap to tokens that have characters that appear in the lines argument."""
         special_tokens = [
             self.bos_token_id, self.eos_token_id, self.pad_token_id, self.unk_token_id, self.mask_token_id]
         special_tokens.extend([self.lang_code_to_id[lang] for lang in lang_names])
-        res_vocab = sorted(self.convert_tokens_to_ids(res_vocab) + special_tokens)
+        if lines_tokens_only:
+            res_vocab = sorted(list(set([t for l in tqdm(lines) for t in self.encode(l)]) | set(special_tokens)))
+        else:
+            all_chars = set([c for l in lines for c in l] + ["▁"])
+            res_vocab = sorted(
+                self.convert_tokens_to_ids(
+                    list(filter(lambda v: all([c in all_chars for c in v]), self.vocab.keys()))
+                ) + special_tokens
+            )
         with open(os.path.join(os.environ['CAI_DATA_BASE_PATH'], remapping_file), 'w') as f:
             f.writelines(map(lambda x: str(x) + '\n', res_vocab))
 
