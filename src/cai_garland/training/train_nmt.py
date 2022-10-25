@@ -389,12 +389,17 @@ def main(cfg):
             batch_size=getattr(pci_cfg, "batch_size", 1),
             overwrite=getattr(pci_cfg, "overwrite_existing_embeddings", False)
         )
+        logger.info("Testing context alignment for training dataset")
         train_dataset = ContextInjectionDataset(
             train_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
-        eval_dataset = ContextInjectionDataset(
-            eval_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
-        test_dataset = ContextInjectionDataset(
-            test_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
+        if eval_dataset is not None:
+            logger.info("Testing context alignment for validation dataset")
+            eval_dataset = ContextInjectionDataset(
+                eval_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
+        if test_dataset is not None:
+            logger.info("Testing context alignment for test dataset")
+            test_dataset = ContextInjectionDataset(
+                test_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
 
     # Data collator
     quantize_padding = (training_cfg.fp16 or training_cfg.bf16) and not cfg.training_preprocess.no_padding_quantization
