@@ -4,7 +4,7 @@ defaults:
     # - nllb-augmentation-bo-it
     # - nllb-augmentation-bo-en
   - dataset_construction: context-injection
-  - model: nllb-with-context-small
+  - model: olive-cormorant-bart-pooled-context-injection
   - training: basic_with_bleu
   - training_preprocess: basic
   - override hydra/job_logging: colorlog
@@ -14,7 +14,7 @@ defaults:
 hydra:
   verbose: cai_garland.training
   run:
-    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/nllb-with-context-small/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-bart-with-context/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 # Uncomment this to skip evaluation
 # training:
