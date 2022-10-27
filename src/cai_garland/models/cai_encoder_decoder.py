@@ -8,7 +8,7 @@ from transformers.generation_stopping_criteria import StoppingCriteriaList
 
 
 class CAIEncoderDecoderConfig(EncoderDecoderConfig):
-    start_token_repetitions = 1
+    start_token_repetitions = 2
     forced_bos_language_code = "eng_Latn"
 
 
