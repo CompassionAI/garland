@@ -71,6 +71,17 @@ class ProcessorRemoveCharacters:
         return self._re.sub("", segment)
 
 
+class ProcessorKeepAlphabet:
+    def __init__(self, to_keep_set: str, to_keep_alphabet: str) -> None:
+        self.to_keep_set = set(to_keep_set)
+        self.to_keep_alphabet = to_keep_alphabet
+
+    def __call__(self, segment: str) -> str:
+        return ''.join(
+            [c for c in segment if c in self.to_keep_set or self.to_keep_alphabet in unicodedata.name(c, "")]
+        )
+
+
 class ProcessorBlankOutAllWithCharacters:
     def __init__(self, to_blank_out: str) -> None:
         self.to_blank_out = set(to_blank_out)
