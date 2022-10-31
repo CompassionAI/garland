@@ -90,8 +90,10 @@ class SegmenterTargetTokenCount(SegmenterBase):
         if translator is None:
             raise ValueError("SegmenterTargetTokenCount needs to have the translator helper class passed in")
         bo_segments = SegmenterOpeningShad()(bo_text)
-        available_space = kwargs.get("max_length", translator.model.encoder.max_length) - \
-            translator.tokenizer.num_special_tokens_to_add(pair=False)
+        max_length = kwargs.get("max_length", None)
+        if max_length is None:
+            max_length = translator.model.encoder.max_length
+        available_space = max_length - translator.tokenizer.num_special_tokens_to_add(pair=False)
 
         bo_token_lengths = [
             len(translator.tokenizer.encode(bo_segment, add_special_tokens=False))
@@ -169,7 +171,9 @@ class SegmenterModel(SegmenterBase):
 
     def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
         bo_segments = SegmenterClosingShad()(bo_text)
-        max_length = kwargs.get("max_length", self.translator.model.encoder.max_length)
+        max_length = kwargs.get("max_length", None)
+        if max_length is None:
+            max_length = self.translator.model.encoder.max_length
         available_space = max_length - self.translator.tokenizer.num_special_tokens_to_add(pair=False)
 
         res, candidate = [], ""
