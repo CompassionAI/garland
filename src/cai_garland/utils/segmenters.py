@@ -21,6 +21,9 @@ class SegmenterBase:
     def __init__(self, *_args, translator=None) -> None:
         self.translator = translator
 
+    def to(self, _device):
+        return self
+
 
 class SegmenterNone(SegmenterBase):
     def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
@@ -169,6 +172,10 @@ class SegmenterModel(SegmenterBase):
             SegmenterModel.model.resize_token_embeddings(len(SegmenterModel.tokenizer))
             SegmenterModel.model.eval()
 
+    def to(self, device):
+        SegmenterModel.model = SegmenterModel.model.to(device)
+        return self
+
     def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
         bo_segments = SegmenterClosingShad()(bo_text)
         max_length = kwargs.get("max_length", None)
@@ -186,7 +193,9 @@ class SegmenterModel(SegmenterBase):
                     res.append(old_candidate)
                 candidate = segment
                 candidate_len = len(translator.tokenizer.encode(candidate, add_special_tokens=False))
-            scores = SegmenterModel.model(**SegmenterModel.tokenizer(candidate, return_tensors="pt")).logits.detach()
+            scores = SegmenterModel.model(
+                **SegmenterModel.tokenizer(candidate, return_tensors="pt").to(SegmenterModel.model.device)
+            ).logits.cpu().detach()
             scores = softmax(scores, dim=1)
             model_score = float(scores[0][1])
             needed_score = min(1 - 0.5 * candidate_len / available_space, 0.8) if self.discourage_long_segments else 0.5
