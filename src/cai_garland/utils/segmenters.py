@@ -194,7 +194,12 @@ class SegmenterModel(SegmenterBase):
                 candidate = segment
                 candidate_len = len(translator.tokenizer.encode(candidate, add_special_tokens=False))
             scores = SegmenterModel.model(
-                **SegmenterModel.tokenizer(candidate, return_tensors="pt").to(SegmenterModel.model.device)
+                **SegmenterModel.tokenizer(
+                    candidate,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=max_length
+                ).to(SegmenterModel.model.device)
             ).logits.cpu().detach()
             scores = softmax(scores, dim=1)
             model_score = float(scores[0][1])
