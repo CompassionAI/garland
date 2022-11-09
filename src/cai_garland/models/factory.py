@@ -1,6 +1,6 @@
-import os
 import logging
 
+from typing import Any
 from cai_common.models.utils import get_local_ckpt, get_cai_config, get_local_file
 from cai_manas.tokenizer import CAITokenizer
 from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
@@ -178,7 +178,7 @@ def make_bilingual_tokenizer(encoder_name: str, decoder_name: str):
     return tokenizer
 
 
-def make_encoder_decoder(encoder_name: str, decoder_name: str):
+def make_encoder_decoder(encoder_name: str, decoder_name: str, hf_model_factory: Any=AutoModelForCausalLM):
     """This is a configurable factory for the various models we experiment with for machine translation.
 
     The rules for the names are:
@@ -196,7 +196,7 @@ def make_encoder_decoder(encoder_name: str, decoder_name: str):
     tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name)
 
     encoder = _make_named_model(encoder_name, AutoModel, tokenizer=tokenizer.source_tokenizer)
-    decoder = _make_named_model(decoder_name, AutoModelForCausalLM, tokenizer=tokenizer.target_tokenizer)
+    decoder = _make_named_model(decoder_name, hf_model_factory, tokenizer=tokenizer.target_tokenizer)
 
     encoder.config.is_decoder = False
     encoder.config.add_cross_attention = False
