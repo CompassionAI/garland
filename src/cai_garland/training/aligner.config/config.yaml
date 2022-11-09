@@ -1,0 +1,21 @@
+defaults:
+  - training: frequent_logs
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+  - _self_
+
+hydra:
+  run:
+    dir: ${oc.env:CAI_TEMP_PATH}/aligner/olive-cormorant-bart/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+seed: 12345
+
+data:
+  preprocessing_num_workers: 20
+  overwrite_cache: true
+
+model:
+  encoder_model: cai:albert-olive-cormorant/base
+  decoder_model: hf:facebook/bart-base
+  max_source_length: 128
+  max_target_length: 1024
