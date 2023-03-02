@@ -156,7 +156,12 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
             .clean_bad_chars() \
             .dataframe
         parallel_df = dask_client.persist(parallel_df)[["tohoku", "tibetan", "english"]]
-    parallel_df = parallel_df.dropna()
+    # This is a kludge to work around a bug in Dask that can cause the Dask-native dropna() to crash with a metadata
+    #   inference error.
+    # parallel_df = parallel_df.dropna()
+    from dask import dataframe as dask_dataframe
+    parallel_df = dask_client.persist(
+        dask_dataframe.from_pandas(parallel_df.compute().dropna(), npartitions=parallel_df.npartitions))
 
     logger.info("Loading training dataframe")
     test_tohoku_numbers = [str(toh) for toh in cfg.input.test_tohoku_numbers]
