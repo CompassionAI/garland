@@ -3,11 +3,11 @@ defaults:
   - stages:
     # - naive-unconcatted
     # - naive-concats
-    - naive-concats-sequenced-cased
+    - naive-concats-sequenced
     # - concatted-registers
     # - concatted-registers-sequenced
     # - unconcatted-registers-sequenced
-    - context-embeddings-from-folios-cased
+    - context-embeddings-from-folios
     # - folio-registers
     # - dictionary
   - processing: local-dask
