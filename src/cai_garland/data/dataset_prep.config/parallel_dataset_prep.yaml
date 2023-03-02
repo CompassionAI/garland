@@ -47,7 +47,7 @@ output:
   filter_longer_than_max_source_length: false
 
 hydra:
-  # verbose: cai_garland.data
+  # verbose: __main__
   run:
     dir: .
   output_subdir: ~
