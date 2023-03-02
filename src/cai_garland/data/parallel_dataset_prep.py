@@ -160,8 +160,8 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     #   inference error.
     # parallel_df = parallel_df.dropna()
     from dask import dataframe as dask_dataframe
-    parallel_df = dask_client.persist(
-        dask_dataframe.from_pandas(parallel_df.compute().dropna(), npartitions=parallel_df.npartitions))
+    nparts, parallel_df = parallel_df.npartitions, parallel_df.compute().reset_index(drop=True)
+    parallel_df = dask_client.persist(dask_dataframe.from_pandas(parallel_df.dropna(), npartitions=nparts))
 
     logger.info("Loading training dataframe")
     test_tohoku_numbers = [str(toh) for toh in cfg.input.test_tohoku_numbers]
