@@ -347,6 +347,41 @@ def _prep_linear_dataset(flat_data, _cfg, _stage_cfg, _tokenizer):
     return flat_data
 
 
+_pool_tokenizer, _pool_sequencer = None, None
+
+def _init_sequencer_pool(tokenizer, sequencer):
+    global _pool_tokenizer, _pool_sequencer
+    _pool_tokenizer, _pool_sequencer = tokenizer, sequencer
+
+
+def _proc_start_sent(args):
+    start_sent, cfg, stage_cfg  = args
+    tokenizer, sequencer = _pool_tokenizer, _pool_sequencer
+    cur_datum = {
+        "tibetan": "",
+        "english": ""}
+    num_non_context = stage_cfg.concat_window - stage_cfg.context_windows
+    for num_concats, cur_sent in enumerate(sequencer.generate(start_sent)):
+        if num_concats < num_non_context:
+            new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
+            new_en = (cur_datum['english'] + ' ' + cur_sent['english']).strip()
+        if num_concats == num_non_context:
+            new_bo = (cur_datum['tibetan'] + '[MASK]' + cur_sent['tibetan']).strip()
+            new_en = cur_datum['english']
+        if num_concats > num_non_context:
+            new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
+            new_en = cur_datum['english']
+        if len(tokenizer.encode(new_bo)) > cfg.input.max_source_length:
+            break
+        cur_datum['tibetan'] = new_bo
+        cur_datum['english'] = new_en
+        if num_concats + 1 >= stage_cfg.concat_window or \
+            random.random() < stage_cfg.segmentation_early_stopping_probability:
+            # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
+            break
+    return cur_datum, num_concats
+
+
 def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     # Prepare a dataset where consecutive sentences are concatenated to form longer training examples
     logger.info("Creating sequencer object")
@@ -356,32 +391,22 @@ def _prep_concatted_dataset(flat_data, cfg, stage_cfg, tokenizer):
     logger.info("Sampling starting sentences")
     starting_sents = random.sample(flat_data, int(len(flat_data) * stage_cfg.frac_sequenced))
 
+    from multiprocessing import Pool
     concatted_data, concatted_lens = [], {}
-    for start_sent in tqdm(starting_sents, desc="Sequencing"):
-        cur_datum = {
-            "tibetan": "",
-            "english": ""}
-        num_non_context = stage_cfg.concat_window - stage_cfg.context_windows
-        for num_concats, cur_sent in enumerate(sequencer.generate(start_sent)):
-            if num_concats < num_non_context:
-                new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
-                new_en = (cur_datum['english'] + ' ' + cur_sent['english']).strip()
-            if num_concats == num_non_context:
-                new_bo = (cur_datum['tibetan'] + '[MASK]' + cur_sent['tibetan']).strip()
-                new_en = cur_datum['english']
-            if num_concats > num_non_context:
-                new_bo = (cur_datum['tibetan'] + ' ' + cur_sent['tibetan']).strip()
-                new_en = cur_datum['english']
-            if len(tokenizer.encode(new_bo)) > cfg.input.max_source_length:
-                break
-            cur_datum['tibetan'] = new_bo
-            cur_datum['english'] = new_en
-            if num_concats + 1 >= stage_cfg.concat_window or \
-                random.random() < stage_cfg.segmentation_early_stopping_probability:
-                # Do this here to avoid one additional sequencing step, each pull of cur_sent is expensive!
-                break
-        concatted_lens[num_concats + 1] = concatted_lens.get(num_concats + 1, 0) + 1
-        concatted_data.append(cur_datum)
+    with Pool(cfg.compute.concatenation_pool_workers, _init_sequencer_pool, (tokenizer, sequencer)) as pool:
+        with tqdm(total=len(starting_sents), desc="Sequencing") as pbar:
+            for res in pool.imap_unordered(
+                _proc_start_sent,
+                zip(
+                    starting_sents,
+                    [cfg]*len(starting_sents),
+                    [stage_cfg]*len(starting_sents)
+                ),
+            ):
+                pbar.update()
+                cur_datum, num_concats = res
+                concatted_lens[num_concats + 1] = concatted_lens.get(num_concats + 1, 0) + 1
+                concatted_data.append(cur_datum)
     for len_ in sorted(list(concatted_lens.keys())):
         count_ = concatted_lens[len_]
         logger.info(f"Sentences of length {len_}: {count_ / sum(concatted_lens.values()):.2%} of the data.")

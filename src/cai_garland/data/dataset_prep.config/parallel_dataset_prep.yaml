@@ -54,6 +54,7 @@ hydra:
 
 compute:
   seed: 12345
+  concatenation_pool_workers: 20
 
   # These are used by Hugging Face models when shuffling
   cuda: true
