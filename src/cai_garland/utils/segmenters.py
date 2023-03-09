@@ -1,3 +1,4 @@
+import os
 import logging
 
 from typing import List, Any
@@ -18,20 +19,39 @@ def _prepend_shad_if_needed(bo_text):
 
 
 class SegmenterBase:
-    def __init__(self, *_args, translator=None) -> None:
+    def __init__(self, *_args, segments_file=None, translator=None) -> None:
+        self.segments_file = segments_file
+        self.hard_segment_counter = 0
         self.translator = translator
 
     def to(self, _device):
         return self
 
+    @property
+    def _segment_file_name(self):
+        if self.segments_file is None:
+            return None
+        return f"{self.segments_file}.{self.hard_segment_counter}"
+
+    def __call__(self, bo_text:str, *args: Any, **kwargs: Any) -> Any:
+        if self._segment_file_name is not None:
+            if os.path.exists(self._segment_file_name):
+                with open(self._segment_file_name, "r") as f:
+                    return list(map(lambda x: x.strip(), f.readlines()))
+        res = self._segment(bo_text, *args, **kwargs)
+        if self._segment_file_name is not None:
+            with open(self._segment_file_name, "w") as f:
+                f.writelines(map(lambda x: x + '\n', res))
+        return res
+
 
 class SegmenterNone(SegmenterBase):
-    def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
+    def _segment(self, bo_text: str, **kwargs: Any) -> List[str]:
         return [bo_text]
 
 
 class SegmenterOpeningShad(SegmenterBase):
-    def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
+    def _segment(self, bo_text: str, **kwargs: Any) -> List[str]:
         bo_text = _prepend_shad_if_needed(bo_text)
         return ['།' + sent if not sent[0] == '།' else sent for sent in bo_text.strip().split(' །') if len(sent) > 0]
 
@@ -41,14 +61,14 @@ class SegmenterClosingShad(SegmenterBase):
         super().__init__(translator=None)
         self.prepend_shad = prepend_shad
 
-    def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
+    def _segment(self, bo_text: str, **kwargs: Any) -> List[str]:
         if self.prepend_shad:
             bo_text = _prepend_shad_if_needed(bo_text)
         return [x.strip() + '།' for x in bo_text.strip().split('། ') if len(x.strip()) > 0]
 
 
 class SegmenterOpeningOrClosingShad(SegmenterBase):
-    def __call__(self, bo_text: str, translator=None, **kwargs: Any) -> List[str]:
+    def _segment(self, bo_text: str, translator=None, **kwargs: Any) -> List[str]:
         if translator is None:
             raise ValueError("SegmenterOpeningOrClosingShad needs to have the translator helper class passed in")
         bo_segments = SegmenterOpeningShad()(bo_text)
@@ -66,19 +86,19 @@ class SegmenterOpeningOrClosingShad(SegmenterBase):
 
 
 class SegmenterDoubleShad(SegmenterBase):
-    def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
+    def _segment(self, bo_text: str, **kwargs: Any) -> List[str]:
         bo_text = _prepend_shad_if_needed(bo_text)
         return [x.strip() for x in bo_text.strip().split('།།') if len(x.strip()) > 0]
 
 
 class SegmenterLineBreak(SegmenterBase):
-    def __call__(self, bo_text: str, **kwargs: Any) -> List[str]:
+    def _segment(self, bo_text: str, **kwargs: Any) -> List[str]:
         bo_text = _prepend_shad_if_needed(bo_text)
         return [x.strip() for x in bo_text.split('\n') if len(x.strip()) > 0]
 
 
 class SegmenterTargetTokenCount(SegmenterBase):
-    def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
+    def _segment(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
         # This segmenter packs bo_text into registers. Each register is of the longest possible length that fits into
         #   the encoder.
         #
@@ -176,7 +196,7 @@ class SegmenterModel(SegmenterBase):
         SegmenterModel.model = SegmenterModel.model.to(device)
         return self
 
-    def __call__(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
+    def _segment(self, bo_text: str, translator=None, tqdm=tqdm, **kwargs: Any) -> List[str]:       # pylint: disable=redefined-outer-name
         bo_segments = SegmenterClosingShad()(bo_text)
         max_length = kwargs.get("max_length", None)
         if max_length is None:

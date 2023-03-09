@@ -316,10 +316,13 @@ class Translator:
 
         hard_segments = self.hard_segmenter(bo_text, translator=self, **hard_segmenter_kwargs)
 
-        for hard_segment in tqdm(hard_segments, desc="Hard segments", leave=False):
+        for hard_seg_count, hard_segment in tqdm(
+            enumerate(hard_segments), total=len(hard_segments), desc="Hard segments", leave=False
+        ):
             for preproc_func in self.preprocessors:
                 hard_segment = preproc_func(hard_segment)
 
+            self.soft_segmenter.hard_segment_counter = hard_seg_count
             soft_segments = self.soft_segmenter(hard_segment, translator=self, **soft_segmenter_kwargs)
 
             for preproc_func in self.soft_segment_preprocessors:
