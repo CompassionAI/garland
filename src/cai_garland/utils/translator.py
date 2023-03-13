@@ -354,68 +354,70 @@ class Translator:
             else:
                 context_window = None
 
-            for seg_idx, soft_segment in tqdm(
-                enumerate(soft_segments),
+            with tqdm(
                 total=len(soft_segments),
                 desc="Translating soft segments",
+                initial=len(previous_results),
                 leave=False
-            ):
-                if retrospective_decoding:
-                    encoder_outputs = None
-                    if retrospective_registers:
-                        input_ = self.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
-                        # encoder_outputs = [
-                        #     all_encoder_outputs[seg_idx - i] for i in reversed(range(len(src_registers) + 1))]
-                    else:
-                        input_ = ' '.join(src_registers + [soft_segment])
-                    prefix = ''.join(tgt_registers)
-                    if len(prefix) > 0:
-                        prefix += ' '
-                else:
-                    input_ = soft_segment
-                    prefix = None
-                    encoder_outputs = None
-
-                translation_err = False
-                if seg_idx < len(previous_results):
-                    src_prev_res, tgt_segment = previous_results[seg_idx]
-                    if not src_prev_res == input_:
-                        raise ValueError("Previous results appear to be corrupt, segments are not matching. Previous "
-                                         f"results segment is {src_prev_res}, but loaded segmentation gives {input_}.")
-                else:
-                    try:
-                        tgt_segment = self.translate(
-                            input_,
-                            prefix=prefix,
-                            context=context_window,
-                            target_language_code=target_language_code,
-                            encoder_outputs=encoder_outputs,
-                            generator_kwargs=generator_kwargs
-                        )
-                    except TokenizationTooLongException as err:
-                        if throw_translation_errors:
-                            raise err
+            ) as pbar:
+                for seg_idx, soft_segment in enumerate(soft_segments):
+                    if retrospective_decoding:
+                        encoder_outputs = None
+                        if retrospective_registers:
+                            input_ = self.tokenizer.source_tokenizer.eor_token.join(src_registers + [soft_segment])
+                            # encoder_outputs = [
+                            #     all_encoder_outputs[seg_idx - i] for i in reversed(range(len(src_registers) + 1))]
                         else:
-                            translation_err = True
-                            tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
-
-                for postproc_func in self.postprocessors:
-                    tgt_segment = postproc_func(tgt_segment)
-
-                if retrospective_decoding:
-                    if translation_err:
-                        src_registers, tgt_registers = [], []
+                            input_ = ' '.join(src_registers + [soft_segment])
+                        prefix = ''.join(tgt_registers)
+                        if len(prefix) > 0:
+                            prefix += ' '
                     else:
-                        tgt_segment = tgt_segment[len(prefix):].strip()
-                        src_registers.append(soft_segment)
-                        tgt_registers.append(tgt_segment)
-                        if len(src_registers) == retrospection_window:
-                            src_registers.pop(0)
-                            tgt_registers.pop(0)
-                if contextual_decoding:
-                    if not tgt_segment.startswith(' ') and not context_window.endswith(' '):
-                        context_window += ' '
-                    context_window = (context_window + tgt_segment)[-context_window_characters:]
-                    context_window = ' '.join(context_window.split(' ')[-context_window_words:]).strip()
+                        input_ = soft_segment
+                        prefix = None
+                        encoder_outputs = None
 
-                yield soft_segment, tgt_segment
+                    translation_err = False
+                    if seg_idx < len(previous_results):
+                        src_prev_res, tgt_segment = previous_results[seg_idx]
+                        if not src_prev_res == input_:
+                            raise ValueError("Previous results appear to be corrupt, segments are not matching. "
+                                            f"Previous results give {src_prev_res}, but segmentation gives {input_}.")
+                    else:
+                        try:
+                            tgt_segment = self.translate(
+                                input_,
+                                prefix=prefix,
+                                context=context_window,
+                                target_language_code=target_language_code,
+                                encoder_outputs=encoder_outputs,
+                                generator_kwargs=generator_kwargs
+                            )
+                        except TokenizationTooLongException as err:
+                            if throw_translation_errors:
+                                raise err
+                            else:
+                                translation_err = True
+                                tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
+                        pbar.update()
+
+                    for postproc_func in self.postprocessors:
+                        tgt_segment = postproc_func(tgt_segment)
+
+                    if retrospective_decoding:
+                        if translation_err:
+                            src_registers, tgt_registers = [], []
+                        else:
+                            tgt_segment = tgt_segment[len(prefix):].strip()
+                            src_registers.append(soft_segment)
+                            tgt_registers.append(tgt_segment)
+                            if len(src_registers) == retrospection_window:
+                                src_registers.pop(0)
+                                tgt_registers.pop(0)
+                    if contextual_decoding:
+                        if not tgt_segment.startswith(' ') and not context_window.endswith(' '):
+                            context_window += ' '
+                        context_window = (context_window + tgt_segment)[-context_window_characters:]
+                        context_window = ' '.join(context_window.split(' ')[-context_window_words:]).strip()
+
+                    yield soft_segment, tgt_segment
