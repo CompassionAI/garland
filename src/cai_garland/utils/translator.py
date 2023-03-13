@@ -309,6 +309,7 @@ class Translator:
         context_window_characters=1000,
         throw_translation_errors=False,
         target_language_code=None,
+        previous_results=[],
         generator_kwargs={}
     ):
         if retrospective_decoding and contextual_decoding:
@@ -376,21 +377,27 @@ class Translator:
                     encoder_outputs = None
 
                 translation_err = False
-                try:
-                    tgt_segment = self.translate(
-                        input_,
-                        prefix=prefix,
-                        context=context_window,
-                        target_language_code=target_language_code,
-                        encoder_outputs=encoder_outputs,
-                        generator_kwargs=generator_kwargs
-                    )
-                except TokenizationTooLongException as err:
-                    if throw_translation_errors:
-                        raise err
-                    else:
-                        translation_err = True
-                        tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
+                if seg_idx < len(previous_results):
+                    src_prev_res, tgt_segment = previous_results[seg_idx]
+                    if not src_prev_res == input_:
+                        raise ValueError("Previous results appear to be corrupt, segments are not matching. Previous "
+                                         f"results segment is {src_prev_res}, but loaded segmentation gives {input_}.")
+                else:
+                    try:
+                        tgt_segment = self.translate(
+                            input_,
+                            prefix=prefix,
+                            context=context_window,
+                            target_language_code=target_language_code,
+                            encoder_outputs=encoder_outputs,
+                            generator_kwargs=generator_kwargs
+                        )
+                    except TokenizationTooLongException as err:
+                        if throw_translation_errors:
+                            raise err
+                        else:
+                            translation_err = True
+                            tgt_segment = "SEGMENT TOKENIZATION TOO LONG FOR ENCODER MODEL"
 
                 for postproc_func in self.postprocessors:
                     tgt_segment = postproc_func(tgt_segment)
