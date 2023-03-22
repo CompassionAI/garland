@@ -31,7 +31,7 @@ _causal_LM_classes = {
 }
 
 
-def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer):
+def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer, deepspeed=False):
     # Apply the names rules in make_encoder_decoder. Returns a tokenizer
     if packed_name.startswith('cai:'):
         logging.debug(f"Loading tokenizer {packed_name} from CompassionAI data registry")
@@ -46,7 +46,7 @@ def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer):
                     cai_config['base_model_name'],
                     hf_tokenizer_factory=_tokenizer_classes[tokenizer_cfg.get("tokenizer_class", "default")]
                 )
-                if 'remapping_file' in tokenizer_cfg:
+                if not deepspeed and 'remapping_file' in tokenizer_cfg:
                     tokenizer.remap_tokens(get_local_file(tokenizer_cfg['remapping_file']))
                 return tokenizer
 
@@ -70,7 +70,7 @@ def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer):
     return tokenizer
 
 
-def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args={}):
+def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args={}, deepspeed=False):
     # Apply the names rules in make_encoder_decoder. Returns a model.
     #   *NB:* The optional tokenizer should be the source/target tokenizer, NOT a bilingual tokenizer.
     if packed_name.startswith('cai:'):
@@ -123,7 +123,7 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args
             model = hf_model_factory.from_pretrained(local_ckpt, config=model_cfg)
             if tokenizer is not None:
                 model.resize_token_embeddings(len(tokenizer))
-        if isinstance(tokenizer, CAINllbTokenizerFast) and tokenizer.is_remapped:
+        if not deepspeed and isinstance(tokenizer, CAINllbTokenizerFast) and tokenizer.is_remapped:
             model.remap_tokens(tokenizer)
     elif packed_name.startswith('hf:'):
         logging.debug(f"Loading {packed_name} from Hugging Face")
@@ -159,7 +159,7 @@ def make_encoder(encoder_name: str):
     return encoder, tokenizer
 
 
-def make_bilingual_tokenizer(encoder_name: str, decoder_name: str):
+def make_bilingual_tokenizer(encoder_name: str, decoder_name: str, deepspeed=False):
     """This is a configurable factory for our bilingual tokenizers we use for machine translation.
 
     The rules for the names are:
@@ -174,11 +174,16 @@ def make_bilingual_tokenizer(encoder_name: str, decoder_name: str):
         A bilingual tokenizer.
     """
 
-    tokenizer = BilingualTokenizer(_make_named_tokenizer(encoder_name), _make_named_tokenizer(decoder_name))
+    tokenizer = BilingualTokenizer(
+        _make_named_tokenizer(encoder_name, deepspeed=deepspeed),
+        _make_named_tokenizer(decoder_name, deepspeed=deepspeed)
+    )
     return tokenizer
 
 
-def make_encoder_decoder(encoder_name: str, decoder_name: str, hf_model_factory: Any=AutoModelForCausalLM):
+def make_encoder_decoder(
+    encoder_name: str, decoder_name: str, hf_model_factory: Any=AutoModelForCausalLM, deepspeed=False
+):
     """This is a configurable factory for the various models we experiment with for machine translation.
 
     The rules for the names are:
@@ -193,10 +198,11 @@ def make_encoder_decoder(encoder_name: str, decoder_name: str, hf_model_factory:
         A tuple of the model and a bilingual tokenizer.
     """
 
-    tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name)
+    tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name, deepspeed=deepspeed)
 
-    encoder = _make_named_model(encoder_name, AutoModel, tokenizer=tokenizer.source_tokenizer)
-    decoder = _make_named_model(decoder_name, hf_model_factory, tokenizer=tokenizer.target_tokenizer)
+    encoder = _make_named_model(encoder_name, AutoModel, tokenizer=tokenizer.source_tokenizer, deepspeed=deepspeed)
+    decoder = _make_named_model(
+        decoder_name, hf_model_factory, tokenizer=tokenizer.target_tokenizer, deepspeed=deepspeed)
 
     encoder.config.is_decoder = False
     encoder.config.add_cross_attention = False

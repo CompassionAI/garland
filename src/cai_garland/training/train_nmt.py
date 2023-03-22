@@ -41,7 +41,7 @@ from cai_garland.data.context_collator import ContextDataCollatorForSeq2Seq
 from cai_garland.data.context_injection_dataset import ContextInjectionDataset
 from cai_garland.training.cai_trainer_seq2seq import CAISeq2SeqTrainer
 
-from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed
+from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed, HfArgumentParser
 from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint
 
 from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
@@ -52,6 +52,8 @@ logger = logging.getLogger(__name__)
 init_colorama()
 cs = ConfigStore()
 cs.store(group="training", name="huggingface_training_args", node=HydraSeq2SeqTrainingArguments)
+
+hf_args = None
 
 
 def preprocess_function(
@@ -256,7 +258,7 @@ def is_long_example(example, eor_token_id, max_source_length, max_target_length)
 @hydra.main(version_base="1.2", config_path="./train_nmt.config", config_name="config")
 def main(cfg):
     cfg.training.output_dir = HydraConfig.get().run.dir
-    training_cfg = HydraSeq2SeqTrainingArguments.as_hf_training_args(cfg.training)
+    training_cfg = HydraSeq2SeqTrainingArguments.as_hf_training_args(cfg.training, hf_args)
     training_cfg.logging_dir = os.path.join(cfg.training.output_dir, "tb_logs")
     skip_eval = cfg.training.evaluation_strategy == IntervalStrategy.NO
 
@@ -288,7 +290,8 @@ def main(cfg):
     set_seed(training_cfg.seed)
 
     logger.info("Making encoder-decoder model")
-    model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model)
+    model, tokenizer = make_encoder_decoder(
+        cfg.model.encoder_model, cfg.model.decoder_model, deepspeed=hasattr(training_cfg, 'deepspeed'))
 
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
@@ -544,4 +547,8 @@ def _mp_fn(_index):
 
 
 if __name__ == "__main__":
-    main()      # pylint: disable=no-value-for-parameter
+    hydra_args = [sys.argv[0]] + [arg for arg in sys.argv[1:] if not arg.startswith('--')]
+    hf_args = [sys.argv[0]] + [arg for arg in sys.argv[1:] if arg.startswith('--')]
+
+    sys.argv = hydra_args       # Kludge to keep the Hydra decorator working
+    main()                      # pylint: disable=no-value-for-parameter

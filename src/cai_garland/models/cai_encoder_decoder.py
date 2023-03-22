@@ -11,6 +11,11 @@ class CAIEncoderDecoderConfig(EncoderDecoderConfig):
     start_token_repetitions = 2
     forced_bos_language_code = "eng_Latn"
 
+    @property
+    def hidden_size(self):
+        return max(self.encoder.hidden_size, self.decoder.hidden_size)
+
+
 
 class CAIEncoderDecoderModel(EncoderDecoderModel):
     """A wrapper class for the encoder-decoder model to include various CompassionAI features, such as context
