@@ -154,7 +154,7 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             self.context_encoder = model.encoder
         else:
             raise ValueError("Unknown context architecture")
-        self.adapter_layer = torch.nn.Linear(768, 1024)
+        self.adapter_layer = torch.nn.Linear(768, self.embed_tokens.embedding_dim)
 
     def forward(
         self,
