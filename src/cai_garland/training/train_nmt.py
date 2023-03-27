@@ -290,8 +290,8 @@ def main(cfg):
     set_seed(training_cfg.seed)
 
     logger.info("Making encoder-decoder model")
-    model, tokenizer = make_encoder_decoder(
-        cfg.model.encoder_model, cfg.model.decoder_model, deepspeed=hasattr(training_cfg, 'deepspeed'))
+    deepspeed = hasattr(training_cfg, 'deepspeed')
+    model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model, deepspeed=deepspeed)
 
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
@@ -320,6 +320,15 @@ def main(cfg):
     params_by_layer = ', '.join(
         map(str, [np.prod(p.shape) for p in list(filter(lambda p: p.requires_grad, model.parameters()))]))
     logger.debug(f"Trainable parameters by layer: {params_by_layer}")
+    if deepspeed: 
+        if num_params > 0:
+            logger.error("DeepSpeed is switched on but there are detected trainable parameters! This number should "
+                         "have been zero.")
+            raise ValueError("DeepSpeed is switched on but there are detected trainable parameters! This number should "
+                            "have been zero.")
+        else:
+            logger.info("You're using DeepSpeed, so zero detected trainable parameters is correct. DeepSpeed will "
+                        "print the actual number of trainable parameters separately.")
 
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
