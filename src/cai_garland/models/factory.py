@@ -1,6 +1,12 @@
 import logging
 
+try:
+    import deepspeed
+except:
+    pass
+
 from typing import Any
+from contextlib import contextmanager
 from cai_common.models.utils import get_local_ckpt, get_cai_config, get_local_file
 from cai_manas.tokenizer import CAITokenizer
 from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
@@ -31,7 +37,16 @@ _causal_LM_classes = {
 }
 
 
-def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer, deepspeed=False):
+@contextmanager
+def __deepspeed_ctx(is_deepspeed):
+    if is_deepspeed:
+        with deepspeed.zero.Init() as ctx:
+            yield ctx
+    else:
+        yield None
+
+
+def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer, is_deepspeed=False):
     # Apply the names rules in make_encoder_decoder. Returns a tokenizer
     if packed_name.startswith('cai:'):
         logging.debug(f"Loading tokenizer {packed_name} from CompassionAI data registry")
@@ -46,7 +61,7 @@ def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer, deeps
                     cai_config['base_model_name'],
                     hf_tokenizer_factory=_tokenizer_classes[tokenizer_cfg.get("tokenizer_class", "default")]
                 )
-                if not deepspeed and 'remapping_file' in tokenizer_cfg:
+                if not is_deepspeed and 'remapping_file' in tokenizer_cfg:
                     tokenizer.remap_tokens(get_local_file(tokenizer_cfg['remapping_file']))
                 return tokenizer
 
@@ -70,7 +85,7 @@ def _make_named_tokenizer(packed_name, hf_tokenizer_factory=AutoTokenizer, deeps
     return tokenizer
 
 
-def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args={}, deepspeed=False):
+def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args={}, is_deepspeed=False):
     # Apply the names rules in make_encoder_decoder. Returns a model.
     #   *NB:* The optional tokenizer should be the source/target tokenizer, NOT a bilingual tokenizer.
     if packed_name.startswith('cai:'):
@@ -122,8 +137,9 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args
             logger.debug("Loading model")
             model = hf_model_factory.from_pretrained(local_ckpt, config=model_cfg)
             if tokenizer is not None:
-                model.resize_token_embeddings(len(tokenizer))
-        if not deepspeed and isinstance(tokenizer, CAINllbTokenizerFast) and tokenizer.is_remapped:
+                if not is_deepspeed:
+                    model.resize_token_embeddings(len(tokenizer))
+        if not is_deepspeed and isinstance(tokenizer, CAINllbTokenizerFast) and tokenizer.is_remapped:
             model.remap_tokens(tokenizer)
     elif packed_name.startswith('hf:'):
         logging.debug(f"Loading {packed_name} from Hugging Face")
@@ -159,7 +175,7 @@ def make_encoder(encoder_name: str):
     return encoder, tokenizer
 
 
-def make_bilingual_tokenizer(encoder_name: str, decoder_name: str, deepspeed=False):
+def make_bilingual_tokenizer(encoder_name: str, decoder_name: str, is_deepspeed=False):
     """This is a configurable factory for our bilingual tokenizers we use for machine translation.
 
     The rules for the names are:
@@ -175,14 +191,14 @@ def make_bilingual_tokenizer(encoder_name: str, decoder_name: str, deepspeed=Fal
     """
 
     tokenizer = BilingualTokenizer(
-        _make_named_tokenizer(encoder_name, deepspeed=deepspeed),
-        _make_named_tokenizer(decoder_name, deepspeed=deepspeed)
+        _make_named_tokenizer(encoder_name, is_deepspeed=is_deepspeed),
+        _make_named_tokenizer(decoder_name, is_deepspeed=is_deepspeed)
     )
     return tokenizer
 
 
 def make_encoder_decoder(
-    encoder_name: str, decoder_name: str, hf_model_factory: Any=AutoModelForCausalLM, deepspeed=False
+    encoder_name: str, decoder_name: str, hf_model_factory: Any=AutoModelForCausalLM, is_deepspeed=False
 ):
     """This is a configurable factory for the various models we experiment with for machine translation.
 
@@ -198,11 +214,11 @@ def make_encoder_decoder(
         A tuple of the model and a bilingual tokenizer.
     """
 
-    tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name, deepspeed=deepspeed)
+    tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name, is_deepspeed=is_deepspeed)
 
-    encoder = _make_named_model(encoder_name, AutoModel, tokenizer=tokenizer.source_tokenizer, deepspeed=deepspeed)
+    encoder = _make_named_model(encoder_name, AutoModel, tokenizer=tokenizer.source_tokenizer, is_deepspeed=is_deepspeed)
     decoder = _make_named_model(
-        decoder_name, hf_model_factory, tokenizer=tokenizer.target_tokenizer, deepspeed=deepspeed)
+        decoder_name, hf_model_factory, tokenizer=tokenizer.target_tokenizer, is_deepspeed=is_deepspeed)
 
     encoder.config.is_decoder = False
     encoder.config.add_cross_attention = False
@@ -211,7 +227,8 @@ def make_encoder_decoder(
     decoder.config.add_cross_attention = True
 
     config = CAIEncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config)
-    model = CAIEncoderDecoderModel(encoder=encoder, decoder=decoder, config=config)
+    with __deepspeed_ctx(is_deepspeed):
+        model = CAIEncoderDecoderModel(encoder=encoder, decoder=decoder, config=config)
 
     # model.config.decoder_start_token_id = tokenizer.target_tokenizer.cls_token_id
     model.config.pad_token_id = tokenizer.target_tokenizer.pad_token_id

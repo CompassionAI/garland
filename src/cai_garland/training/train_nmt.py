@@ -291,7 +291,7 @@ def main(cfg):
 
     logger.info("Making encoder-decoder model")
     deepspeed = hasattr(training_cfg, 'deepspeed')
-    model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model, deepspeed=deepspeed)
+    model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model, is_deepspeed=deepspeed)
 
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
