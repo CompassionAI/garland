@@ -290,7 +290,7 @@ def main(cfg):
     set_seed(training_cfg.seed)
 
     logger.info("Making encoder-decoder model")
-    deepspeed = hasattr(training_cfg, 'deepspeed')
+    deepspeed = getattr(training_cfg, 'deepspeed', None) is not None
     model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model, is_deepspeed=deepspeed)
 
     if model.config.decoder.decoder_start_token_id is None:
