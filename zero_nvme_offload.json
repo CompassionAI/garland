@@ -45,7 +45,7 @@
         "stage3_gather_16bit_weights_on_model_save": true
     },
 	"aio": {
-		"block_size": 262144,
+		"block_size": 524288,
 		"queue_depth": 32,
 		"thread_count": 1,
 		"single_submit": false,
