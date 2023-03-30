@@ -90,10 +90,11 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
 
     @contextmanager
     def prepare_model_for_generation(self, context_embedding, context_embedding_mask):
+        cur_dtype = next(self.parameters()).dtype
         if context_embedding is not None:
-            self.cur_context_embedding = context_embedding.to(self.device)
+            self.cur_context_embedding = context_embedding.to(device=self.device, dtype=cur_dtype)
         if context_embedding_mask is not None:
-            self.cur_context_embedding_mask = context_embedding_mask.to(self.device)
+            self.cur_context_embedding_mask = context_embedding_mask.to(device=self.device, dtype=cur_dtype)
         yield
         self.cur_context_embedding = None
         self.cur_context_embedding_mask = None
