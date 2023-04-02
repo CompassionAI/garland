@@ -18,7 +18,7 @@ gradient_accumulation_steps: 3
 num_train_epochs: 9
 
 # Every how many training steps to run the evaluation loop
-logging_steps: 50
+logging_steps: 150
 
 # Every how many training steps to save a model checkpoint
 save_steps: 50
@@ -61,4 +61,4 @@ skip_memory_metrics: true
 bf16: true
 # tf32: true
 
-dataloader_num_workers: 10
+dataloader_num_workers: 2
