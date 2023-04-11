@@ -235,3 +235,6 @@ def make_encoder_decoder(
     model.config.vocab_size = model.config.decoder.vocab_size
 
     return model, tokenizer
+
+def get_model_type():
+    return CAIEncoderDecoderModel
