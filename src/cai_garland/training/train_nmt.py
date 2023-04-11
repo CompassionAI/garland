@@ -319,13 +319,14 @@ def main(cfg):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     num_params = sum([np.prod(p.size()) for p in model_parameters])
     logger.info(f"Model has {num_params:,} trainable parameters.")
-    params_by_layer = ', '.join(
-        map(str, [np.prod(p.shape) for p in list(filter(lambda p: p.requires_grad, model.parameters()))]))
-    logger.debug(f"Trainable parameters by layer: {params_by_layer}")
     if deepspeed: 
         if num_params > 0:
             logger.error("DeepSpeed is switched on but there are detected trainable parameters! This number should "
                          "have been zero.")
+            for param_name, param in model.named_parameters():
+                param_size = np.prod(param.size())
+                if param_size > 0:
+                    logger.error(f"Trainable parameter layer {param_name} has {param_size:,} trainable parameters!")
             raise ValueError("DeepSpeed is switched on but there are detected trainable parameters! This number should "
                             "have been zero.")
         else:
