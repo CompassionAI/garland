@@ -35,7 +35,7 @@ import datasets
 import numpy as np
 from datasets import load_dataset, load_metric
 
-from cai_garland.models.factory import make_encoder_decoder
+from cai_garland.models.factory import make_encoder_decoder, make_bilingual_tokenizer, get_model_type
 from cai_garland.data.siamese_collator import SiameseDataCollatorForSeq2Seq
 from cai_garland.data.context_collator import ContextDataCollatorForSeq2Seq
 from cai_garland.data.context_injection_dataset import ContextInjectionDataset
@@ -289,9 +289,15 @@ def main(cfg):
 
     set_seed(training_cfg.seed)
 
-    logger.info("Making encoder-decoder model")
     deepspeed = getattr(training_cfg, 'deepspeed', None) is not None
-    model, tokenizer = make_encoder_decoder(cfg.model.encoder_model, cfg.model.decoder_model, is_deepspeed=deepspeed)
+    if "pretrained_checkpoint" in cfg:
+        logger.info(f"Loading pretrained weights from checkpoint {cfg.pretrained_checkpoint}")
+        model = get_model_type().from_pretrained(cfg.pretrained_checkpoint)
+        tokenizer = make_bilingual_tokenizer(cfg.model.encoder_model, cfg.model.decoder_model, is_deepspeed=deepspeed)
+    else:
+        logger.info("Making encoder-decoder model")
+        model, tokenizer = make_encoder_decoder(
+            cfg.model.encoder_model, cfg.model.decoder_model, is_deepspeed=deepspeed)
 
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
@@ -301,10 +307,6 @@ def main(cfg):
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
     siamese = model.config.encoder.model_type == "siamese-encoder"
     eor_token_id = tokenizer.source_tokenizer.eor_token_id if siamese else -1
-
-    if "pretrained_checkpoint" in cfg:
-        logger.info(f"Loading pretrained weights from checkpoint {cfg.pretrained_checkpoint}")
-        model = type(model).from_pretrained(cfg.pretrained_checkpoint)
 
     if hasattr(cfg.model, "freeze"):
         if getattr(cfg.model.freeze, "lm_head", False):
