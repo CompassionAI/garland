@@ -21,7 +21,7 @@ num_train_epochs: 9
 logging_steps: 150
 
 # Every how many training steps to save a model checkpoint
-save_steps: 50
+save_steps: 150
 
 # How many model checkpoints to keep around
 save_total_limit: 50
