@@ -2,9 +2,7 @@ import torch
 
 from contextlib import contextmanager
 
-from transformers import AutoModel, EncoderDecoderModel, EncoderDecoderConfig
-from transformers.generation_logits_process import LogitsProcessorList
-from transformers.generation_stopping_criteria import StoppingCriteriaList
+from transformers import AutoModel, EncoderDecoderModel, EncoderDecoderConfig, LogitsProcessorList, StoppingCriteriaList
 
 
 class CAIEncoderDecoderConfig(EncoderDecoderConfig):
