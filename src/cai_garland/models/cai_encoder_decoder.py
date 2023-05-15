@@ -2,7 +2,8 @@ import torch
 
 from contextlib import contextmanager
 
-from transformers import AutoModel, EncoderDecoderModel, EncoderDecoderConfig, LogitsProcessorList, StoppingCriteriaList
+from transformers import (
+    AutoModel, EncoderDecoderModel, EncoderDecoderConfig, LogitsProcessorList, StoppingCriteriaList, GenerationConfig)
 
 
 class CAIEncoderDecoderConfig(EncoderDecoderConfig):
@@ -100,66 +101,45 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
     def _prepare_decoder_input_ids_for_generation(
         self,
         batch_size,
-        decoder_start_token_id=None,
-        bos_token_id=None,
-        model_kwargs=None,
-        device=None,
+        model_input_name,
+        model_kwargs,
+        decoder_start_token_id,
+        bos_token_id,
+        device
     ):
+        if not model_input_name == 'input_ids':
+            raise ValueError(
+                f"CAIEncoderDecoderModel can only handle model_input_ids=='input_ids' but given {model_input_name}")
         if model_kwargs is not None and "decoder_input_ids" in model_kwargs:
-            return model_kwargs.pop("decoder_input_ids")
+            decoder_input_ids = model_kwargs.pop("decoder_input_ids")
         else:
             decoder_start_token_id = self._get_decoder_start_token_id(decoder_start_token_id, bos_token_id)
             if device is None:
                 device = self.device
-            return torch.ones(
+            decoder_input_ids = torch.ones(
                 (batch_size, self.config.start_token_repetitions),
                 dtype=torch.long,
                 device=device
             ) * decoder_start_token_id
+        model_kwargs['decoder_input_ids'] = decoder_input_ids
+        return super()._prepare_decoder_input_ids_for_generation(
+            batch_size,
+            model_input_name,
+            model_kwargs,
+            decoder_start_token_id,
+            bos_token_id,
+            device
+        )
 
     @torch.no_grad()
     def generate(
         self,
         inputs=None,
-        max_length=None,
-        min_length=None,
-        do_sample=None,
-        early_stopping=None,
-        num_beams=None,
-        temperature=None,
-        top_k=None,
-        top_p=None,
-        typical_p=None,
-        repetition_penalty=None,
-        bad_words_ids=None,
-        force_words_ids=None,
-        bos_token_id=None,
-        pad_token_id=None,
-        eos_token_id=None,
-        length_penalty=None,
-        no_repeat_ngram_size=None,
-        encoder_no_repeat_ngram_size=None,
-        num_return_sequences=None,
-        max_time=None,
-        max_new_tokens=None,
-        decoder_start_token_id=None,
-        use_cache=None,
-        num_beam_groups=None,
-        diversity_penalty=None,
         prefix_allowed_tokens_fn=None,
         logits_processor=LogitsProcessorList(),
-        renormalize_logits=None,
         stopping_criteria=StoppingCriteriaList(),
-        constraints=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        output_scores=None,
-        return_dict_in_generate=None,
-        forced_bos_token_id=None,
-        forced_eos_token_id=None,
-        remove_invalid_values=None,
         synced_gpus=False,
-        exponential_decay_length_penalty=None,
+        num_beams=None,
         **model_kwargs,
     ):
         if self.cur_context_embedding is None:
@@ -172,46 +152,12 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
                 num_beams, dim=0
             )
         return super().generate(
-            inputs,
-            max_length,
-            min_length,
-            do_sample,
-            early_stopping,
-            num_beams,
-            temperature,
-            top_k,
-            top_p,
-            typical_p,
-            repetition_penalty,
-            bad_words_ids,
-            force_words_ids,
-            bos_token_id,
-            pad_token_id,
-            eos_token_id,
-            length_penalty,
-            no_repeat_ngram_size,
-            encoder_no_repeat_ngram_size,
-            num_return_sequences,
-            max_time,
-            max_new_tokens,
-            decoder_start_token_id,
-            use_cache,
-            num_beam_groups,
-            diversity_penalty,
-            prefix_allowed_tokens_fn,
-            logits_processor,
-            renormalize_logits,
-            stopping_criteria,
-            constraints,
-            output_attentions,
-            output_hidden_states,
-            output_scores,
-            return_dict_in_generate,
-            forced_bos_token_id,
-            forced_eos_token_id,
-            remove_invalid_values,
-            synced_gpus,
-            exponential_decay_length_penalty,
+            inputs=inputs,
+            num_beams=num_beams,
+            prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
+            logits_processor=logits_processor,
+            stopping_criteria=stopping_criteria,
+            synced_gpus=synced_gpus,
             **model_kwargs
         )
 
