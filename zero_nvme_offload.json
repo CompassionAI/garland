@@ -27,7 +27,7 @@
             "nvme_path": "/home/eeisenst/workspace/temp/zero_offload",
             "pin_memory": false,
             "buffer_count": 4,
-            "fast_init": true
+            "fast_init": false
         },
         "offload_param": {
             "device": "cpu",
