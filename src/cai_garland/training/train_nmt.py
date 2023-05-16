@@ -287,15 +287,23 @@ def main(cfg):
     else:
         logger.info("Output directory not found or overwritten")
 
+    checkpoint = None
+    if "pretrained_checkpoint" in cfg:
+        checkpoint = cfg.pretrained_checkpoint
+    elif training_cfg.resume_from_checkpoint is not None:
+        checkpoint = training_cfg.resume_from_checkpoint
+    elif last_checkpoint is not None:
+        checkpoint = last_checkpoint
+
     set_seed(training_cfg.seed)
 
     deepspeed = getattr(training_cfg, 'deepspeed', None) is not None
-    if "pretrained_checkpoint" in cfg:
-        logger.info(f"Loading pretrained weights from checkpoint {cfg.pretrained_checkpoint}")
-        model = get_model_type().from_pretrained(cfg.pretrained_checkpoint)
+    if checkpoint is not None:
+        logger.info(f"Loading weights from local checkpoint {checkpoint}")
+        model = get_model_type().from_pretrained(checkpoint)
         tokenizer = make_bilingual_tokenizer(cfg.model.encoder_model, cfg.model.decoder_model, is_deepspeed=deepspeed)
     else:
-        logger.info("Making encoder-decoder model")
+        logger.info("Making encoder-decoder model from default pre-trained checkpoint")
         model, tokenizer = make_encoder_decoder(
             cfg.model.encoder_model, cfg.model.decoder_model, is_deepspeed=deepspeed)
 
@@ -510,11 +518,6 @@ def main(cfg):
         }
 
     # Training
-    checkpoint = None
-    if training_cfg.resume_from_checkpoint is not None:
-        checkpoint = training_cfg.resume_from_checkpoint
-    elif last_checkpoint is not None:
-        checkpoint = last_checkpoint
     logger.info("Kicking off training")
     logger.debug(f"    resume_from_checkpoint={checkpoint}")
     train_result = trainer.train(resume_from_checkpoint=checkpoint)
