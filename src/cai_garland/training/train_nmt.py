@@ -287,9 +287,10 @@ def main(cfg):
     else:
         logger.info("Output directory not found or overwritten")
 
-    checkpoint = None
+    checkpoint, resume_from_checkpoint = None, True
     if "pretrained_checkpoint" in cfg:
         checkpoint = cfg.pretrained_checkpoint
+        resume_from_checkpoint = False
     elif training_cfg.resume_from_checkpoint is not None:
         checkpoint = training_cfg.resume_from_checkpoint
     elif last_checkpoint is not None:
@@ -306,6 +307,8 @@ def main(cfg):
         logger.info("Making encoder-decoder model from default pre-trained checkpoint")
         model, tokenizer = make_encoder_decoder(
             cfg.model.encoder_model, cfg.model.decoder_model, is_deepspeed=deepspeed)
+    if not resume_from_checkpoint:
+        checkpoint = None
 
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
