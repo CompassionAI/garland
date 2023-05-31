@@ -9,7 +9,7 @@ seed: 12345
 
 per_device_train_batch_size: 8
 per_device_eval_batch_size: 8
-gradient_accumulation_steps: 3
+gradient_accumulation_steps: 4
 
 # per_device_train_batch_size: 4
 # per_device_eval_batch_size: 4
@@ -18,10 +18,10 @@ gradient_accumulation_steps: 3
 num_train_epochs: 9
 
 # Every how many training steps to run the evaluation loop
-logging_steps: 150
+logging_steps: 100
 
 # Every how many training steps to save a model checkpoint
-save_steps: 150
+save_steps: 100
 
 # How many model checkpoints to keep around
 save_total_limit: 50

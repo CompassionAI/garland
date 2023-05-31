@@ -3,7 +3,7 @@ context_injection:
   context_lookup_key: target
 
   # Whether to run the contexts through an encoder
-  raw_contexts: false
+  raw_contexts: true
 
   # What context encoder model to use
   context_encoder: facebook/bart-base

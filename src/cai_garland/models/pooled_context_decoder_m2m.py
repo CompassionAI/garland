@@ -56,6 +56,7 @@ class ContextArchitecture(Enum):
     FullBartEncoder = "full-bart-encoder"
     BartEncoderFirstLayerOnly = "bart-encoder-first-layer-only"
     FrozenEmbeddingsWithTwoLayers = "frozen-embeddings-with-two-layers"
+    BartEncoderTopLayerUnfrozen = "bart-encoder-top-layer-unfrozen"
 
 
 class M2MRemappedEncoderConfig(M2M100Config):
@@ -152,6 +153,16 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             for p in model.encoder.embed_positions.parameters():
                 p.requires_grad = False
             self.context_encoder = model.encoder
+        elif self.context_architecture == ContextArchitecture.BartEncoderTopLayerUnfrozen:
+            model = AutoModel.from_pretrained("facebook/bart-base")
+            for p in model.encoder.embed_tokens.parameters():
+                p.requires_grad = False
+            for p in model.encoder.embed_positions.parameters():
+                p.requires_grad = False
+            for l in model.encoder.layers[:-1]:
+                for p in l.parameters():
+                    p.requires_grad = False
+            self.context_encoder = model.encoder
         else:
             raise ValueError("Unknown context architecture")
         self.adapter_layer = torch.nn.Linear(768, self.embed_tokens.embedding_dim)
@@ -211,7 +222,8 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                     features = None
             elif self.context_architecture == ContextArchitecture.FullBartEncoder or \
                  self.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly or \
-                 self.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers:
+                 self.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers or \
+                 self.context_architecture == ContextArchitecture.BartEncoderTopLayerUnfrozen:
                 features = self.context_encoder(
                     input_ids=context_embedding, attention_mask=context_embedding_mask).last_hidden_state[:,0,:]
             else:
