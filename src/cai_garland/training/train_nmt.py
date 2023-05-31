@@ -380,9 +380,12 @@ def main(cfg):
         raise ValueError("Interleaving rates for augmenting datasets too large.")
     if len(eval_datasets) > 1 or len(test_datasets) > 1:
         raise ValueError("Augmenting datasets should only have training splits.")
-    logger.info("Interleaving training dataset")
-    train_dataset = datasets.interleave_datasets(
-        train_datasets, probabilities=interleaving_rates, stopping_strategy="first_exhausted")
+    if len(train_datasets) > 1:
+        logger.info("Interleaving training dataset")
+        train_dataset = datasets.interleave_datasets(
+            train_datasets, probabilities=interleaving_rates, stopping_strategy="first_exhausted")
+    else:
+        train_dataset = train_datasets[0]
     eval_dataset = eval_datasets[0]
     test_dataset = test_datasets[0]
 
