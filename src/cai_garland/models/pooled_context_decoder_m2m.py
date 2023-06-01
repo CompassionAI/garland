@@ -225,7 +225,8 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                  self.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers or \
                  self.context_architecture == ContextArchitecture.BartEncoderTopLayerUnfrozen:
                 features = self.context_encoder(
-                    input_ids=context_embedding, attention_mask=context_embedding_mask).last_hidden_state[:,0,:]
+                    input_ids=context_embedding.to(torch.int), attention_mask=context_embedding_mask
+                ).last_hidden_state[:,0,:]
             else:
                 raise ValueError("Unknown context architecture")
             if features is not None:
