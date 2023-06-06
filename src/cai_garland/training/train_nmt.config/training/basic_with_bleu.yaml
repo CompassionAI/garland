@@ -24,7 +24,7 @@ logging_steps: 100
 save_steps: 100
 
 # How many model checkpoints to keep around
-save_total_limit: 50
+save_total_limit: 10
 
 # Optimizer learning rate
 learning_rate: 1e-4
