@@ -87,22 +87,25 @@ class Translator:
         self.model.eval()
 
         self.num_beams = 20
-        self._cuda = False
+        self.device = torch.device("cpu")
         self.context_encoder = None
         self.decoding_length = self.model.decoder.max_length
         self._bad_words, self._bad_word_tokens = [], []
 
-    def cuda(self) -> None:
-        self._cuda = True
-        self.model.cuda()
+    def _to_device(self, device):
+        self.device = device
+        self.model.to(device)
         if self.context_encoder is not None:
-            self.context_encoder.cuda()
+            self.context_encoder.to(device)
+
+    def cuda(self) -> None:
+        self._to_device(torch.device("cuda"))
+
+    def mps(self) -> None:
+        self._to_device(torch.device("mps"))
 
     def cpu(self) -> None:
-        self._cuda = False
-        self.model.cpu()
-        if self.context_encoder is not None:
-            self.context_encoder.cpu()
+        self._to_device(torch.device("cpu"))
 
     @property
     def bad_words(self):
@@ -127,8 +130,7 @@ class Translator:
         if getattr(self.context_encoder.config, "is_encoder_decoder", False):
             self.context_encoder = self.context_encoder.model.encoder
         self.context_encoder.eval()
-        if self._cuda:
-            self.context_encoder.cuda()
+        self.context_encoder.to(self.device)
 
     def _encode_text(
         self,
@@ -142,9 +144,7 @@ class Translator:
                 f"{self.model.encoder.max_length}, input tokenizes to {len(bo_tokens[0])} "
                 f"tokens.")
 
-        if self._cuda:
-            bo_tokens = bo_tokens.cuda()
-        bo_tokens = [bo_tokens]
+        bo_tokens = [bo_tokens.to(self.device)]
         inputs_tensor, model_input_name, model_kwargs = self.model._prepare_model_inputs(
             bo_tokens, self.model.config.bos_token_id, model_kwargs={})
         model_kwargs["attention_mask"] = [self.model._prepare_attention_mask_for_generation(
@@ -158,9 +158,8 @@ class Translator:
         del bo_tokens
         encoder_outputs = model_kwargs['encoder_outputs']
         del model_kwargs
-        if self._cuda:
-            last_hidden_state = encoder_outputs.last_hidden_state.cpu().detach().numpy()
-            attention_mask = encoder_outputs.attention_mask.cpu().detach().numpy()
+        last_hidden_state = encoder_outputs.last_hidden_state.to(self.device).detach().numpy()
+        attention_mask = encoder_outputs.attention_mask.to(self.device).detach().numpy()
         torch.cuda.empty_cache()
         return {
             "last_hidden_state": last_hidden_state,
@@ -260,15 +259,14 @@ class Translator:
                 last_hidden_state=torch.FloatTensor(encoder_outputs['last_hidden_state']),
                 attention_mask=torch.LongTensor(encoder_outputs['attention_mask'])
             )
-        if self._cuda:
-            bo_tokens = bo_tokens.cuda()
-            if encoder_outputs is not None:
-                if isinstance(encoder_outputs.last_hidden_state, list):
-                    encoder_outputs.last_hidden_state = [t.cuda() for t in encoder_outputs.last_hidden_state]
-                    encoder_outputs.attention_mask = [t.cuda() for t in encoder_outputs.attention_mask]
-                else:
-                    encoder_outputs.last_hidden_state = encoder_outputs.last_hidden_state.cuda()
-                    encoder_outputs.attention_mask = encoder_outputs.attention_mask.cuda()
+        bo_tokens = bo_tokens.to(self.device)
+        if encoder_outputs is not None:
+            if isinstance(encoder_outputs.last_hidden_state, list):
+                encoder_outputs.last_hidden_state = [t.to(self.device) for t in encoder_outputs.last_hidden_state]
+                encoder_outputs.attention_mask = [t.to(self.device) for t in encoder_outputs.attention_mask]
+            else:
+                encoder_outputs.last_hidden_state = encoder_outputs.last_hidden_state.to(self.device)
+                encoder_outputs.attention_mask = encoder_outputs.attention_mask.to(self.device)
         if encoder_outputs is not None:
             generator_kwargs['encoder_outputs'] = encoder_outputs
             generator_kwargs['attention_mask'] = encoder_outputs.attention_mask
@@ -286,8 +284,7 @@ class Translator:
                 bad_words_ids=None if len(self._bad_word_tokens) == 0 else self._bad_word_tokens,   # Needs to be None instead of empty, otherwise HF throws ValueError
                 **generator_kwargs
             )[0]
-        if self._cuda:
-            preds = preds.cpu()
+        preds = preds.cpu()
 
         logger.debug(f"Generated tokens: {preds}")
         logger.debug(f"Generated tokens length: {len(preds)}")
