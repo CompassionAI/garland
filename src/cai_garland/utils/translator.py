@@ -291,6 +291,40 @@ class Translator:
         with self.tokenizer.as_target_tokenizer():
             return self.tokenizer.decode(preds, skip_special_tokens=True).strip()
 
+    def segment(
+        self,
+        bo_text,
+        tqdm=tqdm,      # pylint: disable=redefined-outer-name
+        hard_segmenter_kwargs={},
+        soft_segmenter_kwargs={}
+    ):
+        hard_segments = self.hard_segmenter(bo_text, translator=self, **hard_segmenter_kwargs)
+
+        for hard_seg_count, hard_segment in tqdm(
+            enumerate(hard_segments), total=len(hard_segments), desc="Hard segments", leave=False
+        ):
+            for preproc_func in self.preprocessors:
+                hard_segment = preproc_func(hard_segment)
+
+            self.soft_segmenter.hard_segment_counter = hard_seg_count
+            soft_segments = self.soft_segmenter(hard_segment, translator=self, **soft_segmenter_kwargs)
+
+            for preproc_func in self.soft_segment_preprocessors:
+                soft_segments = list(map(preproc_func, soft_segments))
+
+            if getattr(self, "soft_segment_combiner_config", None) is not None:
+                new_soft_segments = soft_segments[:self.soft_segment_combiner_config.skip_first_N]
+                for seg_idx in range(
+                    self.soft_segment_combiner_config.skip_first_N,
+                    len(soft_segments),
+                    self.soft_segment_combiner_config.combine_window
+                ):
+                    new_soft_segments.append(
+                        ' '.join(soft_segments[seg_idx:seg_idx + self.soft_segment_combiner_config.combine_window]))
+                soft_segments = new_soft_segments
+
+            for soft_segment in soft_segments:
+                yield soft_segment
 
     def batch_translate(
         self,
