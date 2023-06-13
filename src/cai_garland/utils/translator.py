@@ -307,7 +307,7 @@ class Translator:
                 hard_segment = preproc_func(hard_segment)
 
             self.soft_segmenter.hard_segment_counter = hard_seg_count
-            soft_segments = self.soft_segmenter(hard_segment, translator=self, **soft_segmenter_kwargs)
+            soft_segments = self.soft_segmenter(hard_segment, translator=self, tqdm=tqdm, **soft_segmenter_kwargs)
 
             for preproc_func in self.soft_segment_preprocessors:
                 soft_segments = list(map(preproc_func, soft_segments))
