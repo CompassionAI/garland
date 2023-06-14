@@ -1,0 +1,30 @@
+output:
+  output_dir: ${oc.env:CAI_TEMP_PATH}/temp_data/mined_enbo_data
+
+  # Continue from previous state in already existing output directory
+  continue_from_previous: true
+
+input:
+  bo:
+    # The Tibetan folios have section fragments at the start and end, this will look back/ahead to complete them
+    complete_edge_sections: true
+
+model:
+  model_name: olive-cormorant-nllb
+  model_size: base-600M
+
+compute:
+  seed: 12345
+  cuda: true
+
+  # Number of Dask worker processes to load training data with.
+  dask_n_workers: 20
+
+  # Make the Dask dashboard only visible on localhost. Use this to avoid weird crashes involving LocalCluster.
+  local_dask_dash: true
+
+hydra:
+  # verbose: __main__
+  run:
+    dir: .
+  output_subdir: ~
