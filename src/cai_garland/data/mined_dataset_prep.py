@@ -3,6 +3,7 @@ import sys
 import copy
 import hydra
 import shutil
+import string
 import logging
 
 from tqdm.auto import tqdm
@@ -136,7 +137,8 @@ def segment_folios(folios, translator, cfg):
 
     with open(segment_fn, 'a') as f:
         for folio in tqdm(folios[len(segments):]):
-            cur_segments = list(translator.segment(folio, tqdm=lambda *args, **kwargs: tqdm(*args, disable=True, **kwargs)))
+            cur_segments = list(
+                translator.segment(folio, tqdm=lambda *args, **kwargs: tqdm(*args, disable=True, **kwargs)))
             f.write(','.join(cur_segments) + '\n')
             segments.append(cur_segments)
 
@@ -171,8 +173,10 @@ def _combine_tokens(*all_tokens, translator):
 def _score_segments(bo_segments, en_text, translator):
     scores = {}
     with translator.tokenizer.as_target_tokenizer():
-        splits = [t.strip() + '.' for t in en_text.split('.') if len(t) > 0]
-        splits = [t.strip() + '.' for s in splits for t in s.split(',') if len(s) > 0]
+        splits = [t.strip() for t in en_text.split('.') if len(t) > 0]
+        splits = [s if s[-1] in string.punctuation else (s + '.') for s in splits if len(s) > 0]
+        splits = [t.strip() for s in splits for t in s.split(',') if len(s) > 0]
+        splits = [s if s[-1] in string.punctuation else (s + ',') for s in splits if len(s) > 0]
         split_tokens = [translator.tokenizer.encode(t, add_special_tokens=False) for t in splits]
     for bo_segment in tqdm(bo_segments, leave=False, desc="Scoring segments"):
         all_logits = []
@@ -254,7 +258,7 @@ def main(cfg):
     matches_fn = os.path.join(cfg.output.output_dir, "matches.csv")
     open(matches_fn, 'a').close()
     with open(matches_fn, 'r') as f:
-        proced_f_idxs = set([int(l.strip().split(',')[0]) for l in f.readlines()])
+        proced_f_idxs = set([int(l.strip().split('|')[0]) for l in f.readlines()])
     with open(matches_fn, 'a') as f:
         for f_idx, (segments, translation) in tqdm(enumerate(list(zip(bo_segments, en_folios))), total=len(en_folios)):
             if f_idx in proced_f_idxs:
@@ -262,7 +266,7 @@ def main(cfg):
             new_matches = match_segments(segments, translation, translator)
             new_matches = [[c[0], c[1][0], c[1][1]] for c in new_matches.items()]
             for match in new_matches:
-                f.write(','.join(map(str, [f_idx] + match)) + '\n')
+                f.write('|'.join(map(str, [f_idx] + match)) + '\n')
             f.flush()
 
 
