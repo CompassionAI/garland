@@ -212,11 +212,13 @@ def match_segments(segments, translation, translator):
 
         new_segment_scores = {}
         for segment, scores in segment_scores.items():
-            new_segment_scores[segment] = [
+            cur_segment_scores = [
                 ((en, en_start, en_end), score)
                 for (en, en_start, en_end), score in scores
                 if not _overlap(en_start, en_end, best_en_start, best_en_end)
             ]
+            if len(cur_segment_scores) > 0:
+                new_segment_scores[segment] = cur_segment_scores
         segment_scores = new_segment_scores
     return final_matches    
 
