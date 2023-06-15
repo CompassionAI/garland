@@ -189,6 +189,11 @@ def _score_segments(bo_segments, en_text, translator):
     return scores
 
 
+def _overlap(a, b, big_a, big_b):
+    assert a <= b and big_a <= big_b
+    return b > big_a and a < big_b
+
+
 def match_segments(segments, translation, translator):
     assert len(translation) > 0 and len(segments) > 0
 
@@ -209,7 +214,8 @@ def match_segments(segments, translation, translator):
         for segment, scores in segment_scores.items():
             new_segment_scores[segment] = [
                 ((en, en_start, en_end), score)
-                for (en, en_start, en_end), score in scores if not (best_en_start >= en_start and best_en_end <= en_end)
+                for (en, en_start, en_end), score in scores
+                if not _overlap(en_start, en_end, best_en_start, best_en_end)
             ]
         segment_scores = new_segment_scores
     return final_matches    
