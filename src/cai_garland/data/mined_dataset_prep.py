@@ -174,9 +174,9 @@ def _score_segments(bo_segments, en_text, translator):
     scores = {}
     with translator.tokenizer.as_target_tokenizer():
         splits = [t.strip() for t in en_text.split('.') if len(t) > 0]
-        splits = [s if s[-1] in string.punctuation else (s + '.') for s in splits if len(s) > 0]
+        splits = [s if s[-1] in string.punctuation else (s + '. ') for s in splits if len(s) > 0]
         splits = [t.strip() for s in splits for t in s.split(',') if len(s) > 0]
-        splits = [s if s[-1] in string.punctuation else (s + ',') for s in splits if len(s) > 0]
+        splits = [s if s[-1] in string.punctuation else (s + ', ') for s in splits if len(s) > 0]
         split_tokens = [translator.tokenizer.encode(t, add_special_tokens=False) for t in splits]
     for bo_segment in tqdm(bo_segments, leave=False, desc="Scoring segments"):
         all_logits = []
