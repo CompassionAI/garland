@@ -10,8 +10,11 @@ input:
     complete_edge_sections: true
 
 model:
-  model_name: olive-cormorant-nllb
-  model_size: base-600M
+  model_name: olive-cormorant-bart
+  model_size: base-base
+
+  # model_name: olive-cormorant-nllb
+  # model_size: base-600M
 
 compute:
   seed: 12345
