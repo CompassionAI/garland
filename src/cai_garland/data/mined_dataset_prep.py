@@ -1,9 +1,9 @@
 import os
+import re
 import sys
 import copy
 import hydra
 import shutil
-import string
 import logging
 
 from tqdm.auto import tqdm
@@ -170,22 +170,61 @@ def _combine_tokens(*all_tokens, translator):
     }
 
 
-def _score_segments(bo_segments, en_text, translator):
+our_punct = '!&,-.:;?'
+_punct_re = None
+
+
+def _punctuation_segment(en_text):
+    global _punct_re
+    if _punct_re is None:
+        _punct_re = re.compile(f"[^(?:{'|'.join(re.escape(our_punct))})]+(?:{'|'.join(re.escape(our_punct))})")
+    return _punct_re.findall(en_text)
+
+
+def _score_segments(
+    bo_segments,
+    en_text,
+    translator,
+    location_fudge=5,
+    width_fudge=2,
+    bottom_words_fudge=0.9,
+    top_words_fudge=2.2
+    # bottom_words_fudge=-1,
+    # top_words_fudge=13
+):
     scores = {}
     with translator.tokenizer.as_target_tokenizer():
-        splits = [t.strip() for t in en_text.split('.') if len(t) > 0]
-        splits = [s if s[-1] in string.punctuation else (s + '. ') for s in splits if len(s) > 0]
-        splits = [t.strip() for s in splits for t in s.split(',') if len(s) > 0]
-        splits = [s if s[-1] in string.punctuation else (s + ', ') for s in splits if len(s) > 0]
-        split_tokens = [translator.tokenizer.encode(t, add_special_tokens=False) for t in splits]
-    for bo_segment in tqdm(bo_segments, leave=False, desc="Scoring segments"):
+        split_tokens = [translator.tokenizer.encode(t, add_special_tokens=False) for t in _punctuation_segment(en_text)]
+    for seg_idx, bo_segment in tqdm(
+        enumerate(bo_segments), total=len(bo_segments), leave=False, desc="Scoring segments"
+    ):
         all_logits = []
-        for start_idx in range(len(split_tokens)):
-            for end_idx in range(start_idx + 1, len(split_tokens) + 1):
+        num_preceding = sum([len(s.split(' ')) for s in bo_segments[:seg_idx]])
+        num_subsegments = len(bo_segment.split(' '))
+        for start_idx in range(
+            max(0, num_preceding - location_fudge), min(len(split_tokens), num_preceding + location_fudge)
+        ):
+            for length in range(
+                max(1, num_subsegments - width_fudge),
+                min(len(split_tokens) + 1 - start_idx, num_subsegments + width_fudge + 1)
+            ):
+                end_idx = start_idx + length
                 cur_en_tokens = _combine_tokens(*split_tokens[start_idx:end_idx], translator=translator)
+                with translator.tokenizer.as_target_tokenizer():
+                    cur_en_text = translator.tokenizer.decode(cur_en_tokens['input_ids'][0][2:-1])
+                bo_wordslike_count, en_words_count = bo_segment.count('་') + 1, cur_en_text.count(' ') + 1
+                # words_diff = bo_wordslike_count - en_words_count
+                # if words_diff < bottom_words_fudge or words_diff > top_words_fudge:
+                #     continue
+                words_diff = bo_wordslike_count / en_words_count
+                if words_diff < bottom_words_fudge or words_diff > top_words_fudge:
+                    continue
                 all_logits.append(
                     ((cur_en_tokens, start_idx, end_idx), _get_total_logits(bo_segment, cur_en_tokens, translator)))
-        scores[bo_segment] = sorted(all_logits, key=lambda x: -x[1])
+        if len(all_logits) == 0:
+            scores[bo_segment] = [(({'input_ids': LongTensor([[0, 0, 0]])}, -1, -1), -100.)]
+        else:
+            scores[bo_segment] = sorted(all_logits, key=lambda x: -x[1])
     return scores
 
 
