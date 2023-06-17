@@ -139,6 +139,13 @@ def load_hf_dataset(
     else:
         logger.info("    No test set")
 
+    if data_cfg.get('score_cutoff', None) is not None:
+        logger.info("  Filtering dataset by score cutoff")
+        pre_filter_len = len(train_dataset)
+        train_dataset = train_dataset.filter(lambda x: x['score'] > data_cfg.score_cutoff, desc="Score filter")
+        logger.info(f"  {1 - len(train_dataset) / pre_filter_len} has been filtered out, {len(train_dataset)} "
+                     "examples left.")
+
     tgt_lang_code = getattr(data_cfg, "tgt_lang_code", None)
     logger.info("  Preprocessing training dataset")
     with training_cfg.main_process_first(desc="train dataset map pre-processing"):
@@ -382,8 +389,9 @@ def main(cfg):
         raise ValueError("Augmenting datasets should only have training splits.")
     if len(train_datasets) > 1:
         logger.info("Interleaving training dataset")
+        strategy = getattr(getattr(cfg, "interleave", object), "stopping_strategy", "first_exhausted")
         train_dataset = datasets.interleave_datasets(
-            train_datasets, probabilities=interleaving_rates, stopping_strategy="first_exhausted")
+            train_datasets, probabilities=interleaving_rates, stopping_strategy=strategy)
     else:
         train_dataset = train_datasets[0]
     eval_dataset = eval_datasets[0]
