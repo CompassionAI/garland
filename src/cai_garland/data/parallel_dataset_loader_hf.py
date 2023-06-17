@@ -42,6 +42,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "raw_with_context_cased": "processed_datasets/84000-parallel-sentences-raw-with-context-cased",
         "raw_with_bidirectional_context": "processed_datasets/84000-parallel-sentences-raw-with-bidirectional-context",
         "nllb_augmentation": "experiments/nllb-augmentation",
+        "mined": "processed_datasets/mined-parallel-sentences"
     }
 
     BUILDER_CONFIGS = [
@@ -91,10 +92,26 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             version=datasets.Version("0.2.0", ""),
             description="Dataset splits extracted from the NLLB model",
         ),
+        ParallelSentences84000Config(
+            name="mined",
+            version=datasets.Version("0.1.0", ""),
+            description="Mined parallel sentences from the folio-level aligned publications",
+        ),
     ]
 
     def _info(self):
         # Dataset information
+        if self.config.name == "mined":
+            return datasets.DatasetInfo(
+                description=_DESCRIPTION,
+                features=datasets.Features(
+                    {
+                        "source": datasets.Value("string"),
+                        "target": datasets.Value("string"),
+                        "score": datasets.Value("float")
+                    }
+                )
+            )
         return datasets.DatasetInfo(
             description=_DESCRIPTION,
             features=datasets.Features(
@@ -141,6 +158,15 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                     gen_kwargs={
                         "source_fn": os.path.join(files_path, "bod_Tibt-eng_Latn/train.bo"),
                         "target_fn": os.path.join(files_path, "bod_Tibt-eng_Latn/train.it")
+                    }
+                )
+            ]
+        elif self.config.name == "mined":
+            return [datasets.SplitGenerator(
+                    name=datasets.Split.TRAIN,
+                    gen_kwargs={
+                        "source_fn": os.path.join(files_path, "matches.csv"),
+                        "target_fn": ""
                     }
                 )
             ]
@@ -196,6 +222,21 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
                 yield id_, source, target
 
     def _generate_examples(self, source_fn, target_fn):     # pylint: disable=arguments-differ
+        if self.config.name == "mined":
+            import pandas as pd
+            mined_df = pd.read_csv(
+                source_fn,
+                header=None,
+                delimiter='|',
+                names=["folio_idx", "bo", "en", "score"],
+                index_col="folio_idx")
+            for id_, row in mined_df.iterrows():
+                yield id_, {
+                    "source": row.bo,
+                    "target": row.en,
+                    "score": row.score
+                }
+            return
         for id_, source, target in self._read_from_files(source_fn, target_fn):
             source, target = source.strip(), target.strip()
             yield id_, {
