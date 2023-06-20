@@ -4,6 +4,7 @@ from typing import Optional, Union
 from enum import Enum
 
 import torch
+import numpy as np
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
@@ -224,6 +225,11 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                  self.context_architecture == ContextArchitecture.BartEncoderFirstLayerOnly or \
                  self.context_architecture == ContextArchitecture.FrozenEmbeddingsWithTwoLayers or \
                  self.context_architecture == ContextArchitecture.BartEncoderTopLayerUnfrozen:
+                if np.prod(context_embedding.size()) == 0:
+                    context_embedding = torch.LongTensor([[1]] * context_embedding.size()[0]).to(
+                        context_embedding.device)
+                    context_embedding_mask = torch.LongTensor([[0]] * context_embedding.size()[0]).to(
+                        context_embedding.device)
                 features = self.context_encoder(
                     input_ids=context_embedding.to(torch.int), attention_mask=context_embedding_mask
                 ).last_hidden_state[:,0,:]
