@@ -295,9 +295,14 @@ def main(cfg):
         logger.info("Output directory not found or overwritten")
 
     checkpoint, resume_from_checkpoint = None, True
+    if "pretrained_checkpoint" in cfg and "resume_from_checkpoint" in cfg:
+        raise ValueError("Either specify a pretrained checkpoint to start from or a previous checkpoint to resume from")
     if "pretrained_checkpoint" in cfg:
         checkpoint = cfg.pretrained_checkpoint
         resume_from_checkpoint = False
+    elif "resume_from_checkpoint" in cfg:
+        checkpoint = cfg.resume_from_checkpoint
+        resume_from_checkpoint = True
     elif training_cfg.resume_from_checkpoint is not None:
         checkpoint = training_cfg.resume_from_checkpoint
     elif last_checkpoint is not None:

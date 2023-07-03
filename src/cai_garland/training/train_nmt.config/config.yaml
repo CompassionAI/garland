@@ -24,7 +24,8 @@ hydra:
 # training:
 #   evaluation_strategy: "NO"
 
-# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-large-pooled-context-injection/latest
+# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-large-pooled-context-injection/temp
+# resume_from_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-large-pooled-context-injection/temp
 
 # Overwrite the cached training and evaluation sets
 overwrite_cache: false
