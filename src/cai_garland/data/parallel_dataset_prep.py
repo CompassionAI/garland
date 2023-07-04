@@ -873,7 +873,7 @@ def main(cfg):
     _write_to_file("test.en", final_test_en, cfg.output.output_dir)
 
     logger.info("Checking for equal lengths")
-    logger.info("    Trainining")
+    logger.info("    Training")
     _check_equal_lengths("train.bo", "train.en", cfg.output.output_dir)
     logger.info("    Validation")
     _check_equal_lengths("valid.bo", "valid.en", cfg.output.output_dir)
