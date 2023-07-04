@@ -1,0 +1,16 @@
+defaults:
+  - datasets/mined-parallel-sentences@mined-concats-sequenced
+  - sequencing/follows-anywhere@mined-concats-sequenced
+  - concat/concat@mined-concats-sequenced
+
+mined-concats-sequenced:
+  # Function to pull the dataset
+  pull_func:
+    _target_: cai_garland.data.parallel_dataset_prep._pull_mined_dataset
+
+  # Function to prepare the dataset
+  prep_func:
+    _target_: cai_garland.data.parallel_dataset_prep._prep_concatted_dataset
+
+  exclude_from_validation: true
+  exclude_from_test: true

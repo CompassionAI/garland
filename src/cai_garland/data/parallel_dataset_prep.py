@@ -198,6 +198,21 @@ def _pull_parallel_dataset(dask_client, cfg, stage_cfg):
     return train_flat_data, val_flat_data, test_flat_data
 
 
+def _pull_mined_dataset(_dask_client, cfg, stage_cfg):
+    import pandas as pd
+    mined_df = pd.read_csv(
+        os.path.join(DATA_BASE_PATH, stage_cfg.dataset.parallel_dataset_location),
+        header=None,
+        delimiter='|',
+        names=["folio_idx", "bo", "en", "score"],
+        index_col="folio_idx")
+    mined_df = mined_df[mined_df.score > stage_cfg.dataset.score_cutoff]
+    mined_df["tibetan"] = mined_df.bo
+    mined_df["english"] = mined_df.en
+    train_flat_data = mined_df[["tibetan", "english"]].to_dict(orient="records")
+    return train_flat_data, [], []
+
+
 def _pull_folio_dataset(_dask_client, cfg, stage_cfg):
     # Loads flat training and test datasets of parallel folios into memory from Dask
     english_df = TeiLoader("kangyur").dataframe
@@ -629,8 +644,8 @@ def _check_for_unks(f_name, cfg):
 
     if len(unk_lines) > 0:
         logger.warning(f"Unknown tokens found in {f_name}!!! Total of {len(unk_lines)} lines contain <unk>.")
-        for line in unk_lines[:10]:
-            logger.warning("    " + line)
+        for _, line_text in unk_lines[:10]:
+            logger.warning("    " + line_text)
         if len(unk_lines) > 9:
             logger.warning("...")
 

@@ -1,0 +1,7 @@
+dataset:
+  # Directory with the parallel sentences dataset under CAI_DATA_BASE_PATH
+  parallel_dataset_location: processed_datasets/mined-parallel-sentences/matches.csv
+
+  score_cutoff: -100.0
+
+  # This dataset is preprocessed when it is generated

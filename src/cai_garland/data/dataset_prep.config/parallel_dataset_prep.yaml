@@ -4,6 +4,7 @@ defaults:
     # - naive-unconcatted
     # - naive-concats
     - naive-concats-sequenced
+    - mined-concats-sequenced
     # - concatted-registers
     # - concatted-registers-sequenced
     # - unconcatted-registers-sequenced
