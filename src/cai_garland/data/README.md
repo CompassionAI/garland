@@ -149,4 +149,20 @@ dataset_info:
     num_examples: 234897
   download_size: 0
   dataset_size: 89595387
+- config_name: largest_parallel_with_context
+  features:
+  - name: source
+    dtype: string
+  - name: target
+    dtype: string
+  splits:
+  - name: train
+    num_bytes: 201755790
+    num_examples: 361308
+  - name: validation
+    num_bytes: 375791
+    num_examples: 831
+  - name: test
+  download_size: 0
+  dataset_size: 202131581
 ---

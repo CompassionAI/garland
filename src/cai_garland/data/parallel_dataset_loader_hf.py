@@ -42,6 +42,7 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "raw_with_context_cased": "processed_datasets/84000-parallel-sentences-raw-with-context-cased",
         "raw_with_bidirectional_context": "processed_datasets/84000-parallel-sentences-raw-with-bidirectional-context",
         "nllb_augmentation": "experiments/nllb-augmentation",
+        "largest_parallel_with_context": "processed_datasets/largest-parallel-with-context",
         "mined": "processed_datasets/mined-parallel-sentences"
     }
 
@@ -91,6 +92,12 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             name="nllb_augmentation",
             version=datasets.Version("0.2.0", ""),
             description="Dataset splits extracted from the NLLB model",
+        ),
+        ParallelSentences84000Config(
+            name="largest_parallel_with_context",
+            version=datasets.Version("0.1.0", ""),
+            description="Dataset for a Tibetan encoder with no registers, augmented with mined sentences, and context "
+                        "embeddings",
         ),
         ParallelSentences84000Config(
             name="mined",
