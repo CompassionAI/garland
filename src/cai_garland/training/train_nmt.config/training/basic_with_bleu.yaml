@@ -44,6 +44,9 @@ generation_max_length: 200
 # Evaluate the model every 'steps' (as opposed to epochs or never)
 evaluation_strategy: STEPS
 
+# How many steps to wait before evaluating the model - first few evaluations are very slow due to long generation length
+eval_delay: 2000
+
 # Use beam search during the evaluation step, needed for computing BLEU on validation data
 predict_with_generate: true
 
