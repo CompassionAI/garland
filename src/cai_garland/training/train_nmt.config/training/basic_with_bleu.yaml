@@ -18,10 +18,10 @@ gradient_accumulation_steps: 6
 num_train_epochs: 9
 
 # Every how many training steps to run the evaluation loop
-logging_steps: 100
+logging_steps: 300
 
 # Every how many training steps to save a model checkpoint
-save_steps: 100
+save_steps: 300
 
 # How many model checkpoints to keep around
 save_total_limit: 10
@@ -45,7 +45,7 @@ generation_max_length: 200
 evaluation_strategy: STEPS
 
 # How many steps to wait before evaluating the model - first few evaluations are very slow due to long generation length
-eval_delay: 2000
+eval_delay: 6000
 
 # Use beam search during the evaluation step, needed for computing BLEU on validation data
 predict_with_generate: true
