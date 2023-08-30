@@ -15,6 +15,11 @@ per_device_train_batch_size: 4
 per_device_eval_batch_size: 4
 gradient_accumulation_steps: 6
 
+lora:
+  r: 8
+  alpha: 16
+  bias: none
+
 num_train_epochs: 9
 
 # Every how many training steps to run the evaluation loop

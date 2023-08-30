@@ -42,7 +42,8 @@ from cai_garland.data.context_injection_dataset import ContextInjectionDataset
 from cai_garland.training.cai_trainer_seq2seq import CAISeq2SeqTrainer
 
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed, HfArgumentParser
-from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint
+from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint, RemoveColumnsCollator
+from peft import LoraConfig, TaskType, get_peft_model
 
 from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
 
@@ -311,6 +312,7 @@ def main(cfg):
     set_seed(training_cfg.seed)
 
     deepspeed = getattr(training_cfg, 'deepspeed', None) is not None
+    lora = getattr(cfg.training, "lora", None) is not None
     if checkpoint is not None:
         logger.info(f"Loading weights from local checkpoint {checkpoint}")
         model = get_model_type().from_pretrained(checkpoint)
@@ -342,10 +344,10 @@ def main(cfg):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     num_params = sum([np.prod(p.size()) for p in model_parameters])
     logger.info(f"Model has {num_params:,} trainable parameters.")
-    if deepspeed: 
+    if deepspeed:
         if num_params > 0:
             logger.error("DeepSpeed is switched on but there are detected trainable parameters! This number should "
-                         "have been zero.")
+                        "have been zero.")
             for param_name, param in model.named_parameters():
                 param_size = np.prod(param.size())
                 if param_size > 0:
@@ -355,6 +357,19 @@ def main(cfg):
         else:
             logger.info("You're using DeepSpeed, so zero detected trainable parameters is correct. DeepSpeed will "
                         "print the actual number of trainable parameters separately.")
+
+    if lora:
+        lora_cfg = cfg.training.lora
+        logger.info("Initializing LoRA via PEFT")
+        peft_config = LoraConfig(
+            r=lora_cfg.r,
+            lora_alpha=lora_cfg.alpha,
+            bias=lora_cfg.bias,
+            task_type=TaskType.SEQ_2_SEQ_LM,
+            target_modules=["key", "query", "value"],
+        )
+        model = get_peft_model(model, peft_config)
+        model.print_trainable_parameters()
 
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
@@ -521,6 +536,16 @@ def main(cfg):
 
     # Initialize our Trainer
     logger.info("Initializing trainer")
+    if lora:
+        training_cfg.remove_unused_columns = False
+        import inspect
+        data_collator = RemoveColumnsCollator(
+            data_collator=data_collator,
+            signature_columns=list(inspect.signature(model.base_model.model.forward).parameters.keys()),
+            logger=logger,
+            description=None,
+            model_name=model.__class__.__name__,
+        )
     trainer = CAISeq2SeqTrainer(
         model=model,
         args=training_cfg,
