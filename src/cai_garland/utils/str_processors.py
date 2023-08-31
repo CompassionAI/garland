@@ -114,6 +114,7 @@ class ProcessorReplaceCharacters:
 
 class ProcessorSymbolCleaningJSON:
     base_dir = None
+    clean_not_skip = False
 
     def __init__(self, symbol_cleaning_json_file) -> None:
         if self.base_dir is None:
@@ -123,8 +124,12 @@ class ProcessorSymbolCleaningJSON:
         self.skip_lines = set(self.symbol_cleaning_map.pop("skip_this_line", []))
 
     def __call__(self, segment: str) -> str:
-        if any([skip_char in segment for skip_char in self.skip_lines]):
-            return ""
+        if not self.clean_not_skip:
+            if any([skip_char in segment for skip_char in self.skip_lines]):
+                return ""
+        else:
+            for bad_c in self.skip_lines:
+                segment = segment.replace(bad_c, "")
         for bad_c, good_c in self.symbol_cleaning_map.items():
             segment = segment.replace(bad_c, good_c)
         return segment
