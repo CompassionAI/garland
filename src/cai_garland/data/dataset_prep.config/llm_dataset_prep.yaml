@@ -1,0 +1,23 @@
+defaults:
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+output:
+  output_dir: ${oc.env:CAI_TEMP_PATH}/temp_data/llm_en_data
+  reset_output_dir: true   # EUG!!!
+
+input:
+  num_sentences: 3
+
+compute:
+  # Number of Dask worker processes to load training data with.
+  dask_n_workers: 20
+
+  # Make the Dask dashboard only visible on localhost. Use this to avoid weird crashes involving LocalCluster.
+  local_dask_dash: true
+
+hydra:
+  # verbose: __main__
+  run:
+    dir: .
+  output_subdir: ~
