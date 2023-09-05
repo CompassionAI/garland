@@ -2,6 +2,7 @@
 # pylint: disable=no-member
 # pylint: disable=protected-access
 import logging
+from contextlib import contextmanager
 from typing import Optional, Dict, Any
 import torch
 from tqdm.auto import tqdm
@@ -13,6 +14,12 @@ from cai_garland.utils.segmenters import SegmenterNone, SegmenterOpeningShad
 from cai_garland.models.siamese_encoder import SiameseEncoderModel, BaseModelOutputWithAttentionMask
 
 from cai_garland.models.cai_encoder_decoder import CAIEncoderDecoderModel
+
+try:
+    import deepspeed
+    _has_deepspeed = True
+except:
+    _has_deepspeed = False
 
 
 logger = logging.getLogger(__name__)
@@ -48,16 +55,23 @@ class Translator:
     soft_segmenter = SegmenterNone()
     postprocessors = []
 
-    def __init__(self, model_ckpt: str) -> None:
+    def __init__(self, model_ckpt: str, deepspeed_cfg: str = None) -> None:
         """Loads all the relevant data and models for machine translation.
 
         Args:
-            model_ckpt:  Name of the fine-tuned model checkpoint in the data registry to use for translation. For
-                example, olive-cormorant-bart."""
+            model_ckpt: Name of the fine-tuned model checkpoint in the data registry to use for translation. For
+                example, olive-cormorant-bart.
+            deepspeed_cfg: Name of the JSON file configuring DeepSpeed for inference, if any."""
+        is_deepspeed = deepspeed_cfg is not None
+        if is_deepspeed and not _has_deepspeed:
+            raise ImportError("Requires DeepSpeed but DeepSpeed import failed, likely not installed!")
+
         local_ckpt = get_local_ckpt(model_ckpt, model_dir=True)
         logger.info(f"Local model checkpoint {model_ckpt} resolved to {local_ckpt}")
 
         self.model = CAIEncoderDecoderModel.from_pretrained(local_ckpt)
+        if is_deepspeed:
+            self.ds_engine = deepspeed.init_inference(model=self.model, config=deepspeed_cfg)
         logger.debug(f"Encoder: {self.model.encoder}")
         logger.debug(f"Decoder: {self.model.decoder}")
 
@@ -73,9 +87,9 @@ class Translator:
         self.model.decoder.max_length = decoder_length
 
         logger.info("Loading bilingual tokenizer")
-        self.tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name)
+        self.tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name, is_deepspeed=is_deepspeed)
 
-        if cai_base_config.get("reset_token_vocab", False):
+        if cai_base_config.get("reset_token_vocab", False) and not is_deepspeed:
             logger.info("Resetting token vocabulary")
             from transformers import M2M100ForConditionalGeneration
             nllb_model = M2M100ForConditionalGeneration.from_pretrained("facebook/nllb-200-distilled-600M")
