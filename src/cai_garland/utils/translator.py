@@ -231,6 +231,9 @@ class Translator:
 
         if context is not None:
             logger.debug("Encoding context")
+            # We embed the context here, instead of passing the raw tokens. Otherwise every time the beam search (or
+            #   whatever generation method) calls the model forward, it will encode the context again. The model will
+            #   slice and reshape it as needed.
             ctx_embedding = self.context_encoder(**ctx_tokens.to(self.context_encoder.device)).last_hidden_state
             ctx_mask = ctx_tokens.attention_mask
         else:

@@ -230,9 +230,12 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                         context_embedding.device)
                     context_embedding_mask = torch.LongTensor([[0]] * context_embedding.size()[0]).to(
                         context_embedding.device)
-                features = self.context_encoder(
-                    input_ids=context_embedding.to(torch.int), attention_mask=context_embedding_mask
-                ).last_hidden_state[:,0,:]
+                if context_embedding.size()[-1] == self.context_encoder.embed_tokens.embedding_dim:
+                    features = context_embedding[:,0,:]
+                else:
+                    features = self.context_encoder(
+                        input_ids=context_embedding.to(torch.int), attention_mask=context_embedding_mask
+                    ).last_hidden_state[:,0,:]
             else:
                 raise ValueError("Unknown context architecture")
             if features is not None:
