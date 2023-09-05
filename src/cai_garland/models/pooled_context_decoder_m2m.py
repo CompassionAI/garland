@@ -198,8 +198,8 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                 raise ValueError("If passing in a context embedding, must also pass in a context attention mask")
             if self.context_architecture == ContextArchitecture.DenseFeatureTransformer:
                 if not len(context_embedding.shape) == 3:
-                    raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feding a raw "
-                                     "context dataset?")
+                    raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feeding a "
+                                     "raw context dataset?")
                 context_embedding_mask = (
                     context_embedding_mask.unsqueeze(-1).expand(-1, -1, self.config.d_model)
                 )
@@ -208,8 +208,8 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                 features = features.sum(axis=1)
             elif self.context_architecture == ContextArchitecture.BartEncoderLayerOnTop:
                 if not len(context_embedding.shape) == 3:
-                    raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feding a raw "
-                                     "context dataset?")
+                    raise ValueError("Context embedding should have 3 dimensions. Are you sure you're not feeding a "
+                                     "raw context dataset?")
                 context_embedding_mask = _expand_mask(context_embedding_mask, inputs_embeds.dtype)
                 features = self.context_layer(
                     context_embedding,
