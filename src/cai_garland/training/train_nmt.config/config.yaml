@@ -6,7 +6,7 @@ defaults:
     # - nllb-augmentation-bo-en
     # - mined
   - dataset_construction: context-injection-mined
-  - model: olive-cormorant-nllb-large-pooled-context-injection
+  - model: olive-cormorant-nllb-pooled-context-injection
   - training: basic_with_bleu
   - training_preprocess: basic
   - override hydra/job_logging: colorlog
@@ -19,14 +19,14 @@ interleave:
 hydra:
   verbose: cai_garland.training
   run:
-    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-large-pooled-context-injection-lora
+    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection
 
 # Uncomment this to skip evaluation
 # training:
 #   evaluation_strategy: "NO"
 
-# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-large-pooled-context-injection-lora/temp
-# resume_from_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-large-pooled-context-injection-lora/temp
+# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection/temp
+# resume_from_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection/temp
 
 # Overwrite the cached training and evaluation sets
 overwrite_cache: false
