@@ -244,10 +244,10 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             else:
                 raise ValueError("Unknown context architecture")
             if features is not None:
-                features = self.adapter_layer(features)
-
                 if normalize_encodings:
                     features = self.normalizer(features)
+
+                features = self.adapter_layer(features)
 
                 features = features.unsqueeze(1)
 
