@@ -6,7 +6,7 @@ from enum import Enum
 import torch
 import numpy as np
 from torch import nn
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, Softmax
 
 from transformers import (
     AutoConfig,
@@ -58,6 +58,8 @@ class ContextArchitecture(Enum):
     BartEncoderFirstLayerOnly = "bart-encoder-first-layer-only"
     FrozenEmbeddingsWithTwoLayers = "frozen-embeddings-with-two-layers"
     BartEncoderTopLayerUnfrozen = "bart-encoder-top-layer-unfrozen"
+
+normalize_encodings = True
 
 
 class M2MRemappedEncoderConfig(M2M100Config):
@@ -168,6 +170,9 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             raise ValueError("Unknown context architecture")
         self.adapter_layer = torch.nn.Linear(768, self.embed_tokens.embedding_dim)
 
+        if normalize_encodings:
+            self.normalizer = Softmax(dim=1)
+
     def forward(
         self,
         input_ids=None,
@@ -240,6 +245,9 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                 raise ValueError("Unknown context architecture")
             if features is not None:
                 features = self.adapter_layer(features)
+
+                if normalize_encodings:
+                    features = self.normalizer(features)
 
                 features = features.unsqueeze(1)
 

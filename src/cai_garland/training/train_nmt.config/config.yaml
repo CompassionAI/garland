@@ -19,14 +19,14 @@ interleave:
 hydra:
   verbose: cai_garland.training
   run:
-    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection
+    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection-normalized
 
 # Uncomment this to skip evaluation
 # training:
 #   evaluation_strategy: "NO"
 
-# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection/temp
-# resume_from_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection/temp
+# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection-normalized/temp
+# resume_from_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-pooled-context-injection-normalized/temp
 
 # Overwrite the cached training and evaluation sets
 overwrite_cache: false
