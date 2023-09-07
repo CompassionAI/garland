@@ -6,7 +6,7 @@ from enum import Enum
 import torch
 import numpy as np
 from torch import nn
-from torch.nn import CrossEntropyLoss, Softmax
+from torch.nn import CrossEntropyLoss, Softmax, LayerNorm
 
 from transformers import (
     AutoConfig,
@@ -171,7 +171,9 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
         self.adapter_layer = torch.nn.Linear(768, self.embed_tokens.embedding_dim)
 
         if normalize_encodings:
-            self.normalizer = Softmax(dim=1)
+            # self.normalizer = Softmax(dim=1)
+            self.normalizer = LayerNorm([768], elementwise_affine=False)    # No need for affine transform because of
+                                                                            #   adapter layer.
 
     def forward(
         self,
