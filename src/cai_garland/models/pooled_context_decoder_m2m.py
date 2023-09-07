@@ -6,7 +6,7 @@ from enum import Enum
 import torch
 import numpy as np
 from torch import nn
-from torch.nn import CrossEntropyLoss, Softmax, LayerNorm
+from torch.nn import CrossEntropyLoss, LayerNorm
 
 from transformers import (
     AutoConfig,
@@ -41,6 +41,7 @@ class M2MWithPooledContextForCausalLMConfig(M2M100Config):
         self.remapped_tokens = kwargs.get("remapped_tokens", False)
         self.with_pooled_context = kwargs.get("with_pooled_context", True)
         self.context_architecture = kwargs.get("context_architecture", "no-context-injection")
+        self.normalize_context = kwargs.get("normalize_context", False)
         self.bos_token_id = kwargs.get("bos_token_id", self.eos_token_id)
         self.decoder_start_token_id = kwargs.get("decoder_start_token_id", self.eos_token_id)
 
@@ -59,7 +60,6 @@ class ContextArchitecture(Enum):
     FrozenEmbeddingsWithTwoLayers = "frozen-embeddings-with-two-layers"
     BartEncoderTopLayerUnfrozen = "bart-encoder-top-layer-unfrozen"
 
-normalize_encodings = True
 
 
 class M2MRemappedEncoderConfig(M2M100Config):
@@ -128,11 +128,13 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
     """
 
     context_architecture = ContextArchitecture.BartEncoderLayerOnTop 
+    normalize_context = False
 
     def __init__(self, config: M2M100Config, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config, embed_tokens=embed_tokens)
 
         self.context_architecture = ContextArchitecture(config.context_architecture)
+        self.normalize_context = config.normalize_context
 
         if self.context_architecture == ContextArchitecture.NoContextInjection:
             return
@@ -170,8 +172,7 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             raise ValueError("Unknown context architecture")
         self.adapter_layer = torch.nn.Linear(768, self.embed_tokens.embedding_dim)
 
-        if normalize_encodings:
-            # self.normalizer = Softmax(dim=1)
+        if self.normalize_context:
             self.normalizer = LayerNorm([768], elementwise_affine=False)    # No need for affine transform because of
                                                                             #   adapter layer.
 
@@ -246,7 +247,7 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             else:
                 raise ValueError("Unknown context architecture")
             if features is not None:
-                if normalize_encodings:
+                if self.normalize_context:
                     features = self.normalizer(features)
 
                 features = self.adapter_layer(features)
