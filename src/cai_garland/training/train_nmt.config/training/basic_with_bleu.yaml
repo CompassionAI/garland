@@ -36,7 +36,7 @@ learning_rate: 1e-4
 
 # Number of steps of the linear warmup in the LR scheduler
 #   (multiply by number of devices * per_device_train_batch_size to get number of warmup examples)
-warmup_steps: 20000
+warmup_steps: 5000
 
 # Number of beams to use for evaluation. This argument will be passed to 'model.generate', which is used during
 #   'evaluate' and 'predict'
@@ -50,7 +50,7 @@ generation_max_length: 200
 evaluation_strategy: STEPS
 
 # How many steps to wait before evaluating the model - first few evaluations are very slow due to long generation length
-eval_delay: 6000
+eval_delay: 20000
 
 # Use beam search during the evaluation step, needed for computing BLEU on validation data
 predict_with_generate: true
