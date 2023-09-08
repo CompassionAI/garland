@@ -23,10 +23,10 @@ gradient_accumulation_steps: 6
 num_train_epochs: 9
 
 # Every how many training steps to run the evaluation loop
-logging_steps: 600
+logging_steps: 1500
 
 # Every how many training steps to save a model checkpoint
-save_steps: 600
+save_steps: 1500
 
 # How many model checkpoints to keep around
 save_total_limit: 10
