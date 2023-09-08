@@ -130,6 +130,14 @@ def load_hf_dataset(
     else:
         test_dataset = None
 
+    logger.info("  Setting up context injection if needed")
+    inject_context = data_cfg.get('inject_context', False)
+    train_dataset = train_dataset.add_column(name="inject_context", column=[inject_context]*len(train_dataset))
+    if eval_dataset is not None:
+        eval_dataset = eval_dataset.add_column(name="inject_context", column=[inject_context]*len(eval_dataset))
+    if test_dataset is not None:
+        test_dataset = test_dataset.add_column(name="inject_context", column=[inject_context]*len(test_dataset))
+
     logger.info(f"    Training size   = {len(train_dataset)}")
     if eval_dataset is not None:
         logger.info(f"    Validation size = {len(eval_dataset)}")

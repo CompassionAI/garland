@@ -56,7 +56,7 @@ class ContextInjectionDataset(TorchDataset):
         logger.info("Testing alignment with base dataset")
         not_found = []
         for ex in tqdm(self.base_dataset):
-            if not self.hash_key(ex[context_lookup_key]) in self.all_context_keys:
+            if ex.get('inject_context', True) and not self.hash_key(ex[context_lookup_key]) in self.all_context_keys:
                 not_found.append(ex[context_lookup_key])
         logger.info(
             f"Not found {len(not_found)} examples, this is {len(not_found) / len(self.base_dataset):.2%} of the "
@@ -88,6 +88,8 @@ class ContextInjectionDataset(TorchDataset):
             raise ValueError("The context filename should end with .pkl, instead got " + context_file)
         with open(os.path.join(DATA_BASE_PATH, context_file), 'rb') as f:
             contexts = pickle.load(f)
+        if "" not in contexts:
+            contexts[""] = ""
 
         logger.info("Loading context encoding model")
         tokenizer = AutoTokenizer.from_pretrained(context_encoder)
@@ -127,7 +129,10 @@ class ContextInjectionDataset(TorchDataset):
             raise ValueError("No prepared contexts found, first call prepare_context_embeddings.")
 
         base_item = self.base_dataset[index]
-        context_key = self.hash_key(base_item[self.context_lookup_key])
+        if not base_item.get('inject_context', True):
+            context_key = ""
+        else:
+            context_key = self.hash_key(base_item[self.context_lookup_key])
         if context_key in self.all_context_keys:
             with zarr.DirectoryStore(self.context_store) as zarr_store:
                 contexts = zarr.group(store=zarr_store)

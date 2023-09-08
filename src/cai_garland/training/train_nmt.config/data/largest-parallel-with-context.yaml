@@ -5,6 +5,9 @@ largest-parallel-with-context:
   # The name of the dataset to load from the loader file
   dataset_config: largest_parallel_with_context
 
+  # Use these entries for context injection if switched on
+  inject_context: true
+
   # Source language id for translation
   source_lang: bo
 
