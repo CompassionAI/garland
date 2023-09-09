@@ -387,7 +387,7 @@ def main(cfg):
     if context_injection:
         model.force_preparing_model_for_generation = True
 
-    train_datasets, eval_datasets, test_datasets, interleaving_rates = [], [], [], []
+    train_datasets, eval_datasets, test_datasets = [], [], []
     for dataset_idx, dataset_name in enumerate(cfg.data):
         logger.info(f"{ForeColor.LIGHTCYAN_EX}Loading dataset \"{dataset_name}\" ({dataset_idx + 1}/{len(cfg.data)})")
         train_dataset, eval_dataset, test_dataset = load_hf_dataset(
@@ -407,23 +407,27 @@ def main(cfg):
             eval_datasets.append(eval_dataset)
         if test_dataset is not None:
             test_datasets.append(test_dataset)
-        interleaving_rates.append(getattr(cfg.data[dataset_name], "interleaving_rate", None))
-    if any([r is None for r in interleaving_rates[1:]]):
-        raise ValueError("An interleaving rate for an augmenting dataset is not specified in the config.")
-    interleaving_rates[0] = 1 - sum(interleaving_rates[1:])
+    interleaving_rates = getattr(cfg.interleave, "rates", None)
+    if interleaving_rates is None:
+        interleaving_rates = [1 / len(cfg.data)] * (len(cfg.data) - 1)
+    interleaving_rates = list(interleaving_rates)
+    if not len(interleaving_rates) == len(cfg.data) - 1:
+        raise ValueError("If there are N datasets, there should be N-1 interleaving rates or none.")
+    interleaving_rates = [1 - sum(interleaving_rates)] + interleaving_rates
     if interleaving_rates[0] < 0:
-        raise ValueError("Interleaving rates for augmenting datasets too large.")
-    if len(eval_datasets) > 1 or len(test_datasets) > 1:
-        raise ValueError("Augmenting datasets should only have training splits.")
-    if len(train_datasets) > 1:
-        logger.info("Interleaving training dataset")
-        strategy = getattr(getattr(cfg, "interleave", object), "stopping_strategy", "first_exhausted")
-        train_dataset = datasets.interleave_datasets(
-            train_datasets, probabilities=interleaving_rates, stopping_strategy=strategy)
-    else:
-        train_dataset = train_datasets[0]
-    eval_dataset = eval_datasets[0]
-    test_dataset = test_datasets[0]
+        raise ValueError("Interleaving rate for one of the augmenting datasets is too large.")
+
+    def _interleave_datasets(datasets_, label):
+        if len(datasets_) > 1:
+            logger.info(f"Interleaving {label} datasets")
+            strategy = getattr(getattr(cfg, "interleave", object), "stopping_strategy", "first_exhausted")
+            return datasets.interleave_datasets(datasets_, probabilities=interleaving_rates, stopping_strategy=strategy)
+        else:
+            return datasets_[0]
+
+    train_dataset = _interleave_datasets(train_datasets, "training")
+    eval_dataset = _interleave_datasets(eval_datasets, "validation")
+    test_dataset = _interleave_datasets(test_datasets, "test")
 
     logger.info("Final dataset sizes:")
     logger.info(f"    Training size   = {len(train_dataset)}")
