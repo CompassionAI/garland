@@ -131,10 +131,11 @@ class ContextInjectionDataset(TorchDataset):
             raise ValueError("No prepared contexts found, first call prepare_context_embeddings.")
 
         base_item = self.base_dataset[index]
-        if not base_item.get('inject_context', True):
-            context_key = ""
+        if base_item.get('inject_context', True):
+            context_key = base_item[self.context_lookup_key]
         else:
-            context_key = self.hash_key(base_item[self.context_lookup_key])
+            context_key = ""
+        context_key = self.hash_key(context_key)
         if context_key in self.all_context_keys:
             with zarr.DirectoryStore(self.context_store) as zarr_store:
                 contexts = zarr.group(store=zarr_store)
