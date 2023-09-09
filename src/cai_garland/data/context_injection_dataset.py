@@ -8,6 +8,7 @@ import logging
 import numpy as np
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from torch.utils.data.dataset import Dataset as TorchDataset
+from math import ceil
 from tqdm.auto import tqdm
 
 
@@ -90,6 +91,7 @@ class ContextInjectionDataset(TorchDataset):
             contexts = pickle.load(f)
         if "" not in contexts:
             contexts[""] = ""
+        # d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f
 
         logger.info("Loading context encoding model")
         tokenizer = AutoTokenizer.from_pretrained(context_encoder)
@@ -107,7 +109,7 @@ class ContextInjectionDataset(TorchDataset):
         with zarr.DirectoryStore(context_store) as zarr_store:
             seen_hashes = set()
             outputs = zarr.group(store=zarr_store, overwrite=True)
-            for batch_idx in tqdm(range(len(contexts) // batch_size), desc="Encoding"):
+            for batch_idx in tqdm(range(ceil(len(contexts) / batch_size)), desc="Encoding"):
                 batch_fragments = fragments[batch_size * batch_idx : batch_size * (batch_idx + 1)]
                 batch = contexts[batch_size * batch_idx : batch_size * (batch_idx + 1)]
                 batch = tokenizer(batch, return_tensors="pt", padding=True)
