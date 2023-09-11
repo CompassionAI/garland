@@ -14,3 +14,7 @@ max_target_length: 1024
 
 # Some decoders, such as NLLB/M2M, need a forced token after BOS to indicate the language
 decoder_has_forced_bos_token: true
+
+# Add regularization noise to the context embeddings during training
+regularize_context: true
+regularization_sigma: 0.05

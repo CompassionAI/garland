@@ -341,6 +341,11 @@ def main(cfg):
     siamese = model.config.encoder.model_type == "siamese-encoder"
     eor_token_id = tokenizer.source_tokenizer.eor_token_id if siamese else -1
 
+    if getattr(cfg.model, "regularize_context", False):
+        model.decoder.model.decoder.regularize_context = True
+        if hasattr(cfg.model, "regularization_sigma"):
+            model.decoder.model.decoder.regularization_sigma = cfg.model.regularization_sigma
+
     if hasattr(cfg.model, "freeze"):
         if getattr(cfg.model.freeze, "lm_head", False):
             for param in model.decoder.lm_head.parameters():

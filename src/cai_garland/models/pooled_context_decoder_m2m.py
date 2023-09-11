@@ -129,6 +129,8 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
 
     context_architecture = ContextArchitecture.BartEncoderLayerOnTop 
     normalize_context = False
+    regularize_context = False
+    regularization_sigma = 0.1
 
     def __init__(self, config: M2M100Config, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config, embed_tokens=embed_tokens)
@@ -249,6 +251,10 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             if features is not None:
                 if self.normalize_context:
                     features = self.normalizer(features)
+                if self.regularize_context:
+                    noise = torch.randn_like(features)
+                    features = self.regularization_sigma * noise + features     # The noise is detached from the
+                                                                                #   backprop by default
 
                 features = self.adapter_layer(features)
 
