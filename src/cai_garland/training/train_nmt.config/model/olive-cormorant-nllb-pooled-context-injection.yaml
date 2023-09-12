@@ -17,4 +17,4 @@ decoder_has_forced_bos_token: true
 
 # Add regularization noise to the context embeddings during training
 regularize_context: true
-regularization_sigma: 0.05
+regularization_sigma: 0.2
