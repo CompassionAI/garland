@@ -322,9 +322,9 @@ class M2MWithPooledContextForCausalLM(BartForCausalLM):
         self.model.decoder.embed_tokens = new_embed_tokens
 
         new_weights = self.lm_head.weight[tokenizer.used_tokens, :]
-        new_lm_head = torch.nn.Linear(new_weights.shape[0], new_weights.shape[1], bias=False)
-        new_lm_head.weight = torch.nn.Parameter(new_weights)
-        self.lm_head = new_lm_head
+        self.lm_head = torch.nn.Linear(new_weights.shape[1], new_weights.shape[0], bias=False)
+        self.lm_head.weight = torch.nn.Parameter(new_weights)
+        self.lm_head.weight.data = new_weights.data
 
         self.config.remapped_tokens = True
         self.config.vocab_size = len(tokenizer.used_tokens)
