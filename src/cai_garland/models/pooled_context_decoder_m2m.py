@@ -303,6 +303,7 @@ class M2MWithPooledContextForCausalLM(BartForCausalLM):
         config = copy.deepcopy(config)
         config.is_decoder = True
         config.is_encoder_decoder = False
+        config.tie_word_embeddings = not config.remapped_tokens
         BartPretrainedModel.__init__(self, config)
         self.model = M2MDecoderWithPooledContextWrapper(config)
 

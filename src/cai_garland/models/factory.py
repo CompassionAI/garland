@@ -148,6 +148,8 @@ def _make_named_model(packed_name, hf_model_factory, tokenizer=None, config_args
 
         logger.debug(f"Loading model {hf_name}")
         config = getattr(hf_model_factory, "config_class", AutoConfig).from_pretrained(hf_name)
+        config.remapped_tokens = \
+            not is_deepspeed and isinstance(tokenizer, CAINllbTokenizerFast) and tokenizer.is_remapped
         for key, val in config_args.items():
             setattr(config, key, val)
         model = hf_model_factory.from_pretrained(hf_name, config=config)
