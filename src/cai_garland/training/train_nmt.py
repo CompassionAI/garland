@@ -43,7 +43,12 @@ from cai_garland.training.cai_trainer_seq2seq import CAISeq2SeqTrainer
 
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed, HfArgumentParser
 from transformers.trainer_utils import IntervalStrategy, get_last_checkpoint, RemoveColumnsCollator
-from peft import LoraConfig, TaskType, get_peft_model
+
+try:
+    from peft import LoraConfig, TaskType, get_peft_model
+    peft_available = True
+except:
+    peft_available = False
 
 from cai_garland.models.cai_nllb_tokenizer import CAINllbTokenizerFast
 
@@ -372,6 +377,8 @@ def main(cfg):
                         "print the actual number of trainable parameters separately.")
 
     if lora:
+        if not peft_available:
+            raise ImportError("PEFT not installed but LoRA requested")
         lora_cfg = cfg.training.lora
         logger.info("Initializing LoRA via PEFT")
         peft_config = LoraConfig(
