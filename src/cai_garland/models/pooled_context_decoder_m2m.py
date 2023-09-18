@@ -251,7 +251,7 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             if features is not None:
                 if self.normalize_context:
                     features = self.normalizer(features)
-                if self.regularize_context:
+                if self.regularize_context and self.training:
                     noise = torch.randn_like(features)
                     features = self.regularization_sigma * noise + features     # The noise is detached from the
                                                                                 #   backprop by default
