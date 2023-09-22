@@ -125,3 +125,9 @@ class CAINllbTokenizerFast(NllbTokenizerFast):
     @property
     def is_remapped(self):
         return self.tokenizer_remapping_forward is not None
+
+    @property
+    def vocab_size(self):
+        if self.tokenizer_remapping_forward is None or not self.apply_token_remapping:
+            return super().vocab_size
+        return len(set(self.tokenizer_remapping_forward.values()))
