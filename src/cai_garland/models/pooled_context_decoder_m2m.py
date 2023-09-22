@@ -38,6 +38,7 @@ class M2MWithPooledContextForCausalLMConfig(M2M100Config):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.target_language_code = kwargs.get('target_language_code', 'eng_Latn')
         self.remapped_tokens = kwargs.get("remapped_tokens", False)
         self.with_pooled_context = kwargs.get("with_pooled_context", True)
         self.context_architecture = kwargs.get("context_architecture", "no-context-injection")
@@ -314,6 +315,10 @@ class M2MWithPooledContextForCausalLM(BartForCausalLM):
 
         if self.config.remapped_tokens:
             self.resize_token_embeddings(self.config.vocab_size)
+
+    def generated_prefix(self, tokenizer):
+        lang_token = tokenizer.encode(self.config.target_language_code, add_special_tokens=False)[0]
+        return [self.config.decoder_start_token_id]*2 + [lang_token]*2
 
     def remap_tokens(self, tokenizer):
         new_weights = self.model.decoder.embed_tokens.weight[tokenizer.used_tokens, :]

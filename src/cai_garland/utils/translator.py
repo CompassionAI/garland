@@ -3,7 +3,7 @@
 # pylint: disable=protected-access
 import logging
 from contextlib import contextmanager
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, List, Any
 import torch
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForMaskedLM
@@ -34,6 +34,14 @@ def _warm_start_constraints(_batch_id, input_ids, target_tkns):
         return [target_tkns[len(input_ids) - 1]]
     else:
         return slice(0, None)
+
+
+def _excluded_prefix_constraints(batch_id, input_ids, prefix_excluded, generated_prefix, vocab_size):
+    if len(input_ids) < 4:
+        return generated_prefix[len(input_ids)]
+    if len(input_ids) < len(prefix_excluded) + 4:
+        return [t for t in range(vocab_size) if not t == prefix_excluded[len(input_ids) - 4]]
+    return slice(0, None)
 
 
 class Translator:
@@ -190,6 +198,7 @@ class Translator:
         target_language_code: Optional[str]=None,
         encoder_outputs: Any = None,
         generator_kwargs: Dict[Any, Any]={},
+        prefix_excluded: Optional[List[int]]=None,
         return_full_results: bool = False
     ) -> str:
         """Translate the input Tibtean.
@@ -205,6 +214,7 @@ class Translator:
                 example: ita_Latn.
             encoder_outputs (optional): Pre-computed encoder outputs. If not specified, the model will run the encoder.
             generator_kwargs (optional): Any additional keyword arguments to pass to the generator function.
+            prefix_excluded (optional): Force the generated text to not start with this prefix.
             return_full_results (optional): Return HuggingFace results object.
 
         Returns:
@@ -217,6 +227,10 @@ class Translator:
         bo_tokens = self.tokenizer(bo_text, return_tensors="pt").input_ids
         if context is not None:
             ctx_tokens = self.context_tokenizer(context, return_tensors="pt")
+
+        if prefix_excluded is not None:
+            with self.tokenizer.as_target_tokenizer():
+                prefix_excluded = self.tokenizer.encode(prefix_excluded, add_special_tokens=False)
 
         if isinstance(self.model.encoder, SiameseEncoderModel):
             splits = self.model.encoder.split_tokens_into_registers(bo_tokens)['input_ids']
@@ -296,6 +310,16 @@ class Translator:
                 language_token = self.model.forced_bos_token_id(self.tokenizer)
             else:
                 language_token = self.tokenizer.target_tokenizer.lang_code_to_id[target_language_code]
+            if prefix_excluded is not None:
+                if prefix_fn is not None:
+                    raise ValueError("Cannot provide excluded prefix with prefix-conditioned generation")
+                prefix_fn = lambda batch_id, input_ids: _excluded_prefix_constraints(
+                    batch_id,
+                    input_ids,
+                    prefix_excluded,
+                    self.model.decoder.generated_prefix(self.tokenizer.target_tokenizer),
+                    self.tokenizer.target_tokenizer.vocab_size
+                )
             gen_res = self.model.generate(
                 bo_tokens,
                 max_length=self.decoding_length,
