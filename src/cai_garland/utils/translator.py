@@ -331,18 +331,25 @@ class Translator:
                 output_scores=True,
                 **generator_kwargs
             )
-            preds = gen_res.sequences[0]
+            preds = gen_res.sequences
         preds = preds.cpu()
+        if self.add_score:
+            scores = gen_res.sequences_scores.cpu().tolist()
 
         logger.debug(f"Generated tokens: {preds}")
-        logger.debug(f"Generated tokens length: {len(preds)}")
+        logger.debug(f"Generated main hypothesis length: {len(preds[0])}")
+        translations = []
         with self.tokenizer.as_target_tokenizer():
-            translation = self.tokenizer.decode(preds, skip_special_tokens=True).strip()
-            if self.add_score:
-                translation += "|" + str(gen_res.sequences_scores.cpu().tolist()[0])
+            for t, pred in enumerate(preds):
+                translation = self.tokenizer.decode(pred, skip_special_tokens=True).strip()
+                if self.add_score:
+                    translation += "|" + str(scores[t])
+                translations.append(translation)
+        if len(translations) == 1:
+            translations = translations[0]
         if return_full_results:
-            return translation, gen_res
-        return translation
+            return translations, gen_res
+        return translations
 
     def segment(
         self,
