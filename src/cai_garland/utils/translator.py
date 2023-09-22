@@ -48,12 +48,14 @@ class Translator:
         soft_segmenter: Which soft segmenter from cai_garland.utils.segmenters to use for batch translation.
         preprocessors: List of preprocessors from cai_garland.utils.str_processors to use for batch translation.
         postprocessors: List of postprocessors from cai_garland.utils.str_processors to use for batch translation.
+        add_score: Append a score to the translation with a pipe.
     """
 
     hard_segmenter = SegmenterOpeningShad()
     preprocessors = []
     soft_segmenter = SegmenterNone()
     postprocessors = []
+    add_score = False
 
     def __init__(self, model_ckpt: str, deepspeed_cfg: str = None) -> None:
         """Loads all the relevant data and models for machine translation.
@@ -188,6 +190,7 @@ class Translator:
         target_language_code: Optional[str]=None,
         encoder_outputs: Any = None,
         generator_kwargs: Dict[Any, Any]={},
+        return_full_results: bool = False
     ) -> str:
         """Translate the input Tibtean.
 
@@ -202,6 +205,7 @@ class Translator:
                 example: ita_Latn.
             encoder_outputs (optional): Pre-computed encoder outputs. If not specified, the model will run the encoder.
             generator_kwargs (optional): Any additional keyword arguments to pass to the generator function.
+            return_full_results (optional): Return HuggingFace results object.
 
         Returns:
             The translated text (not tokens)."""
@@ -292,21 +296,29 @@ class Translator:
                 language_token = self.model.forced_bos_token_id(self.tokenizer)
             else:
                 language_token = self.tokenizer.target_tokenizer.lang_code_to_id[target_language_code]
-            preds = self.model.generate(
+            gen_res = self.model.generate(
                 bo_tokens,
                 max_length=self.decoding_length,
                 forced_bos_token_id=language_token,
                 num_beams=self.num_beams,
                 prefix_allowed_tokens_fn=prefix_fn,
                 bad_words_ids=None if len(self._bad_word_tokens) == 0 else self._bad_word_tokens,   # Needs to be None instead of empty, otherwise HF throws ValueError
+                return_dict_in_generate=True,
+                output_scores=True,
                 **generator_kwargs
-            )[0]
+            )
+            preds = gen_res.sequences[0]
         preds = preds.cpu()
 
         logger.debug(f"Generated tokens: {preds}")
         logger.debug(f"Generated tokens length: {len(preds)}")
         with self.tokenizer.as_target_tokenizer():
-            return self.tokenizer.decode(preds, skip_special_tokens=True).strip()
+            translation = self.tokenizer.decode(preds, skip_special_tokens=True).strip()
+            if self.add_score:
+                translation += "|" + str(gen_res.sequences_scores.cpu().tolist()[0])
+        if return_full_results:
+            return translation, gen_res
+        return translation
 
     def segment(
         self,
