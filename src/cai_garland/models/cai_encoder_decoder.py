@@ -24,6 +24,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
     base_model_prefix = "encoder_decoder_with_context"
 
     force_preparing_model_for_generation = False
+    label_smoothing_factor = 0
 
     def __init__(
         self,
@@ -64,7 +65,10 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         if context_embedding is not None:
             kwargs["decoder_context_embedding"] = context_embedding
             kwargs["decoder_context_embedding_mask"] = context_embedding_mask
-        return super().forward(
+
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        res = super().forward(
             input_ids,
             attention_mask,
             decoder_input_ids,
@@ -80,6 +84,17 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             return_dict,
             **kwargs
         )
+        if not self.label_smoothing_factor == 0 and labels is not None and self.training:
+            logits = res.logits if return_dict else res[1]
+            from torch.nn import CrossEntropyLoss
+            loss_fct = CrossEntropyLoss(label_smoothing=self.label_smoothing_factor)
+            loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
+
+            if not return_dict:
+                res[0] = loss
+            else:
+                res.loss = loss
+        return res
 
     def forced_bos_token_id(self, tokenizer):
         if self.config.forced_bos_language_code is not None:

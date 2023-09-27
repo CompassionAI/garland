@@ -340,6 +340,8 @@ def main(cfg):
     if model.config.decoder.decoder_start_token_id is None:
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
 
+    model.label_smoothing_factor = cfg.training.label_smoothing
+
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings
     padding = "max_length" if cfg.training_preprocess.pad_to_max_length else False
