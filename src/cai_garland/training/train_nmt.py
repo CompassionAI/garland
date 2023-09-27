@@ -341,6 +341,7 @@ def main(cfg):
         raise ValueError("Make sure that 'config.decoder_start_token_id' is correctly defined")
 
     model.label_smoothing_factor = cfg.training.label_smoothing
+    model.fc_layer_reg_lambda = cfg.training.fc_layer_reg_lambda
 
     # Temporarily set max_target_length for training.
     max_target_length = model.config.decoder.max_position_embeddings

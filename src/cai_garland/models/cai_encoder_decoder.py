@@ -25,6 +25,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
 
     force_preparing_model_for_generation = False
     label_smoothing_factor = 0
+    fc_layer_reg_lambda = 0
 
     def __init__(
         self,
@@ -68,6 +69,10 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        if not self.fc_layer_reg_lambda == 0:
+            if not return_dict:
+                raise ValueError("Must have return_dict=True in forward for activation regularization.")
+            output_hidden_states = True
         res = super().forward(
             input_ids,
             attention_mask,
@@ -84,16 +89,22 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             return_dict,
             **kwargs
         )
-        if not self.label_smoothing_factor == 0 and labels is not None and self.training:
-            logits = res.logits if return_dict else res[1]
-            from torch.nn import CrossEntropyLoss
-            loss_fct = CrossEntropyLoss(label_smoothing=self.label_smoothing_factor)
-            loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
-
-            if not return_dict:
-                res[0] = loss
-            else:
-                res.loss = loss
+        if self.training and labels is not None:
+            update_loss = False
+            if not self.label_smoothing_factor == 0:
+                logits = res.logits if return_dict else res[1]
+                from torch.nn import CrossEntropyLoss
+                loss_fct = CrossEntropyLoss(label_smoothing=self.label_smoothing_factor)
+                loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
+                update_loss = True
+            if not self.fc_layer_reg_lambda == 0:
+                fc_layers_l1_norm = torch.norm(torch.cat([l.view(-1) for l in res.decoder_hidden_states]))
+                loss = loss + self.fc_layer_reg_lambda * fc_layers_l1_norm
+            if update_loss:
+                if not return_dict:
+                    res[0] = loss
+                else:
+                    res.loss = loss
         return res
 
     def forced_bos_token_id(self, tokenizer):
