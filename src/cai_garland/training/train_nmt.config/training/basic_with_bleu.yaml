@@ -20,6 +20,8 @@ gradient_accumulation_steps: 6
 #   alpha: 16
 #   bias: none
 
+label_smoothing: 0.05
+
 num_train_epochs: 9
 
 # Every how many training steps to run the evaluation loop
