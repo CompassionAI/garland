@@ -99,7 +99,8 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
                 update_loss = True
             if not self.fc_layer_reg_lambda == 0:
                 fc_layers_l1_norm = torch.norm(torch.cat([l.view(-1) for l in res.decoder_hidden_states]))
-                loss = loss + self.fc_layer_reg_lambda * fc_layers_l1_norm
+                loss = res.loss + self.fc_layer_reg_lambda * fc_layers_l1_norm
+                update_loss = True
             if update_loss:
                 if not return_dict:
                     res[0] = loss
