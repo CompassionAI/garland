@@ -34,8 +34,8 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         decoder=None
     ):
         super().__init__(config, encoder, decoder)
-        self.cur_context_embedding = None
-        self.cur_context_embedding_mask = None
+        self.context_embedding = None
+        self.context_embedding_mask = None
         if hasattr(config.decoder, "bos_token_id"):
             self.config.bos_token_id = config.decoder.bos_token_id
         if hasattr(config.decoder, "decoder_start_token_id"):
@@ -61,8 +61,8 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         **kwargs
     ):
         if context_embedding is None:
-            context_embedding = self.cur_context_embedding
-            context_embedding_mask = self.cur_context_embedding_mask
+            context_embedding = getattr(self, "cur_context_embedding", self.context_embedding)
+            context_embedding_mask = getattr(self, "cur_context_embedding_mask", self.context_embedding_mask)
         if context_embedding is not None:
             kwargs["decoder_context_embedding"] = context_embedding
             kwargs["decoder_context_embedding_mask"] = context_embedding_mask
@@ -118,12 +118,12 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
     def prepare_model_for_generation(self, context_embedding, context_embedding_mask):
         cur_dtype = next(self.parameters()).dtype
         if context_embedding is not None:
-            self.cur_context_embedding = context_embedding.to(device=self.device, dtype=cur_dtype)
+            self.context_embedding = context_embedding.to(device=self.device, dtype=cur_dtype)
         if context_embedding_mask is not None:
-            self.cur_context_embedding_mask = context_embedding_mask.to(device=self.device, dtype=cur_dtype)
+            self.context_embedding_mask = context_embedding_mask.to(device=self.device, dtype=cur_dtype)
         yield
-        self.cur_context_embedding = None
-        self.cur_context_embedding_mask = None
+        delattr(self, "context_embedding")
+        delattr(self, "context_embedding_mask")
 
     def _prepare_decoder_input_ids_for_generation(
         self,
@@ -169,13 +169,13 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         num_beams=None,
         **model_kwargs,
     ):
-        if self.cur_context_embedding is None:
+        if self.context_embedding is None:
             if self.force_preparing_model_for_generation:
                 raise ValueError("Specify context embeddings for generation using prepare_model_for_generation")
         else:
             num_beams = num_beams if num_beams is not None else self.config.num_beams
-            self.cur_context_embedding = self.cur_context_embedding.repeat_interleave(num_beams, dim=0)
-            self.cur_context_embedding_mask = self.cur_context_embedding_mask.repeat_interleave(
+            self.cur_context_embedding = self.context_embedding.repeat_interleave(num_beams, dim=0)
+            self.cur_context_embedding_mask = self.context_embedding_mask.repeat_interleave(
                 num_beams, dim=0
             )
         return super().generate(
