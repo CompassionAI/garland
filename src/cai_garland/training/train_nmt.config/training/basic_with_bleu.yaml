@@ -21,7 +21,7 @@ gradient_accumulation_steps: 6
 #   bias: none
 
 # label_smoothing: 0.05
-fc_layer_reg_lambda: 0.00005
+# fc_layer_reg_lambda: 0.00005
 
 num_train_epochs: 9
 
