@@ -4,9 +4,11 @@
 import logging
 from contextlib import contextmanager
 from typing import Optional, Dict, List, Any
+from dataclasses import dataclass
 import torch
+
 from tqdm.auto import tqdm
-from transformers import AutoTokenizer, AutoModelForMaskedLM
+from transformers import AutoTokenizer, AutoModelForMaskedLM, LogitsProcessor, LogitsProcessorList
 
 from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_garland.models.factory import make_bilingual_tokenizer
@@ -27,6 +29,25 @@ logger = logging.getLogger(__name__)
 
 class TokenizationTooLongException(Exception):
     pass
+
+
+@dataclass
+class RerankedSmoothedBeamSearchSettings:
+    num_beams: int
+    num_return_sequences: int
+    smoothing_factors: List[float]
+    reranking_model: str
+
+
+class LabelSmoothingLogitsProcessor(LogitsProcessor):
+    source_tokens = None
+
+    def __init__(self, smoothing_factor):
+        super().__init__()
+        self.smoothing_factor = smoothing_factor
+    
+    def __call__(self, input_ids, scores):
+        return torch.clamp(scores, max=-self.smoothing_factor)
 
 
 def _warm_start_constraints(_batch_id, input_ids, target_tkns):
@@ -56,6 +77,8 @@ class Translator:
         soft_segmenter: Which soft segmenter from cai_garland.utils.segmenters to use for batch translation.
         preprocessors: List of preprocessors from cai_garland.utils.str_processors to use for batch translation.
         postprocessors: List of postprocessors from cai_garland.utils.str_processors to use for batch translation.
+        method: Generation method to use. Possible values are beam-search and reranked-smoothed-beam-search.
+        method_settings: Any needed settings for the generation method.
         add_score: Append a score to the translation with a pipe.
     """
 
@@ -63,6 +86,8 @@ class Translator:
     preprocessors = []
     soft_segmenter = SegmenterNone()
     postprocessors = []
+    method = "beam-search"
+    method_settings: Optional[RerankedSmoothedBeamSearchSettings] = None
     add_score = False
 
     def __init__(self, model_ckpt: str, deepspeed_cfg: str = None) -> None:
@@ -113,23 +138,26 @@ class Translator:
         self.num_beams = 20
         self.device = torch.device("cpu")
         self.context_encoder = None
+        self.reranker = None
         self.decoding_length = self.model.decoder.max_length
         self._bad_words, self._bad_word_tokens = [], []
 
-    def _to_device(self, device):
+    def to(self, device):
         self.device = device
         self.model.to(device)
         if self.context_encoder is not None:
             self.context_encoder.to(device)
+        if self.reranker is not None:
+            self.reranker.to(device)
 
     def cuda(self) -> None:
-        self._to_device(torch.device("cuda"))
+        self.to(torch.device("cuda"))
 
     def mps(self) -> None:
-        self._to_device(torch.device("mps"))
+        self.to(torch.device("mps"))
 
     def cpu(self) -> None:
-        self._to_device(torch.device("cpu"))
+        self.to(torch.device("cpu"))
 
     @property
     def bad_words(self):
@@ -155,6 +183,17 @@ class Translator:
             self.context_encoder = self.context_encoder.model.encoder
         self.context_encoder.eval()
         self.context_encoder.to(self.device)
+
+    def load_reranker(self, reranker_model):
+        """Load a reranking model for reranked smoothed beam search.
+        
+        Args:
+            model_name: A CAI model name for the reranking model. Should be a seq2seq model, the loss is used as the
+                ranking score.
+        """
+        logger.info(f"Loading reranking model: {self.method_settings.reranking_model}")
+        self.reranker = Translator(self.method_settings.reranking_model)
+        self.reranker.to(self.device)
 
     def _encode_text(
         self,
@@ -190,6 +229,63 @@ class Translator:
             "attention_mask": attention_mask
         }
 
+    def _generate_bs(self, source_inputs, generator_kwargs={}, **kwargs):
+        kwargs |= generator_kwargs
+        gen_res = self.model.generate(
+            source_inputs.input_ids, return_dict_in_generate=True, output_scores=True, **kwargs
+        )
+        return gen_res.sequences.cpu().tolist(), gen_res.sequences_scores.cpu().tolist()
+
+    def _compute_rank_score(self, source_inputs, target_text, translator):
+        with translator.tokenizer.as_target_tokenizer():
+            target_tokens = translator.tokenizer(target_text, return_tensors="pt")
+        model_inputs = {
+            'input_ids': source_inputs.input_ids.to(translator.model.device),
+            'attention_mask': source_inputs.attention_mask.to(translator.model.device),
+            'labels': target_tokens['input_ids'].to(translator.model.device),
+        }
+        return target_tokens['input_ids'][0].cpu().tolist(), -float(translator.model(**model_inputs).loss.to("cpu"))
+
+    def _rerank(self, source, candidates):
+        losses = [
+            self._compute_rank_score(source, candidate, self.reranker)
+            for candidate in tqdm(candidates, desc="Reranking scores", leave=False)
+        ]
+        losses = list(sorted(losses, key = lambda x: -x[1]))
+        return list(zip(*losses))
+
+    def _generate_rs_bs(self, source_inputs, generator_kwargs={}, **kwargs):
+        if not isinstance(self.method_settings, RerankedSmoothedBeamSearchSettings):
+            raise ValueError("Set method_settings to a filled out RerankedSmoothedBeamSearchSettings.")
+
+        del kwargs['num_beams']
+
+        candidates = []
+        for smoothing_factor in tqdm(self.method_settings.smoothing_factors, desc="Smoothing factors", leave=False):
+            preds, _ = self._generate_bs(
+                source_inputs,
+                generator_kwargs=generator_kwargs,
+                logits_processor=LogitsProcessorList([LabelSmoothingLogitsProcessor(smoothing_factor)]),
+                num_beams=self.method_settings.num_beams,
+                num_return_sequences=self.method_settings.num_beams,
+                **kwargs
+            )
+            with self.tokenizer.as_target_tokenizer():
+                for pred in preds:
+                    candidates.append(self.tokenizer.decode(pred, skip_special_tokens=True).strip())
+
+        candidates, scores = self._rerank(source_inputs, candidates)
+        return candidates[:self.method_settings.num_return_sequences], \
+            scores[:self.method_settings.num_return_sequences]
+
+    def _generate(self, source_inputs, generator_kwargs={}, **kwargs):
+        if self.method == 'beam-search':
+            return self._generate_bs(source_inputs, generator_kwargs=generator_kwargs, **kwargs)
+        elif self.method == 'reranked-smoothed-beam-search':
+            return self._generate_rs_bs(source_inputs, generator_kwargs=generator_kwargs, **kwargs)
+        else:
+            raise NotImplementedError(f"Unknown generation method {self.method}")
+
     def translate(
         self,
         bo_text: str,
@@ -224,7 +320,8 @@ class Translator:
             raise ValueError("Must specify a context encoder if translating with context. Call prepare_context_encoder "
                              "to do this.")
 
-        bo_tokens = self.tokenizer(bo_text, return_tensors="pt").input_ids
+        bo_inputs = self.tokenizer(bo_text, return_tensors="pt")
+        bo_tokens = bo_inputs.input_ids
         if context is not None:
             ctx_tokens = self.context_tokenizer(context, return_tensors="pt")
 
@@ -294,7 +391,7 @@ class Translator:
                 last_hidden_state=torch.FloatTensor(encoder_outputs['last_hidden_state']),
                 attention_mask=torch.LongTensor(encoder_outputs['attention_mask'])
             )
-        bo_tokens = bo_tokens.to(self.device)
+        bo_inputs = bo_inputs.to(self.device)
         if encoder_outputs is not None:
             if isinstance(encoder_outputs.last_hidden_state, list):
                 encoder_outputs.last_hidden_state = [t.to(self.device) for t in encoder_outputs.last_hidden_state]
@@ -320,21 +417,15 @@ class Translator:
                     self.model.decoder.generated_prefix(self.tokenizer.target_tokenizer),
                     self.tokenizer.target_tokenizer.vocab_size
                 )
-            gen_res = self.model.generate(
-                bo_tokens,
+            preds, scores = self._generate(
+                bo_inputs,
                 max_length=self.decoding_length,
                 forced_bos_token_id=language_token,
                 num_beams=self.num_beams,
                 prefix_allowed_tokens_fn=prefix_fn,
                 bad_words_ids=None if len(self._bad_word_tokens) == 0 else self._bad_word_tokens,   # Needs to be None instead of empty, otherwise HF throws ValueError
-                return_dict_in_generate=True,
-                output_scores=True,
-                **generator_kwargs
+                generator_kwargs=generator_kwargs
             )
-            preds = gen_res.sequences
-        preds = preds.cpu()
-        if self.add_score:
-            scores = gen_res.sequences_scores.cpu().tolist()
 
         logger.debug(f"Generated tokens: {preds}")
         logger.debug(f"Generated main hypothesis length: {len(preds[0])}")
@@ -348,7 +439,8 @@ class Translator:
         if len(translations) == 1:
             translations = translations[0]
         if return_full_results:
-            return translations, gen_res
+            raise NotImplementedError()
+            # return translations, gen_res
         return translations
 
     def segment(
