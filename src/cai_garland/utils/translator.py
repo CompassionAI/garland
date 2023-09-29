@@ -50,6 +50,15 @@ class LabelSmoothingLogitsProcessor(LogitsProcessor):
         return torch.clamp(scores, max=-self.smoothing_factor)
 
 
+@contextmanager
+def _reranker_ctx(reranker, ctx_embedding, ctx_mask):
+    if reranker is not None:
+        with reranker.model.prepare_model_for_generation(ctx_embedding, ctx_mask) as ctx:
+            yield ctx
+    else:
+        yield None
+
+
 def _warm_start_constraints(_batch_id, input_ids, target_tkns):
     if len(input_ids) < len(target_tkns):
         return [target_tkns[len(input_ids) - 1]]
@@ -402,7 +411,10 @@ class Translator:
         if encoder_outputs is not None:
             generator_kwargs['encoder_outputs'] = encoder_outputs
             generator_kwargs['attention_mask'] = encoder_outputs.attention_mask
-        with self.model.prepare_model_for_generation(ctx_embedding, ctx_mask):
+        with (
+            self.model.prepare_model_for_generation(ctx_embedding, ctx_mask),
+            _reranker_ctx(self.reranker, ctx_embedding, ctx_mask)
+        ):
             if target_language_code is None:
                 language_token = self.model.forced_bos_token_id(self.tokenizer)
             else:
