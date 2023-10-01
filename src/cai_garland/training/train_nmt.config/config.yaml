@@ -1,13 +1,13 @@
 defaults:
   - data:
     - largest-parallel-with-context
-    # - largest-parallel-blank-context
+    - largest-parallel-blank-context
     # - 84000-parallel-sentences-raw-with-context
     # - nllb-augmentation-bo-it
     # - nllb-augmentation-bo-en
     # - mined
-  - dataset_construction: no-context
-  - model: olive-cormorant-nllb
+  - dataset_construction: context-injection-mined
+  - model: olive-cormorant-nllb-pooled-context-injection
   - training: basic_with_bleu
   - training_preprocess: basic
   - override hydra/job_logging: colorlog
@@ -15,20 +15,20 @@ defaults:
   - _self_
 
 interleave:
-  # rates: [0.1]
+  rates: [0.01]
   stopping_strategy: first_exhausted
 
 hydra:
   verbose: cai_garland.training
   run:
-    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M
+    dir: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-context
 
 # Uncomment this to skip evaluation
 # training:
 #   evaluation_strategy: "NO"
 
-# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M/temp
-# resume_from_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M/temp
+# pretrained_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-context/temp
+# resume_from_checkpoint: ${oc.env:CAI_TEMP_PATH}/training_results/nmt/olive-cormorant-nllb-600M-context/temp
 
 # Overwrite the cached training and evaluation sets
 overwrite_cache: false
