@@ -253,14 +253,17 @@ class Translator:
             'attention_mask': source_inputs.attention_mask.to(translator.model.device),
             'labels': target_tokens['input_ids'].to(translator.model.device),
         }
-        return target_tokens['input_ids'][0].cpu().tolist(), -float(translator.model(**model_inputs).loss.to("cpu"))
+        return -float(translator.model(**model_inputs).loss.to("cpu"))
 
-    def _rerank(self, source, candidates):
+    def _rerank(self, source, candidates, candidate_tokens):
+        # The generator and reranker tokenizers may be different, so need to be careful which one to use
         losses = [
-            self._compute_rank_score(source, candidate, self.reranker)
-            for candidate in tqdm(candidates, desc="Reranking scores", leave=False)
+            (tokens, self._compute_rank_score(source, candidate, self.reranker))
+            for candidate, tokens in tqdm(
+                zip(candidates, candidate_tokens), desc="Reranking scores", leave=False, total=len(candidates)
+            )
         ]
-        losses = list(sorted(losses, key = lambda x: -x[1]))
+        losses = sorted(losses, key = lambda x: -x[1])
         return list(zip(*losses))
 
     def _generate_rs_bs(self, source_inputs, generator_kwargs={}, **kwargs):
@@ -283,7 +286,7 @@ class Translator:
                 for pred in preds:
                     candidates.append(self.tokenizer.decode(pred, skip_special_tokens=True).strip())
 
-        candidates, scores = self._rerank(source_inputs, candidates)
+        candidates, scores  = self._rerank(source_inputs, candidates, preds)
         return candidates[:self.method_settings.num_return_sequences], \
             scores[:self.method_settings.num_return_sequences]
 
