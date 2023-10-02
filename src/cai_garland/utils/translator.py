@@ -35,19 +35,23 @@ class TokenizationTooLongException(Exception):
 class RerankedSmoothedBeamSearchSettings:
     num_beams: int
     num_return_sequences: int
-    smoothing_factors: List[float]
+    smoothing_indices: List[float]
     reranking_model: str
 
 
 class LabelSmoothingLogitsProcessor(LogitsProcessor):
     source_tokens = None
 
-    def __init__(self, smoothing_factor):
+    def __init__(self, smoothing_index):
         super().__init__()
-        self.smoothing_factor = smoothing_factor
+        self.smoothing_index = smoothing_index
     
     def __call__(self, input_ids, scores):
-        return torch.clamp(scores, max=-self.smoothing_factor)
+        if self.smoothing_index == 0:
+            return scores
+        clamp_idx = int(self.smoothing_index)
+        clamp_val = torch.topk(scores.view(-1), clamp_idx).values[-1]
+        return torch.clamp(scores, max=clamp_val)
 
 
 @contextmanager
@@ -273,11 +277,11 @@ class Translator:
         del kwargs['num_beams']
 
         candidates, tokens = [], []
-        for smoothing_factor in tqdm(self.method_settings.smoothing_factors, desc="Smoothing factors", leave=False):
+        for smoothing_index in tqdm(self.method_settings.smoothing_indices, desc="Smoothing index", leave=False):
             preds, _ = self._generate_bs(
                 source_inputs,
                 generator_kwargs=generator_kwargs,
-                logits_processor=LogitsProcessorList([LabelSmoothingLogitsProcessor(smoothing_factor)]),
+                logits_processor=LogitsProcessorList([LabelSmoothingLogitsProcessor(smoothing_index)]),
                 num_beams=self.method_settings.num_beams,
                 num_return_sequences=self.method_settings.num_beams,
                 **kwargs
