@@ -272,7 +272,7 @@ class Translator:
 
         del kwargs['num_beams']
 
-        candidates = []
+        candidates, tokens = [], []
         for smoothing_factor in tqdm(self.method_settings.smoothing_factors, desc="Smoothing factors", leave=False):
             preds, _ = self._generate_bs(
                 source_inputs,
@@ -282,11 +282,12 @@ class Translator:
                 num_return_sequences=self.method_settings.num_beams,
                 **kwargs
             )
+            tokens.extend(preds)
             with self.tokenizer.as_target_tokenizer():
                 for pred in preds:
                     candidates.append(self.tokenizer.decode(pred, skip_special_tokens=True).strip())
 
-        candidates, scores  = self._rerank(source_inputs, candidates, preds)
+        candidates, scores  = self._rerank(source_inputs, candidates, tokens)
         return candidates[:self.method_settings.num_return_sequences], \
             scores[:self.method_settings.num_return_sequences]
 
