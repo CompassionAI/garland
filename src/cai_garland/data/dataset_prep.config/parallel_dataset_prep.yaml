@@ -11,6 +11,7 @@ defaults:
     - context-embeddings-from-folios
     # - folio-registers
     # - dictionary
+    - glossary
   - processing: local-dask
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog

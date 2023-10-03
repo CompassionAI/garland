@@ -357,6 +357,28 @@ def _pull_dictionary_dataset(_dask_client, cfg, stage_cfg):
     return flat_data, [], []
 
 
+def _pull_glossary_dataset(_dask_client, cfg, stage_cfg):
+    # Pull a glossary from a flat CSV file
+    glossary_df = pd.read_csv(os.path.join(DATA_BASE_PATH, stage_cfg.dataset.glossary_csv_path))
+    glossary_df = glossary_df[[stage_cfg.dataset.source_column_name, stage_cfg.dataset.target_column_name]]
+
+    if stage_cfg.dataset.extract_first_def is not None:
+        glossary_df[stage_cfg.dataset.target_column_name] = glossary_df[stage_cfg.dataset.target_column_name] \
+                .str.split(stage_cfg.dataset.extract_first_def, n=1, expand=True)[0]
+
+    glossary_df = glossary_df.drop_duplicates(subset=[stage_cfg.dataset.source_column_name], keep="first")
+
+    flat_data = glossary_df.rename(columns={
+        stage_cfg.dataset.source_column_name: "tibetan",
+        stage_cfg.dataset.target_column_name: "english"
+    }).to_dict(orient="records")
+
+    logger.info("Pre-processing")
+    flat_data = _preprocess_flat_data(flat_data, stage_cfg)
+
+    return flat_data, [], []
+
+
 def _prep_linear_dataset(flat_data, _cfg, _stage_cfg, _tokenizer):
     # No preprocessing, direct passthrough of dataset
     return flat_data
@@ -797,7 +819,8 @@ def main(cfg):
         if not skip_validation:
             logger.info("Preparing validation dataset")
         valid_concat_data = instantiate(stage_cfg.prep_func, valid_flat_data, cfg, stage_cfg, tokenizer)
-        logger.info("Preparing test dataset")
+        if not skip_test:
+            logger.info("Preparing test dataset")
         test_concat_data = instantiate(stage_cfg.prep_func, test_flat_data, cfg, stage_cfg, tokenizer)
 
         def _split_data_dicts(data_dicts):
