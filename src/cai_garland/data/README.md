@@ -165,4 +165,18 @@ dataset_info:
   - name: test
   download_size: 0
   dataset_size: 202131581
+- config_name: glossary
+  features:
+  - name: source
+    dtype: string
+  - name: target
+    dtype: string
+  splits:
+  - name: train
+    num_bytes: 1712488
+    num_examples: 22513
+  - name: validation
+  - name: test
+  download_size: 0
+  dataset_size: 1712488
 ---

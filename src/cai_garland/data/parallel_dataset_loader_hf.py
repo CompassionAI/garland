@@ -43,7 +43,8 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
         "raw_with_bidirectional_context": "processed_datasets/84000-parallel-sentences-raw-with-bidirectional-context",
         "nllb_augmentation": "experiments/nllb-augmentation",
         "largest_parallel_with_context": "processed_datasets/largest-parallel-with-context",
-        "mined": "processed_datasets/mined-parallel-sentences"
+        "mined": "processed_datasets/mined-parallel-sentences",
+        "glossary": "processed_datasets/tibetan-sanskrit-glossary",
     }
 
     BUILDER_CONFIGS = [
@@ -103,6 +104,11 @@ class ParallelSentences84000(datasets.GeneratorBasedBuilder):
             name="mined",
             version=datasets.Version("0.1.0", ""),
             description="Mined parallel sentences from the folio-level aligned publications",
+        ),
+        ParallelSentences84000Config(
+            name="glossary",
+            version=datasets.Version("0.1.0", ""),
+            description="84,000 glossary",
         ),
     ]
 
