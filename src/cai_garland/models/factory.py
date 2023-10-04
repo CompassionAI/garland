@@ -218,7 +218,8 @@ def make_encoder_decoder(
 
     tokenizer = make_bilingual_tokenizer(encoder_name, decoder_name, is_deepspeed=is_deepspeed)
 
-    encoder = _make_named_model(encoder_name, AutoModel, tokenizer=tokenizer.source_tokenizer, is_deepspeed=is_deepspeed)
+    encoder = _make_named_model(
+        encoder_name, AutoModel, tokenizer=tokenizer.source_tokenizer, is_deepspeed=is_deepspeed)
     decoder = _make_named_model(
         decoder_name, hf_model_factory, tokenizer=tokenizer.target_tokenizer, is_deepspeed=is_deepspeed)
 
