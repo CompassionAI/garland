@@ -368,6 +368,9 @@ def _pull_glossary_dataset(_dask_client, cfg, stage_cfg):
 
     glossary_df = glossary_df.drop_duplicates(subset=[stage_cfg.dataset.source_column_name], keep="first")
 
+    glossary_df[stage_cfg.dataset.source_column_name] = glossary_df[stage_cfg.dataset.source_column_name].str.strip('།')
+    glossary_df[stage_cfg.dataset.source_column_name] = glossary_df[stage_cfg.dataset.source_column_name] + '་'
+
     flat_data = glossary_df.rename(columns={
         stage_cfg.dataset.source_column_name: "tibetan",
         stage_cfg.dataset.target_column_name: "english"
