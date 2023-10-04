@@ -422,27 +422,36 @@ def main(cfg):
             eval_datasets.append(eval_dataset)
         if test_dataset is not None:
             test_datasets.append(test_dataset)
-    interleaving_rates = getattr(cfg.interleave, "rates", None)
-    if interleaving_rates is None:
-        interleaving_rates = [1 / len(cfg.data)] * (len(cfg.data) - 1)
-    interleaving_rates = list(interleaving_rates)
-    if not len(interleaving_rates) == len(cfg.data) - 1:
-        raise ValueError("If there are N datasets, there should be N-1 interleaving rates or none.")
-    interleaving_rates = [1 - sum(interleaving_rates)] + interleaving_rates
-    if interleaving_rates[0] < 0:
-        raise ValueError("Interleaving rate for one of the augmenting datasets is too large.")
+    for interleave_step_idx, interleave_step in enumerate(cfg.interleave):
+        logging.info(f"Interleave step {interleave_step_idx}")
+        interleaving_rates = getattr(interleave_step, "rates", None)
+        if interleaving_rates is None:
+            interleaving_rates = [1 / len(cfg.data)] * (len(cfg.data) - 1)
+        interleaving_rates = list(interleaving_rates)
+        interleaving_rates = [1 - sum(interleaving_rates)] + interleaving_rates
+        if interleaving_rates[0] < 0:
+            raise ValueError("Interleaving rate for one of the augmenting datasets is too large.")
 
-    def _interleave_datasets(datasets_, label):
-        if len(datasets_) > 1:
-            logger.info(f"Interleaving {label} datasets")
-            strategy = getattr(getattr(cfg, "interleave", object), "stopping_strategy", "first_exhausted")
-            return datasets.interleave_datasets(datasets_, probabilities=interleaving_rates, stopping_strategy=strategy)
-        else:
-            return datasets_[0]
+        def _interleave_datasets(datasets_, label, interleave_step):
+            if len(datasets_) > 1:
+                logger.info(f"Interleaving {label} datasets")
+                strategy = getattr(interleave_step, "stopping_strategy", "first_exhausted")
+                return datasets.interleave_datasets(datasets_, probabilities=interleaving_rates, stopping_strategy=strategy)
+            else:
+                return datasets_[0]
 
-    train_dataset = _interleave_datasets(train_datasets, "training")
-    eval_dataset = _interleave_datasets(eval_datasets, "validation")
-    test_dataset = _interleave_datasets(test_datasets, "test")
+        cur_train_dataset = _interleave_datasets(train_datasets[:len(interleaving_rates)], "training", interleave_step)
+        cur_eval_dataset = _interleave_datasets(eval_datasets[:len(interleaving_rates)], "validation", interleave_step)
+        cur_test_dataset = _interleave_datasets(test_datasets[:len(interleaving_rates)], "test", interleave_step)
+
+        train_datasets = [cur_train_dataset] + train_datasets[len(interleaving_rates):]
+        eval_datasets = [cur_eval_dataset] + eval_datasets[len(interleaving_rates):]
+        test_datasets = [cur_test_dataset] + test_datasets[len(interleaving_rates):]
+
+    if len(train_datasets) > 1:
+        raise ValueError("Not enough interleaving steps specified.")
+
+    train_dataset, eval_dataset, test_dataset = train_datasets[0], eval_datasets[0], test_datasets[0]
 
     logger.info("Final dataset sizes:")
     logger.info(f"    Training size   = {len(train_dataset)}")

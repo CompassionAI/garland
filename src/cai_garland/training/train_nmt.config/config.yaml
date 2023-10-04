@@ -6,6 +6,7 @@ defaults:
     # - nllb-augmentation-bo-it
     # - nllb-augmentation-bo-en
     # - mined
+    - glossary
   - dataset_construction: context-injection-mined
   - model: olive-cormorant-nllb-pooled-context-injection
   - training: basic_with_bleu
@@ -15,8 +16,10 @@ defaults:
   - _self_
 
 interleave:
-  rates: [0.01]
-  stopping_strategy: first_exhausted
+  - rates: [0.01]
+    stopping_strategy: first_exhausted
+  - rates: [0.1]
+    stopping_strategy: all_exhausted
 
 hydra:
   verbose: cai_garland.training
