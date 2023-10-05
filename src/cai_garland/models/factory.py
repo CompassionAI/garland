@@ -177,6 +177,23 @@ def make_encoder(encoder_name: str):
     return encoder, tokenizer
 
 
+def make_monolingual_tokenizer(model_name: str, is_deepspeed=False):
+    """A factory for individual tokenizers, not wrapped in a bilingual tokenizer.
+
+    The rules for the names are:
+        cai:<model_name> - name of a model (not tokenizer) checkpoint in the data registry.
+        hf:<model_name> - name of a pretrained model in the Hugging Face model registry.
+
+    Args:
+        model_name: Name of the encoder tokenizer.
+        is_deepspeed: Turns off certain features, such as token remapping, that don't work with DeepSpeed.
+
+    Returns:
+        A monolingual tokenizer.
+    """
+    return _make_named_tokenizer(model_name, is_deepspeed=is_deepspeed)
+
+
 def make_bilingual_tokenizer(encoder_name: str, decoder_name: str, is_deepspeed=False):
     """This is a configurable factory for our bilingual tokenizers we use for machine translation.
 
@@ -187,6 +204,7 @@ def make_bilingual_tokenizer(encoder_name: str, decoder_name: str, is_deepspeed=
     Args:
         encoder_name: Name of the encoder tokenizer.
         decoder_name: Name of the decoder tokenizer.
+        is_deepspeed: Turns off certain features, such as token remapping, that don't work with DeepSpeed.
 
     Returns:
         A bilingual tokenizer.
