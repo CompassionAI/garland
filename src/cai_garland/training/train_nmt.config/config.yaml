@@ -15,7 +15,7 @@ defaults:
   - override hydra/hydra_logging: colorlog
   - _self_
 
-interleave: []
+interleave:
   - rates: [0.01]
     stopping_strategy: first_exhausted
   # - rates: [0.1]
