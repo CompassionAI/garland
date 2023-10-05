@@ -218,8 +218,14 @@ class KnowledgeInjectionDataset(TorchDataset):
         lexemes = [k for k in self.glossary.keys() if k in base_item['source']]
         glossaries = [self.glossary_tokenized[lexeme] for lexeme in lexemes]
         base_item[self.glossary_name_key] = {
-            'input_ids': torch.cat([g['source_tokens']['input_ids'][0] for g in glossaries]),
-            'attention_mask': torch.cat([g['source_tokens']['attention_mask'][0] for g in glossaries])
+            'source': {
+                'input_ids': torch.cat([g['source_tokens']['input_ids'][0] for g in glossaries]),
+                'attention_mask': torch.cat([g['source_tokens']['attention_mask'][0] for g in glossaries])
+            },
+            'target': {
+                'input_ids': torch.cat([g['target_tokens']['input_ids'][0] for g in glossaries]),
+                'attention_mask': torch.cat([g['target_tokens']['attention_mask'][0] for g in glossaries])
+            }
         }
         return base_item
 
