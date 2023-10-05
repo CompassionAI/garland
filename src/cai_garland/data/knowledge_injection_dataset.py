@@ -5,9 +5,11 @@ import shutil
 import hashlib
 import logging
 
+import torch
 import numpy as np
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from torch.utils.data.dataset import Dataset as TorchDataset
+from cai_garland.models.factory import make_monolingual_tokenizer
 from math import ceil
 from tqdm.auto import tqdm
 
@@ -18,25 +20,36 @@ DATA_TEMP_PATH = os.environ['CAI_TEMP_PATH']
 logger = logging.getLogger(__name__)
 
 
-class ContextInjectionDataset(TorchDataset):
-    """A wrapper dataset that takes a dataset object and injects context embeddings into it.
-
-    Args:
-        base_dataset (Dataset): A PyTorch Dataset object to wrap.
-        context_file (str): The npz file with preprocessed contexts, under $CAI_DATA_BASE_PATH.
-        context_lookup_key (str): The name of the key in the base dataset to use to look up the context.
-        context_name_key (str, optional): The name of the context key in the datums returned by the wrapper object.
-            Defaults to 'context_embedding'.
+class KnowledgeInjectionDataset(TorchDataset):
+    """A wrapper dataset that takes a dataset object and injects exogenous knowledge into it. The exogenous knowledge
+        may be context embeddings of preceding target text or a glossary.
     """
 
     @staticmethod
     def hash_key(key):
         return hashlib.sha224(key.encode("utf-8")).hexdigest()
 
-    def __init__(self, base_dataset, context_lookup_key, context_name_key="context_embedding", raw_contexts=False):
+    def __init__(self, base_dataset):
         super().__init__()
         self.base_dataset = base_dataset
+        self.has_context = False
+        self.has_glossary = False
         if len(base_dataset) == 0:
+            return
+
+    def inject_context(self, context_lookup_key, context_name_key="context_embedding", raw_contexts=False):
+        """Set up injection of context embeddings of preceding target text.
+
+        Args:
+            base_dataset (Dataset): A PyTorch Dataset object to wrap.
+            context_file (str): The npz file with preprocessed contexts, under $CAI_DATA_BASE_PATH.
+            context_lookup_key (str): The name of the key in the base dataset to use to look up the context.
+            context_name_key (str, optional): The name of the context key in the datums returned by the wrapper object.
+                Defaults to 'context_embedding'.
+        """
+        self.has_context = True
+
+        if len(self.base_dataset) == 0:
             return
 
         self.context_lookup_key, self.context_name_key = context_lookup_key, context_name_key
@@ -67,6 +80,52 @@ class ContextInjectionDataset(TorchDataset):
             for key in not_found[:10]:
                 logger.info(f"   {key}")
 
+    def inject_glossary(
+        self,
+        glossary_dataset,
+        source_encoder_name,
+        target_decoder_name,
+        glossary_name_key="glossary",
+        is_deepspeed=False
+    ):
+        """Set up injection of glossary entries.
+
+        Args:
+            base_dataset (Dataset): A PyTorch Dataset object to wrap.
+            glossary_dataset (str): The path, under $CAI_DATA_BASE_PATH, to the processed glossary dataset.
+            source_encoder_name (str): Name of the source encoder model.
+            source_encoder_name (str): Name of the target decoder model.
+            glossary_name_key (str, optional): The name of the glossary key in the datums returned by the wrapper
+                object. Defaults to 'glossary'.
+            is_deepspeed (bool): Turns off certain features, such as token remapping, that don't work with DeepSpeed.
+        """
+        self.has_glossary = True
+        self.glossary_name_key = glossary_name_key
+
+        if len(self.base_dataset) == 0:
+            self.glossary = None
+            return
+        
+        glossary_dataset = os.path.join(DATA_BASE_PATH, glossary_dataset)
+        with open(os.path.join(glossary_dataset, "train.bo")) as bo_f, \
+             open(os.path.join(glossary_dataset, "train.en")) as en_f \
+        :
+            self.glossary = dict(
+                zip(map(lambda x: x.strip(), bo_f.readlines()), map(lambda x: x.strip(), en_f.readlines()))
+            )
+        
+        self.source_tokenizer = make_monolingual_tokenizer(source_encoder_name, is_deepspeed=is_deepspeed)
+        self.target_tokenizer = make_monolingual_tokenizer(target_decoder_name, is_deepspeed=is_deepspeed)
+
+        if self.glossary is None:
+            return
+        self.glossary_tokenized = {}
+        for source, target in tqdm(self.glossary.items(), desc="Tokenizing glossary"):
+            self.glossary_tokenized[source] = {
+                "source_tokens": self.source_tokenizer(source, return_tensors="pt"),
+                "target_tokens": self.target_tokenizer(target, return_tensors="pt")
+            }
+
     @staticmethod
     def prepare_context_embeddings(
         context_file,
@@ -91,7 +150,6 @@ class ContextInjectionDataset(TorchDataset):
             contexts = pickle.load(f)
         if "" not in contexts:
             contexts[""] = ""
-        # d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f
 
         logger.info("Loading context encoding model")
         tokenizer = AutoTokenizer.from_pretrained(context_encoder)
@@ -120,17 +178,16 @@ class ContextInjectionDataset(TorchDataset):
                 batch = batch.input_ids.cpu().numpy()
                 for frag_name, tokens, encoding in zip(batch_fragments, batch, encoded):
                     end_idx = np.where(tokens == tokenizer.eos_token_id)[0][0]
-                    frag_name = ContextInjectionDataset.hash_key(frag_name)
+                    frag_name = KnowledgeInjectionDataset.hash_key(frag_name)
                     if frag_name in seen_hashes:
                         raise ValueError("Hash collision!")
                     seen_hashes.add(frag_name)
                     outputs.array(frag_name, encoding[:end_idx + 1])
 
-    def __getitem__(self, index):
+    def _add_context_to_item(self, base_item):
         if self.context_store is None and not self.raw_contexts:
             raise ValueError("No prepared contexts found, first call prepare_context_embeddings.")
 
-        base_item = self.base_dataset[index]
         if base_item.get('inject_context', True):
             context_key = base_item[self.context_lookup_key]
         else:
@@ -154,6 +211,26 @@ class ContextInjectionDataset(TorchDataset):
         if self.raw_contexts:
             for key in [self.context_name_key, self.context_name_key + "_mask"]:
                 base_item[key] = base_item[key].tolist()
+        return base_item
+
+    def _add_glossary_to_item(self, base_item):
+        # TODO: The lexemes should involve shads as well - maybe strip the tshegs?
+        lexemes = [k for k in self.glossary.keys() if k in base_item['source']]
+        glossaries = [self.glossary_tokenized[lexeme] for lexeme in lexemes]
+        base_item[self.glossary_name_key] = {
+            'input_ids': torch.cat([g['source_tokens']['input_ids'][0] for g in glossaries]),
+            'attention_mask': torch.cat([g['source_tokens']['attention_mask'][0] for g in glossaries])
+        }
+        return base_item
+
+    def __getitem__(self, index):
+        base_item = self.base_dataset[index]
+
+        if self.has_context:
+            base_item = self._add_context_to_item(base_item)
+        if self.has_glossary:
+            base_item = self._add_glossary_to_item(base_item)
+        
         return base_item
 
     def __len__(self):

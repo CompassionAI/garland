@@ -37,8 +37,8 @@ from datasets import load_dataset, load_metric
 
 from cai_garland.models.factory import make_encoder_decoder, make_bilingual_tokenizer, get_model_type
 from cai_garland.data.siamese_collator import SiameseDataCollatorForSeq2Seq
-from cai_garland.data.context_collator import ContextDataCollatorForSeq2Seq
-from cai_garland.data.context_injection_dataset import ContextInjectionDataset
+from cai_garland.data.knowledge_collator import KnowledgeDataCollatorForSeq2Seq
+from cai_garland.data.knowledge_injection_dataset import KnowledgeInjectionDataset
 from cai_garland.training.cai_trainer_seq2seq import CAISeq2SeqTrainer
 
 from transformers import DataCollatorForSeq2Seq, Seq2SeqTrainer, default_data_collator, set_seed, HfArgumentParser
@@ -475,9 +475,13 @@ def main(cfg):
         logger.info("Shuffling training dataset")
         train_dataset = train_dataset.shuffle(seed=training_cfg.seed)
 
+    train_dataset, eval_dataset, test_dataset = [
+        KnowledgeInjectionDataset(d) for d in (train_dataset, eval_dataset, test_dataset)
+    ]
+
     if context_injection:
         pci_cfg = cfg.dataset_construction.context_injection
-        ContextInjectionDataset.prepare_context_embeddings(
+        KnowledgeInjectionDataset.prepare_context_embeddings(
             pci_cfg.context_file,
             pci_cfg.context_encoder,
             raw_contexts=pci_cfg.raw_contexts,
@@ -486,16 +490,39 @@ def main(cfg):
             overwrite=getattr(pci_cfg, "overwrite_existing_embeddings", False)
         )
         logger.info("Testing context alignment for training dataset")
-        train_dataset = ContextInjectionDataset(
-            train_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
+        train_dataset.inject_context(pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
         if eval_dataset is not None:
             logger.info("Testing context alignment for validation dataset")
-            eval_dataset = ContextInjectionDataset(
-                eval_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
+            eval_dataset.inject_context(pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
         if test_dataset is not None:
             logger.info("Testing context alignment for test dataset")
-            test_dataset = ContextInjectionDataset(
-                test_dataset, pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
+            test_dataset.inject_context(pci_cfg.context_lookup_key, raw_contexts=pci_cfg.raw_contexts)
+
+    glossary_injection = hasattr(cfg, "glossary")
+    if glossary_injection:
+        logger.info("Injecting glossary into training dataset")
+        train_dataset.inject_glossary(
+            cfg.glossary.dataset_path,
+            source_encoder_name = cfg.glossary.source_encoder_name,
+            target_decoder_name = cfg.glossary.target_decoder_name,
+            is_deepspeed=deepspeed
+        )
+        if eval_dataset is not None:
+            logger.info("Injecting glossary into validation dataset")
+            eval_dataset.inject_glossary(
+                cfg.glossary.dataset_path,
+                source_encoder_name = cfg.glossary.source_encoder_name,
+                target_decoder_name = cfg.glossary.target_decoder_name,
+                is_deepspeed=deepspeed
+            )
+        if test_dataset is not None:
+            logger.info("Injecting glossary into test dataset")
+            test_dataset.inject_glossary(
+                cfg.glossary.dataset_path,
+                source_encoder_name = cfg.glossary.source_encoder_name,
+                target_decoder_name = cfg.glossary.target_decoder_name,
+                is_deepspeed=deepspeed
+            )
 
     # Data collator
     quantize_padding = (training_cfg.fp16 or training_cfg.bf16) and not cfg.training_preprocess.no_padding_quantization
@@ -513,6 +540,9 @@ def main(cfg):
             label_pad_token_id=label_pad_token_id,
             pad_to_multiple_of=8 if quantize_padding else None,
         )
+        if context_injection or glossary_injection:
+            logger.debug("Wrapping in KnowledgeDataCollatorForSeq2Seq")
+            data_collator = KnowledgeDataCollatorForSeq2Seq(data_collator)
         if siamese:
             logger.debug("Wrapping in SiameseDataCollatorForSeq2Seq")
             data_collator = SiameseDataCollatorForSeq2Seq(
@@ -521,15 +551,15 @@ def main(cfg):
                 eor_token_id
             )
         if context_injection:
-            logger.debug("Wrapping in ContextDataCollatorForSeq2Seq")
+            logger.debug("Activating context collation")
             with tokenizer.as_target_tokenizer():
                 tgt_pad_token_id = tokenizer.pad_token_id
-            data_collator = ContextDataCollatorForSeq2Seq(
-                data_collator,
-                train_dataset.context_name_key,
-                raw_context=pci_cfg.raw_contexts,
-                raw_pad_token_id=tgt_pad_token_id
+            data_collator.setup_context(
+                train_dataset.context_name_key, raw_context=pci_cfg.raw_contexts, raw_pad_token_id=tgt_pad_token_id
             )
+        if glossary_injection:
+            logger.debug("Activating glossary collation")
+            data_collator.setup_glossary(train_dataset.glossary_name_key)
 
     # Metric
     logger.info("Loading SacreBLEU")

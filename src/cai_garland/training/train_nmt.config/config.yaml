@@ -6,7 +6,7 @@ defaults:
     # - nllb-augmentation-bo-it
     # - nllb-augmentation-bo-en
     # - mined
-    - glossary
+    # - glossary
   - dataset_construction: context-injection-mined
   - model: olive-cormorant-nllb-pooled-context-injection
   - training: basic_with_bleu
@@ -15,11 +15,16 @@ defaults:
   - override hydra/hydra_logging: colorlog
   - _self_
 
-interleave:
+interleave: []
   - rates: [0.01]
     stopping_strategy: first_exhausted
-  - rates: [0.1]
-    stopping_strategy: all_exhausted
+  # - rates: [0.1]
+  #   stopping_strategy: all_exhausted
+
+glossary:
+  dataset_path: processed_datasets/tibetan-sanskrit-glossary
+  source_encoder_name: cai:albert-olive-cormorant/base
+  target_decoder_name: hf:facebook/bart-base
 
 hydra:
   verbose: cai_garland.training
