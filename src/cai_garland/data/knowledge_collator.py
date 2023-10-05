@@ -82,6 +82,9 @@ class KnowledgeDataCollatorForSeq2Seq:
                 res[mask_key] = torch.LongTensor(res[mask_key])
                 res[context_key] = torch.FloatTensor(res[context_key])
         if self.has_glossary:
-            res[self.glossary_key] = self.base_collator([f[self.glossary_key] for f in features])
+            res[self.glossary_key] = {
+                'source': self.base_collator([f[self.glossary_key]['source'] for f in features]),
+                'target': self.base_collator([f[self.glossary_key]['target'] for f in features])
+            }
 
         return res
