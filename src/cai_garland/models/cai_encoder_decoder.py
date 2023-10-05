@@ -68,7 +68,14 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             kwargs["decoder_context_embedding"] = context_embedding
             kwargs["decoder_context_embedding_mask"] = context_embedding_mask
         if glossary is not None:
-            kwargs["decoder_glossary"] = glossary
+            kwargs["decoder_glossary_source"] = {
+                'embeddings': self.encoder.get_input_embeddings()(glossary['source']['input_ids']),
+                'attention_mask': glossary['source']['attention_mask']
+            }
+            kwargs["decoder_glossary_target"] = {
+                'embeddings': self.decoder.get_input_embeddings()(glossary['target']['input_ids']),
+                'attention_mask': glossary['target']['attention_mask']
+            }
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
