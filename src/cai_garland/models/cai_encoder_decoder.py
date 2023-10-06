@@ -2,8 +2,10 @@ import torch
 
 from contextlib import contextmanager
 
+from torch.nn import CrossEntropyLoss
 from transformers import (
     AutoModel, EncoderDecoderModel, EncoderDecoderConfig, LogitsProcessorList, StoppingCriteriaList, GenerationConfig)
+from transformers.modeling_outputs import Seq2SeqLMOutput
 
 
 class CAIEncoderDecoderConfig(EncoderDecoderConfig):
@@ -61,6 +63,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         return_dict=None,
         **kwargs
     ):
+        return_dict = True      # Force this, for convenience
         if context_embedding is None:
             context_embedding = getattr(self, "cur_context_embedding", self.context_embedding)
             context_embedding_mask = getattr(self, "cur_context_embedding_mask", self.context_embedding_mask)
@@ -79,6 +82,9 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        if decoder_attention_mask is None:
+            decoder_attention_mask = 1 - (decoder_input_ids == self.config.pad_token_id).to(int)
+
         if not self.fc_layer_reg_lambda == 0:
             if not return_dict:
                 raise ValueError("Must have return_dict=True in forward for activation regularization.")
@@ -92,30 +98,31 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             past_key_values,
             inputs_embeds,
             decoder_inputs_embeds,
-            labels,
+            None,           # Labels set to None to stop the model from calculating loss, we will calculate it here
             use_cache,
             output_attentions,
             output_hidden_states,
             return_dict,
             **kwargs
         )
-        if self.training and labels is not None:
-            update_loss = False
-            if not self.label_smoothing_factor == 0:
-                logits = res.logits if return_dict else res[1]
-                from torch.nn import CrossEntropyLoss
-                loss_fct = CrossEntropyLoss(label_smoothing=self.label_smoothing_factor)
-                loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
-                update_loss = True
+        if labels is not None:
+            loss_fct = CrossEntropyLoss(label_smoothing=self.label_smoothing_factor)
+            if glossary is not None:
+                labels_prefix = torch.cat(
+                    [
+                        torch.ones_like(glossary['source']['input_ids']), torch.ones_like(glossary['target']['input_ids'])
+                    ], dim=1
+                ) * self.config.decoder.decoder_start_token_id  # The rotation of the forced first token from the
+                                                                #   labels to the -100 at the end is still correct
+                labels = torch.cat([labels_prefix, labels], dim=1)
+            loss = loss_fct(res.logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
             if not self.fc_layer_reg_lambda == 0:
                 fc_layers_l1_norm = torch.norm(torch.cat([l.view(-1) for l in res.decoder_hidden_states]))
-                loss = res.loss + self.fc_layer_reg_lambda * fc_layers_l1_norm
-                update_loss = True
-            if update_loss:
-                if not return_dict:
-                    res[0] = loss
-                else:
-                    res.loss = loss
+                loss += self.fc_layer_reg_lambda * fc_layers_l1_norm
+            res = Seq2SeqLMOutput(
+                loss=loss,
+                **res
+            )
         return res
 
     def forced_bos_token_id(self, tokenizer):

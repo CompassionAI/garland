@@ -1,6 +1,6 @@
 # pylint: disable=no-member
 import copy
-from typing import Optional, Union
+from typing import Any, Optional, Union
 from enum import Enum
 
 import torch
@@ -123,6 +123,26 @@ class M2MForCGWithRemappedEncoder(M2M100ForConditionalGeneration):
         self.post_init()
 
 
+class M2MPositionEmbeddingsFromAttentionMask(nn.Module):
+    def __init__(self, embed_positions, fill_token=12345):
+        super().__init__()
+        self.embed_positions = embed_positions
+        self.attention_mask = None
+        self.fill_token = fill_token
+    
+    @torch.no_grad()
+    def forward(
+        self, input_ids: torch.Tensor = None, inputs_embeds: torch.Tensor = None, past_key_values_length: int = 0
+    ):
+        if self.attention_mask is None:
+            raise ValueError("Need to set the attention mask to make position embeddings from it!")
+        return self.embed_positions(
+            self.attention_mask * self.fill_token + (1 - self.attention_mask) * self.embed_positions.padding_idx,
+            None,
+            past_key_values_length
+        )
+
+
 class M2MDecoderWithPooledContext(M2M100Decoder):
     """An M2M decoder with a tweaked token embedding layer that injects a learned layer to pool encoded target language
     context into the token embedding slot for the starting token.
@@ -138,6 +158,7 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
 
         self.context_architecture = ContextArchitecture(config.context_architecture)
         self.normalize_context = config.normalize_context
+        self.embed_positions = M2MPositionEmbeddingsFromAttentionMask(self.embed_positions)
 
         if self.context_architecture == ContextArchitecture.NoContextInjection:
             return
@@ -173,7 +194,8 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             self.context_encoder = model.encoder
         else:
             raise ValueError("Unknown context architecture")
-        self.adapter_layer = torch.nn.Linear(768, self.embed_tokens.embedding_dim)
+        self.context_adapter_layer = torch.nn.Linear(768, self.embed_tokens.embedding_dim)
+        self.glossary_adapter_layer = torch.nn.Linear(128, self.embed_tokens.embedding_dim)
 
         if self.normalize_context:
             self.normalizer = LayerNorm([768], elementwise_affine=False)    # No need for affine transform because of
@@ -259,13 +281,26 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                     features = self.regularization_sigma * noise + features     # The noise is detached from the
                                                                                 #   backprop by default
 
-                features = self.adapter_layer(features)
+                features = self.context_adapter_layer(features)
 
                 features = features.unsqueeze(1)
 
                 if inputs_embeds.shape[1] > 1:
                     inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
 
+        if (glossary_source is None) != (glossary_target is None):
+            raise ValueError("Both glossary inputs have to either be None or not None")
+        if glossary_source is not None:
+            glossary_embeds = torch.cat(
+                [self.glossary_adapter_layer(glossary_source['embeddings']), glossary_target['embeddings']], dim=1
+            )
+            glossary_attentions = torch.cat(
+                [glossary_source['attention_mask'], glossary_target['attention_mask']], dim=1
+            )
+            inputs_embeds = torch.cat([glossary_embeds, inputs_embeds], dim=1)
+            attention_mask = torch.cat([glossary_attentions, attention_mask], dim=1)
+
+        self.embed_positions.attention_mask = attention_mask
         return super().forward(
             None,
             attention_mask,
@@ -388,6 +423,10 @@ class M2MWithPooledContextForCausalLM(BartForCausalLM):
 
         loss = None
         if labels is not None:
+            if glossary_source is not None:
+                raise NotImplementedError("The loss function should ignore the glossary tokens but this is not "
+                                          "implemented in the decoder yet, only in the encoder-decoder model")
+
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.config.vocab_size), labels.view(-1))
 
