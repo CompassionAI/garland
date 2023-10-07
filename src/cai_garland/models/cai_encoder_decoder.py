@@ -71,14 +71,18 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             kwargs["decoder_context_embedding"] = context_embedding
             kwargs["decoder_context_embedding_mask"] = context_embedding_mask
         if glossary is not None:
-            kwargs["decoder_glossary_source"] = {
-                'embeddings': self.encoder.get_input_embeddings()(glossary['source']['input_ids']),
-                'attention_mask': glossary['source']['attention_mask']
-            }
-            kwargs["decoder_glossary_target"] = {
-                'embeddings': self.decoder.get_input_embeddings()(glossary['target']['input_ids']),
-                'attention_mask': glossary['target']['attention_mask']
-            }
+            if glossary['source']['input_ids'].size()[-1] == 0:
+                kwargs["decoder_glossary_source"] = None
+                kwargs["decoder_glossary_target"] = None
+            else:
+                kwargs["decoder_glossary_source"] = {
+                    'embeddings': self.encoder.get_input_embeddings()(glossary['source']['input_ids']),
+                    'attention_mask': glossary['source']['attention_mask']
+                }
+                kwargs["decoder_glossary_target"] = {
+                    'embeddings': self.decoder.get_input_embeddings()(glossary['target']['input_ids']),
+                    'attention_mask': glossary['target']['attention_mask']
+                }
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
@@ -115,7 +119,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
                 ) * self.config.decoder.decoder_start_token_id  # The rotation of the forced first token from the
                                                                 #   labels to the -100 at the end is still correct
                 labels = torch.cat([labels_prefix, labels], dim=1)
-            loss = loss_fct(res.logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
+            loss = loss_fct(res.logits.reshape(-1, self.decoder.config.vocab_size), labels.to(int).view(-1))
             if not self.fc_layer_reg_lambda == 0:
                 fc_layers_l1_norm = torch.norm(torch.cat([l.view(-1) for l in res.decoder_hidden_states]))
                 loss += self.fc_layer_reg_lambda * fc_layers_l1_norm
