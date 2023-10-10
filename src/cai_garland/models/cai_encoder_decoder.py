@@ -86,6 +86,14 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
+        if decoder_input_ids is None:
+            # We want basically decoder_input_ids = labels, but labels are rotated by 1 for the causal loss
+            decoder_input_ids = torch.cat(
+                [torch.ones_like(labels[:,0].unsqueeze(dim=1)) * self.config.decoder_start_token_id, labels[:,:-1]],
+                dim=1
+            )
+            # We could make the -100 configurable but it's quite universal, set by CrossEntropyLoss in PyTorch
+            decoder_input_ids[decoder_input_ids == -100] = self.config.pad_token_id
         if decoder_attention_mask is None:
             decoder_attention_mask = 1 - (decoder_input_ids == self.config.pad_token_id).to(int)
 
