@@ -122,7 +122,8 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             if glossary is not None:
                 labels_prefix = torch.cat(
                     [
-                        torch.ones_like(glossary['source']['input_ids']), torch.ones_like(glossary['target']['input_ids'])
+                        torch.ones_like(glossary['source']['input_ids']),
+                        torch.ones_like(glossary['target']['input_ids'])
                     ], dim=1
                 ) * self.config.decoder.decoder_start_token_id  # The rotation of the forced first token from the
                                                                 #   labels to the -100 at the end is still correct
