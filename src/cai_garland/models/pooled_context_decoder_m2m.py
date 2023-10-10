@@ -136,8 +136,22 @@ class M2MPositionEmbeddingsFromAttentionMask(nn.Module):
     ):
         if self.attention_mask is None:
             raise ValueError("Need to set the attention mask to make position embeddings from it!")
+        if input_ids is not None:
+            output_shape = input_ids.size()
+        elif inputs_embeds is not None:
+            output_shape = inputs_embeds.size()[:-1]
+        else:
+            raise ValueError("One of input_ids or inputs_embeds must not be None")
+        if len(output_shape) > 2:
+            raise ValueError("Input tensor has too many dimensions")
+        elif len(output_shape) == 2:
+            if not output_shape[0] == self.attention_mask.size()[0]:
+                raise ValueError("Batch sizes of inputs and attention mask do not match")
+            cut_attn_mask = self.attention_mask[:,:output_shape[-1]]
+        else:
+            cut_attn_mask = self.attention_mask[:output_shape[-1]]
         return self.embed_positions(
-            self.attention_mask * self.fill_token + (1 - self.attention_mask) * self.embed_positions.padding_idx,
+            cut_attn_mask * self.fill_token + (1 - cut_attn_mask) * self.embed_positions.padding_idx,
             None,
             past_key_values_length
         )
