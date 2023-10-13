@@ -34,8 +34,6 @@ class KnowledgeInjectionDataset(TorchDataset):
         self.base_dataset = base_dataset
         self.has_context = False
         self.has_glossary = False
-        if len(base_dataset) == 0:
-            return
 
     def inject_context(self, context_lookup_key, context_name_key="context_embedding", raw_contexts=False):
         """Set up injection of context embeddings of preceding target text.
@@ -102,10 +100,6 @@ class KnowledgeInjectionDataset(TorchDataset):
         self.has_glossary = True
         self.glossary_name_key = glossary_name_key
 
-        if len(self.base_dataset) == 0:
-            self.glossary = None
-            return
-        
         glossary_dataset = os.path.join(DATA_BASE_PATH, glossary_dataset)
         with open(os.path.join(glossary_dataset, "train.bo")) as bo_f, \
              open(os.path.join(glossary_dataset, "train.en")) as en_f \
@@ -213,12 +207,15 @@ class KnowledgeInjectionDataset(TorchDataset):
                 base_item[key] = base_item[key].tolist()
         return base_item
 
-    def _add_glossary_to_item(self, base_item):
+    def get_glossary(self, source_text, tokenized=True):
         # TODO: The lexemes should involve shads as well - maybe strip the tshegs?
-        lexemes = [k for k in self.glossary.keys() if k in base_item['source']]
-        glossaries = [self.glossary_tokenized[lexeme] for lexeme in lexemes]
+        lexemes = [k for k in self.glossary.keys() if k in source_text]
+        glossary = self.glossary_tokenized if tokenized else self.glossary
+        glossaries = [glossary[lexeme] for lexeme in lexemes]
+        if not tokenized:
+            return glossaries
         if len(glossaries) == 0:
-            base_item[self.glossary_name_key] = {
+            return {
                 'source': {
                     'input_ids': torch.Tensor([]),
                     'attention_mask': torch.Tensor([])
@@ -229,7 +226,7 @@ class KnowledgeInjectionDataset(TorchDataset):
                 }
             }
         else:
-            base_item[self.glossary_name_key] = {
+            return {
                 'source': {
                     'input_ids': torch.cat([g['source_tokens']['input_ids'][0] for g in glossaries]),
                     'attention_mask': torch.cat([g['source_tokens']['attention_mask'][0] for g in glossaries])
@@ -239,6 +236,9 @@ class KnowledgeInjectionDataset(TorchDataset):
                     'attention_mask': torch.cat([g['target_tokens']['attention_mask'][0] for g in glossaries])
                 }
             }
+
+    def _add_glossary_to_item(self, base_item):
+        base_item[self.glossary_name_key] = self.get_glossary(base_item['source'])
         return base_item
 
     def __getitem__(self, index):
