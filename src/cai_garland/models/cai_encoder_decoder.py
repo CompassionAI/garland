@@ -83,6 +83,17 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
                     'embeddings': self.decoder.get_input_embeddings()(glossary['target']['input_ids']),
                     'attention_mask': glossary['target']['attention_mask']
                 }
+                if len(kwargs['decoder_glossary_source']['embeddings'].size()) == 2:
+                    # Unbatched, happens during generation
+                    batch_size = encoder_outputs.last_hidden_state.size()[0]
+                    kwargs['decoder_glossary_source']['embeddings'] = \
+                        kwargs['decoder_glossary_source']['embeddings'].repeat([batch_size, 1, 1])
+                    kwargs['decoder_glossary_target']['embeddings'] = \
+                        kwargs['decoder_glossary_target']['embeddings'].repeat([batch_size, 1, 1])
+                    kwargs['decoder_glossary_source']['attention_mask'] = \
+                        kwargs['decoder_glossary_source']['attention_mask'].repeat([batch_size, 1])
+                    kwargs['decoder_glossary_target']['attention_mask'] = \
+                        kwargs['decoder_glossary_target']['attention_mask'].repeat([batch_size, 1])
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
@@ -187,6 +198,12 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
             bos_token_id,
             device
         )
+
+    def prepare_inputs_for_generation(self, input_ids, **model_kwargs):
+        model_inputs = super().prepare_inputs_for_generation(input_ids, **model_kwargs)
+        if 'glossary' in model_kwargs:
+            model_inputs['glossary'] = model_kwargs['glossary']
+        return model_inputs
 
     @torch.no_grad()
     def generate(

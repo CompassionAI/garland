@@ -622,10 +622,10 @@ def main(cfg):
         compute_metrics=compute_metrics if training_cfg.predict_with_generate else None,
     )
     CAITensorboardCallback.replace_in_trainer(trainer)
-    if getattr(cfg.model, "decoder_has_forced_bos_token", False):
-        trainer.generation_kwargs = {
-            "forced_bos_token_id": model.forced_bos_token_id(tokenizer)
-        }
+    # if getattr(cfg.model, "decoder_has_forced_bos_token", False):
+    #     trainer.generation_kwargs = {
+    #         "forced_bos_token_id": model.forced_bos_token_id(tokenizer)
+    #     }
 
     # Training
     logger.info("Kicking off training")

@@ -241,6 +241,7 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
         input_shape = input.shape
         input_ids = input_ids.view(-1, input_shape[-1])
         inputs_embeds = self.embed_tokens(input) * self.embed_scale
+        can_prepend_knowledge = past_key_values is None    # inputs_embeds.shape[1] > 1
 
         if not self.context_architecture == ContextArchitecture.NoContextInjection and context_embedding is not None:
             if context_embedding_mask is None:
@@ -299,7 +300,7 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
 
                 features = features.unsqueeze(1)
 
-                if inputs_embeds.shape[1] > 1:
+                if can_prepend_knowledge:
                     inputs_embeds = torch.cat([inputs_embeds[:,0:1,:], features, inputs_embeds[:,2:,:]], dim=1)
 
         if (glossary_source is None) != (glossary_target is None):
@@ -311,8 +312,9 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
             glossary_attentions = torch.cat(
                 [glossary_source['attention_mask'], glossary_target['attention_mask']], dim=1
             )
-            inputs_embeds = torch.cat([glossary_embeds, inputs_embeds], dim=1)
-            attention_mask = torch.cat([glossary_attentions, attention_mask], dim=1)
+            if can_prepend_knowledge:
+                inputs_embeds = torch.cat([glossary_embeds, inputs_embeds], dim=1)
+                attention_mask = torch.cat([glossary_attentions, attention_mask], dim=1)
 
         self.embed_positions.attention_mask = attention_mask
         return super().forward(

@@ -14,7 +14,7 @@ from cai_common.models.utils import get_local_ckpt, get_cai_config
 from cai_garland.models.factory import make_bilingual_tokenizer
 from cai_garland.utils.segmenters import SegmenterNone, SegmenterOpeningShad
 from cai_garland.models.siamese_encoder import SiameseEncoderModel, BaseModelOutputWithAttentionMask
-
+from cai_garland.data.knowledge_injection_dataset import KnowledgeInjectionDataset
 from cai_garland.models.cai_encoder_decoder import CAIEncoderDecoderModel
 
 try:
@@ -155,6 +155,14 @@ class Translator:
         self.decoding_length = self.model.decoder.max_length
         self._bad_words, self._bad_word_tokens = [], []
 
+        logger.info("Loading glossary")
+        self.glossary = KnowledgeInjectionDataset(None)
+        self.glossary.inject_glossary(
+            "processed_datasets/tibetan-sanskrit-glossary",
+            source_encoder_name="cai:albert-olive-cormorant/base",
+            target_decoder_name="hf:facebook/bart-base",
+        )
+
     def to(self, device):
         self.device = device
         self.model.to(device)
@@ -242,8 +250,9 @@ class Translator:
             "attention_mask": attention_mask
         }
 
-    def _generate_bs(self, source_inputs, generator_kwargs={}, **kwargs):
+    def _generate_bs(self, source_inputs, source_text, generator_kwargs={}, **kwargs):
         kwargs |= generator_kwargs
+        kwargs['glossary'] = self.glossary.get_glossary(source_text)
         gen_res = self.model.generate(
             source_inputs.input_ids, return_dict_in_generate=True, output_scores=True, **kwargs
         )
@@ -270,7 +279,7 @@ class Translator:
         losses = sorted(losses, key = lambda x: -x[1])
         return list(zip(*losses))
 
-    def _generate_rs_bs(self, source_inputs, generator_kwargs={}, **kwargs):
+    def _generate_rs_bs(self, source_inputs, source_text, generator_kwargs={}, **kwargs):
         if not isinstance(self.method_settings, RerankedSmoothedBeamSearchSettings):
             raise ValueError("Set method_settings to a filled out RerankedSmoothedBeamSearchSettings.")
 
@@ -280,6 +289,7 @@ class Translator:
         for smoothing_index in tqdm(self.method_settings.smoothing_indices, desc="Smoothing index", leave=False):
             preds, _ = self._generate_bs(
                 source_inputs,
+                source_text,
                 generator_kwargs=generator_kwargs,
                 logits_processor=LogitsProcessorList([LabelSmoothingLogitsProcessor(smoothing_index)]),
                 num_beams=self.method_settings.num_beams,
@@ -295,11 +305,11 @@ class Translator:
         return candidates[:self.method_settings.num_return_sequences], \
             scores[:self.method_settings.num_return_sequences]
 
-    def _generate(self, source_inputs, generator_kwargs={}, **kwargs):
+    def _generate(self, source_inputs, source_text, generator_kwargs={}, **kwargs):
         if self.method == 'beam-search':
-            return self._generate_bs(source_inputs, generator_kwargs=generator_kwargs, **kwargs)
+            return self._generate_bs(source_inputs, source_text, generator_kwargs=generator_kwargs, **kwargs)
         elif self.method == 'reranked-smoothed-beam-search':
-            return self._generate_rs_bs(source_inputs, generator_kwargs=generator_kwargs, **kwargs)
+            return self._generate_rs_bs(source_inputs, source_text, generator_kwargs=generator_kwargs, **kwargs)
         else:
             raise NotImplementedError(f"Unknown generation method {self.method}")
 
@@ -439,8 +449,9 @@ class Translator:
                 )
             preds, scores = self._generate(
                 bo_inputs,
+                bo_text,
                 max_length=self.decoding_length,
-                forced_bos_token_id=language_token,
+                # forced_bos_token_id=language_token,
                 num_beams=self.num_beams,
                 prefix_allowed_tokens_fn=prefix_fn,
                 bad_words_ids=None if len(self._bad_word_tokens) == 0 else self._bad_word_tokens,   # Needs to be None instead of empty, otherwise HF throws ValueError
