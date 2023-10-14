@@ -148,7 +148,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
                                                                     #   labels to the -100 at the end is still correct
                     labels = torch.cat([labels_prefix, labels], dim=1)
                 else:
-                    logits = logits[:,:labels.size()[-1]]
+                    logits = logits[:,-labels.size()[-1]:]
             loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.to(int).view(-1))
             if not self.fc_layer_reg_lambda == 0:
                 fc_layers_l1_norm = torch.norm(torch.cat([l.view(-1) for l in res.decoder_hidden_states]))
