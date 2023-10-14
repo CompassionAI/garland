@@ -83,9 +83,15 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
                     'embeddings': self.decoder.get_input_embeddings()(glossary['target']['input_ids']),
                     'attention_mask': glossary['target']['attention_mask']
                 }
-                if len(kwargs['decoder_glossary_source']['embeddings'].size()) == 2:
-                    # Unbatched, happens during generation
+                embeddings_shape = kwargs['decoder_glossary_source']['embeddings'].size()
+                if input_ids is not None:
+                    batch_size = input_ids.size()[0]
+                else:
                     batch_size = encoder_outputs.last_hidden_state.size()[0]
+                if len(embeddings_shape) == 2 or not embeddings_shape[0] == batch_size:
+                    if len(embeddings_shape) == 3 and not embeddings_shape[0] == 1:
+                        raise NotImplementedError()
+                    # Unbatched, happens during generation
                     kwargs['decoder_glossary_source']['embeddings'] = \
                         kwargs['decoder_glossary_source']['embeddings'].repeat([batch_size, 1, 1])
                     kwargs['decoder_glossary_target']['embeddings'] = \
@@ -130,16 +136,20 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         )
         if labels is not None:
             loss_fct = CrossEntropyLoss(label_smoothing=self.label_smoothing_factor)
+            logits = res.logits
             if glossary is not None:
-                labels_prefix = torch.cat(
-                    [
-                        torch.ones_like(glossary['source']['input_ids']),
-                        torch.ones_like(glossary['target']['input_ids'])
-                    ], dim=1
-                ) * self.config.decoder.decoder_start_token_id  # The rotation of the forced first token from the
-                                                                #   labels to the -100 at the end is still correct
-                labels = torch.cat([labels_prefix, labels], dim=1)
-            loss = loss_fct(res.logits.reshape(-1, self.decoder.config.vocab_size), labels.to(int).view(-1))
+                if self.training:
+                    labels_prefix = torch.cat(
+                        [
+                            torch.ones_like(glossary['source']['input_ids']),
+                            torch.ones_like(glossary['target']['input_ids'])
+                        ], dim=1
+                    ) * self.config.decoder.decoder_start_token_id  # The rotation of the forced first token from the
+                                                                    #   labels to the -100 at the end is still correct
+                    labels = torch.cat([labels_prefix, labels], dim=1)
+                else:
+                    logits = logits[:,:labels.size()[-1]]
+            loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.to(int).view(-1))
             if not self.fc_layer_reg_lambda == 0:
                 fc_layers_l1_norm = torch.norm(torch.cat([l.view(-1) for l in res.decoder_hidden_states]))
                 loss += self.fc_layer_reg_lambda * fc_layers_l1_norm
