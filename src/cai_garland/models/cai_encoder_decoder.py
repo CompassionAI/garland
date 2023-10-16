@@ -76,12 +76,12 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
                 kwargs["decoder_glossary_target"] = None
             else:
                 kwargs["decoder_glossary_source"] = {
-                    'embeddings': self.encoder.get_input_embeddings()(glossary['source']['input_ids']),
-                    'attention_mask': glossary['source']['attention_mask']
+                    'embeddings': self.encoder.get_input_embeddings()(glossary['source']['input_ids'].to(self.device)),
+                    'attention_mask': glossary['source']['attention_mask'].to(self.device)
                 }
                 kwargs["decoder_glossary_target"] = {
-                    'embeddings': self.decoder.get_input_embeddings()(glossary['target']['input_ids']),
-                    'attention_mask': glossary['target']['attention_mask']
+                    'embeddings': self.decoder.get_input_embeddings()(glossary['target']['input_ids'].to(self.device)),
+                    'attention_mask': glossary['target']['attention_mask'].to(self.device)
                 }
                 embeddings_shape = kwargs['decoder_glossary_source']['embeddings'].size()
                 if input_ids is not None:
