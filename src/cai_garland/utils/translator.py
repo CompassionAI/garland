@@ -155,14 +155,6 @@ class Translator:
         self.decoding_length = self.model.decoder.max_length
         self._bad_words, self._bad_word_tokens = [], []
 
-        logger.info("Loading glossary")
-        self.glossary = KnowledgeInjectionDataset(None)
-        self.glossary.inject_glossary(
-            "processed_datasets/tibetan-sanskrit-glossary",
-            source_encoder_name="cai:albert-olive-cormorant/base",
-            target_decoder_name="hf:facebook/bart-base",
-        )
-
     def to(self, device):
         self.device = device
         self.model.to(device)
@@ -204,6 +196,19 @@ class Translator:
             self.context_encoder = self.context_encoder.model.encoder
         self.context_encoder.eval()
         self.context_encoder.to(self.device)
+
+    def load_glossary(self, dataset_location, source_encoder_name, target_encoder_name):
+        """Load the glossary for knowledge injection during decoding.
+        
+        Args:
+            dataset_location: Path under CAI_DATA_BASE_PATH for the glossary processed dataset.
+            source_encoder_name: CAI-convention model name for the source encoder.
+            target_encoder_name: CAI-convention model name for the target encoder."""
+        logger.info("Loading glossary")
+        self.glossary = KnowledgeInjectionDataset(None)
+        self.glossary.inject_glossary(
+            dataset_location, source_encoder_name=source_encoder_name, target_decoder_name=target_encoder_name
+        )
 
     def load_reranker(self, reranker_model):
         """Load a reranking model for reranked smoothed beam search.
@@ -252,7 +257,8 @@ class Translator:
 
     def _generate_bs(self, source_inputs, source_text, generator_kwargs={}, **kwargs):
         kwargs |= generator_kwargs
-        kwargs['glossary'] = self.glossary.get_glossary(source_text)
+        if self.glossary is not None:
+            kwargs['glossary'] = self.glossary.get_glossary(source_text)
         gen_res = self.model.generate(
             source_inputs.input_ids, return_dict_in_generate=True, output_scores=True, **kwargs
         )
