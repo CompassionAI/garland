@@ -28,6 +28,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
     force_preparing_model_for_generation = False
     label_smoothing_factor = 0
     fc_layer_reg_lambda = 0
+    decoder_based_glossary = True
 
     def __init__(
         self,
@@ -137,7 +138,7 @@ class CAIEncoderDecoderModel(EncoderDecoderModel):
         if labels is not None:
             loss_fct = CrossEntropyLoss(label_smoothing=self.label_smoothing_factor)
             logits = res.logits
-            if glossary is not None:
+            if CAIEncoderDecoderModel.decoder_based_glossary and glossary is not None:
                 if self.training:
                     labels_prefix = torch.cat(
                         [

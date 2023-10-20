@@ -27,6 +27,7 @@ from transformers.models.bart.modeling_bart import (
     _expand_mask
 )
 from transformers.utils import logging
+from .cai_encoder_decoder import CAIEncoderDecoderModel
 
 
 logger = logging.get_logger(__name__)
@@ -313,8 +314,15 @@ class M2MDecoderWithPooledContext(M2M100Decoder):
                 [glossary_source['attention_mask'], glossary_target['attention_mask']], dim=1
             )
             if can_prepend_knowledge:
-                inputs_embeds = torch.cat([glossary_embeds, inputs_embeds], dim=1)
-                attention_mask = torch.cat([glossary_attentions, attention_mask], dim=1)
+                if CAIEncoderDecoderModel.decoder_based_glossary:
+                    inputs_embeds = torch.cat([glossary_embeds, inputs_embeds], dim=1)
+                    attention_mask = torch.cat([glossary_attentions, attention_mask], dim=1)
+                else:
+                    self.embed_positions.attention_mask = glossary_attentions
+                    positional_embeds = self.embed_positions(torch.ones(glossary_embeds.size()[:-1]).to(torch.int))
+                    glossary_embeds = glossary_embeds + positional_embeds
+                    encoder_hidden_states = torch.cat([encoder_hidden_states, glossary_embeds], dim=1)
+                    encoder_attention_mask = torch.cat([encoder_attention_mask, glossary_attentions], dim=1)
 
         self.embed_positions.attention_mask = attention_mask
         return super().forward(
